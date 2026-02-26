@@ -54,6 +54,8 @@ Swagger UI: `http://localhost:3000/api-docs`
 
 ### POST `/api/withdrawals/approve`
 
+Request:
+
 ```json
 {
   "account": "1234",
@@ -67,19 +69,36 @@ Swagger UI: `http://localhost:3000/api-docs`
 }
 ```
 
+Response:
+
+```json
+{
+  "streamId": "1234",
+  "emittedEventTypes": ["FundsWithdrawalApproved"]
+}
+```
+
 ## Project structure
 
 ```
 src/
-  eventstore/withdrawal-approval-stream/
-    commands/       # ApproveWithdrawal command + handler + specs
-    events/         # FundsWithdrawalApproved, FundsWithdrawalDeclined
-    messages/       # Outbox message producers
-    types/          # Command / CommandHandler interfaces
-    views/          # WithdrawalsInProcess view state + handlers
-    withdrawalApprovalStreamFactory.ts
-  routes/           # Express router
-  tests/            # Unit + behaviour tests + adapters
-  server.ts         # Entry point
+  eventstore/
+    WithdrawalApprovalsStream/
+      events/         # FundsWithdrawalApproved, FundsWithdrawalDeclined
+      messages/       # Outbox message producers
+      views/          # WithdrawalsInProcess view state + handlers
+      index.ts        # Stream factory registration
+    index.ts          # Event store wiring (Postgres adapter)
+  slices/
+    ApproveWithdrawal/
+      command.ts        # ApproveWithdrawal command class
+      commandHandler.ts # Pure decision function
+      adapter.ts        # Wires handler to stream via CommandAdapter
+  types/
+    commandHandler.ts       # CommandHandler, CommandAdapter, CommandAdapterResult
+    createCommandAdapter.ts # Generic adapter factory + EventStorePort
+  routes/           # Express router (transport layer)
+  tests/            # Unit + behaviour tests + in-memory adapter
+  server.ts         # Composition root
   swagger.ts        # OpenAPI document
 ```
