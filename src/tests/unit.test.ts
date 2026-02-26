@@ -6,10 +6,12 @@ import { handleApproveWithdrawal } from "../slices/ApproveWithdrawal/commandHand
 import type { WithdrawalApprovalStreamType } from "../eventstore/WithdrawalApprovalsStream/index.js";
 import type { FundsWithdrawalApproved } from "../eventstore/WithdrawalApprovalsStream/events/FundsWithdrawalApproved.js";
 import type { FundsWithdrawalDeclined } from "../eventstore/WithdrawalApprovalsStream/events/FundsWithdrawalDeclined.js";
+import EvDbEvent from "@eventualize/types/events/EvDbEvent";
 
 interface TestContext {
   eventStore: ReturnType<typeof Steps.createEventStore>;
   stream: WithdrawalApprovalStreamType;
+  response?: EvDbEvent;
 }
 
 describe("Withdrawal Approval Slice - Unit Tests", () => {
@@ -24,12 +26,12 @@ describe("Withdrawal Approval Slice - Unit Tests", () => {
       ctx.stream = Steps.createWithdrawalStream("account-1234", ctx.eventStore);
     });
 
-    await t.test("When: ApproveWithdrawal command is issued with currentBalance=200, amount=20", () => {
-      Steps.approveWithdrawalWithSufficientFunds(ctx.stream!);
+    await t.test("When: ApproveWithdrawal command is issued with currentBalance=200, amount=20", async () => {
+      ctx.response = await Steps.approveWithdrawalWithSufficientFunds(ctx.stream!);
     });
 
     await t.test("Then: a FundsWithdrawalApproved event is emitted", () => {
-      Steps.assertWithdrawalApproved(ctx.stream!);
+      Steps.assertWithdrawalApproved(ctx.response);
     });
 
     await t.test("And: a withdrawal approved notification message is produced", () => {

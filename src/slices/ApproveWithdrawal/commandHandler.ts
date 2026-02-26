@@ -5,6 +5,7 @@ import { FundsWithdrawalDeclined } from "../../eventstore/WithdrawalApprovalsStr
 import type { WithdrawalApprovalStreamType } from "../../eventstore/WithdrawalApprovalsStream/index.js";
 import { hasInsufficientEffectiveFunds } from "./gwts.js";
 import { eventStore } from "../../eventstore/index.js";
+import EvDbEvent from "@eventualize/types/events/EvDbEvent";
 
 /**
  * Command handler for the ApproveWithdrawal command.
@@ -13,7 +14,7 @@ import { eventStore } from "../../eventstore/index.js";
  * - hasInsufficientEffectiveFunds → emit FundsWithdrawalDeclined
  * - otherwise                     → emit FundsWithdrawalApproved
  */
-export const handleApproveWithdrawal: CommandHandler = async (command: ApproveWithdrawal) => {
+export const handleApproveWithdrawal: CommandHandler = async (command: ApproveWithdrawal): Promise<EvDbEvent> => {
   const stream = await eventStore.getStream("WithdrawalApprovalStream", command.account) as WithdrawalApprovalStreamType;
   if (hasInsufficientEffectiveFunds(command)) {
     stream.appendEventFundsWithdrawalDeclined(

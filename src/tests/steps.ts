@@ -8,6 +8,7 @@ import { handleApproveWithdrawal } from "../slices/ApproveWithdrawal/commandHand
 import type { FundsWithdrawalApproved } from "../eventstore/WithdrawalApprovalsStream/events/FundsWithdrawalApproved.js";
 import type { FundsWithdrawalDeclined } from "../eventstore/WithdrawalApprovalsStream/events/FundsWithdrawalDeclined.js";
 import { EvDbEventStoreBuilder } from "@eventualize/core/store/EvDbEventStoreBuilder";
+import EvDbEvent from "@eventualize/types/events/EvDbEvent";
 
 export enum EVENT_STORE_TYPE {
   STUB = "Stub",
@@ -36,7 +37,7 @@ export default class Steps {
   // Commands
   // ──────────────────────────────────────────────
 
-  public static approveWithdrawalWithSufficientFunds(stream: WithdrawalApprovalStreamType): void {
+  public static approveWithdrawalWithSufficientFunds(stream: WithdrawalApprovalStreamType): Promise<EvDbEvent> {
     const command = new ApproveWithdrawal({
       account: "1234",
       amount: 20,
@@ -49,7 +50,7 @@ export default class Steps {
       transactionTime: new Date("2025-01-01T11:00:00Z"),
       currentBalance: 200,
     });
-    handleApproveWithdrawal(command);
+    return handleApproveWithdrawal(command);
   }
 
   public static approveWithdrawalWithInsufficientFunds(stream: WithdrawalApprovalStreamType): void {
@@ -72,11 +73,10 @@ export default class Steps {
   // Assertions
   // ──────────────────────────────────────────────
 
-  public static assertWithdrawalApproved(stream: WithdrawalApprovalStreamType): void {
-    const events = stream.getEvents();
-    assert.strictEqual(events.length, 1, "Expected exactly 1 event");
+  public static assertWithdrawalApproved(response: EvDbEvent | undefined): void {
+    assert.ok(response, "Expected an event to be emitted");
 
-    const payload = events[0].payload as FundsWithdrawalApproved;
+    const payload = response.payload as FundsWithdrawalApproved;
     assert.strictEqual(payload.payloadType, "FundsWithdrawalApproved");
     assert.strictEqual(payload.amount, 20);
     assert.strictEqual(payload.account, "1234");
