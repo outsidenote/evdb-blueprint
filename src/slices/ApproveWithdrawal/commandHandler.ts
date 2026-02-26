@@ -3,7 +3,7 @@ import type { ApproveWithdrawal } from "./command.js";
 import { FundsWithdrawalApproved } from "../../eventstore/WithdrawalApprovalsStream/events/FundsWithdrawalApproved.js";
 import { FundsWithdrawalDeclined } from "../../eventstore/WithdrawalApprovalsStream/events/FundsWithdrawalDeclined.js";
 import type { WithdrawalApprovalStreamType } from "../../eventstore/WithdrawalApprovalsStream/withdrawalApprovalStreamFactory.js";
-import { hasInsufficientEffectiveFunds } from "../../eventstore/WithdrawalApprovalsStream/commands/specs.js";
+import { hasInsufficientEffectiveFunds } from "./gwts.js";
 import { eventStore } from "../../eventstore/index.js";
 
 /**
