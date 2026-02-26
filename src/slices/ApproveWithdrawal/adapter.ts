@@ -1,4 +1,3 @@
-import type EvDbEvent from "@eventualize/types/events/EvDbEvent";
 import type { WithdrawalApprovalStreamType } from "../../eventstore/WithdrawalApprovalsStream/index.js";
 import type { ApproveWithdrawal } from "./command.js";
 import { handleApproveWithdrawal } from "./commandHandler.js";
@@ -12,7 +11,7 @@ import type { CommandAdapter } from "../../types/commandHandler.js";
  * Wires the pure handler to its stream type and event store.
  * The event store is injected — never imported as a global singleton.
  */
-export function createApproveWithdrawalAdapter(eventStore: EventStorePort): CommandAdapter<ApproveWithdrawal, EvDbEvent> {
+export function createApproveWithdrawalAdapter(eventStore: EventStorePort): CommandAdapter<ApproveWithdrawal> {
   return createCommandAdapter<WithdrawalApprovalStreamType, ApproveWithdrawal>(
     eventStore,
     "WithdrawalApprovalStream",

@@ -18,19 +18,28 @@ export type CommandHandler<
 > = (stream: TStream, command: TCommand) => void;
 
 /**
+ * Result returned by a CommandAdapter after orchestration.
+ *
+ * Contains the stream ID and all events emitted by the handler.
+ * If no events were emitted (idempotent/no-op), events is empty
+ * and the stream was NOT stored.
+ */
+export interface CommandAdapterResult {
+  readonly streamId: string;
+  readonly events: readonly EvDbEvent[];
+}
+
+/**
  * Orchestration function that bridges a caller to a CommandHandler.
  *
- * Accepts a command and returns the resulting event. Internally it:
+ * Accepts a command and returns the result. Internally it:
  *   1. Fetches the stream from the event store
  *   2. Calls the pure CommandHandler
- *   3. Extracts the pending event
- *   4. Stores the stream
- *   5. Returns the event
+ *   3. Collects pending events
+ *   4. If events emitted → stores the stream
+ *   5. Returns { streamId, events }
  *
  * @typeParam TCommand — the specific command type
- * @typeParam TResult  — what the adapter returns (typically EvDbEvent)
  */
-export type CommandAdapter<
-  TCommand,
-  TResult = EvDbEvent,
-> = (command: TCommand) => Promise<TResult>;
+export type CommandAdapter<TCommand> =
+  (command: TCommand) => Promise<CommandAdapterResult>;

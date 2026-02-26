@@ -44,11 +44,8 @@ describe("Withdrawal API — Behaviour Tests", () => {
         });
 
       assert.strictEqual(res.status, 200);
-      assert.strictEqual(res.body.event.payloadType, "FundsWithdrawalApproved");
-      assert.strictEqual(res.body.event.account, "acc-001");
-      assert.strictEqual(res.body.event.amount, 20);
-      assert.strictEqual(res.body.event.currency, "USD");
       assert.strictEqual(res.body.streamId, "acc-001");
+      assert.deepStrictEqual(res.body.emittedEventTypes, ["FundsWithdrawalApproved"]);
     });
   });
 
@@ -73,13 +70,7 @@ describe("Withdrawal API — Behaviour Tests", () => {
         });
 
       assert.strictEqual(res.status, 200);
-      assert.strictEqual(res.body.event.payloadType, "FundsWithdrawalDeclined");
-      assert.strictEqual(res.body.event.account, "acc-002");
-      assert.strictEqual(res.body.event.amount, 20);
-      assert.ok(
-        res.body.event.reason.includes("Insufficient funds"),
-        "Expected reason to mention insufficient funds",
-      );
+      assert.deepStrictEqual(res.body.emittedEventTypes, ["FundsWithdrawalDeclined"]);
     });
   });
 
@@ -155,7 +146,7 @@ describe("Withdrawal API — Behaviour Tests", () => {
         transactionId: "txn-004a",
       });
       assert.strictEqual(res.status, 200);
-      assert.strictEqual(res.body.event.payloadType, "FundsWithdrawalApproved");
+      assert.deepStrictEqual(res.body.emittedEventTypes, ["FundsWithdrawalApproved"]);
     });
 
     await t.test("And: second withdrawal for the same account", async () => {
@@ -170,7 +161,7 @@ describe("Withdrawal API — Behaviour Tests", () => {
         transactionId: "txn-004b",
       });
       assert.strictEqual(res.status, 200);
-      assert.strictEqual(res.body.event.payloadType, "FundsWithdrawalApproved");
+      assert.deepStrictEqual(res.body.emittedEventTypes, ["FundsWithdrawalApproved"]);
     });
 
     await t.test("Then: storedOffset is 2", async () => {

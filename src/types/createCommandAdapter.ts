@@ -1,6 +1,5 @@
 import type EvDbStream from "@eventualize/core/store/EvDbStream";
-import type EvDbEvent from "@eventualize/types/events/EvDbEvent";
-import type { CommandHandler, CommandAdapter } from "./commandHandler.js";
+import type { CommandHandler, CommandAdapter, CommandAdapterResult } from "./commandHandler.js";
 
 /**
  * Minimal interface for the event store dependency.
@@ -11,7 +10,11 @@ export interface EventStorePort {
 }
 
 /**
- * Creates a CommandAdapter that orchestrates: fetch stream → decide → store → return event.
+ * Creates a CommandAdapter that orchestrates:
+ *   fetch stream → decide → collect events → store (if any) → return result.
+ *
+ * If the handler emits no events (idempotent / no-op), the stream is NOT stored
+ * and an empty events array is returned.
  *
  * @typeParam TStream  — concrete typed stream (e.g. WithdrawalApprovalStreamType)
  * @typeParam TCommand — command type (e.g. ApproveWithdrawal)
@@ -29,17 +32,23 @@ export function createCommandAdapter<
   streamType: string,
   getStreamId: (command: TCommand) => string,
   handler: CommandHandler<TStream, TCommand>,
-): CommandAdapter<TCommand, EvDbEvent> {
-  return async (command: TCommand): Promise<EvDbEvent> => {
+): CommandAdapter<TCommand> {
+  return async (command: TCommand): Promise<CommandAdapterResult> => {
+    const streamId = getStreamId(command);
     const stream = await eventStore.getStream(
       streamType,
-      getStreamId(command),
+      streamId,
     ) as TStream;
 
     handler(stream, command);
 
-    const event = stream.getEvents()[0];
+    const events = stream.getEvents();
+
+    if (events.length === 0) {
+      return { streamId, events: [] };
+    }
+
     await stream.store();
-    return event;
+    return { streamId, events };
   };
 }
