@@ -2,7 +2,7 @@ import * as assert from "node:assert";
 import { test, describe } from "node:test";
 import Steps from "./steps.js";
 import { ApproveWithdrawal } from "../slices/ApproveWithdrawal/command.js";
-import { handleApproveWithdrawal } from "../eventstore/WithdrawalApprovalsStream/commands/commandHandler.js";
+import { handleApproveWithdrawal } from "../slices/ApproveWithdrawal/commandHandler.js";
 import type { WithdrawalApprovalStreamType } from "../eventstore/WithdrawalApprovalsStream/withdrawalApprovalStreamFactory.js";
 import type { FundsWithdrawalApproved } from "../eventstore/WithdrawalApprovalsStream/events/FundsWithdrawalApproved.js";
 import type { FundsWithdrawalDeclined } from "../eventstore/WithdrawalApprovalsStream/events/FundsWithdrawalDeclined.js";
@@ -85,7 +85,7 @@ describe("Withdrawal Approval Slice - Unit Tests", () => {
         transactionTime: new Date("2025-01-01T11:00:00Z"),
         currentBalance: 20,
       });
-      handleApproveWithdrawal(ctx.stream!, command);
+      handleApproveWithdrawal(command);
     });
 
     await t.test("Then: a FundsWithdrawalApproved event is emitted (balance == amount is sufficient)", () => {
@@ -125,7 +125,7 @@ describe("Withdrawal Approval Slice - Unit Tests", () => {
         transactionTime: new Date("2025-01-01T11:00:00Z"),
         currentBalance: 50,
       });
-      handleApproveWithdrawal(ctx.stream!, command);
+      handleApproveWithdrawal(command);
     });
 
     await t.test("Then: a FundsWithdrawalDeclined event is emitted", () => {

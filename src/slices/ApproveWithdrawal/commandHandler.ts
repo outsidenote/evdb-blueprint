@@ -1,9 +1,10 @@
-import type { CommandHandler } from "../types/commandHandler.js";
-import type { ApproveWithdrawal } from "../../../slices/ApproveWithdrawal/command.js";
-import { FundsWithdrawalApproved } from "../events/FundsWithdrawalApproved.js";
-import { FundsWithdrawalDeclined } from "../events/FundsWithdrawalDeclined.js";
-import type { WithdrawalApprovalStreamType } from "../withdrawalApprovalStreamFactory.js";
-import { hasInsufficientEffectiveFunds } from "./specs.js";
+import type { CommandHandler } from "../../types/commandHandler.js";
+import type { ApproveWithdrawal } from "./command.js";
+import { FundsWithdrawalApproved } from "../../eventstore/WithdrawalApprovalsStream/events/FundsWithdrawalApproved.js";
+import { FundsWithdrawalDeclined } from "../../eventstore/WithdrawalApprovalsStream/events/FundsWithdrawalDeclined.js";
+import type { WithdrawalApprovalStreamType } from "../../eventstore/WithdrawalApprovalsStream/withdrawalApprovalStreamFactory.js";
+import { hasInsufficientEffectiveFunds } from "../../eventstore/WithdrawalApprovalsStream/commands/specs.js";
+import { eventStore } from "../../eventstore/index.js";
 
 /**
  * Command handler for the ApproveWithdrawal command.
@@ -12,10 +13,8 @@ import { hasInsufficientEffectiveFunds } from "./specs.js";
  * - hasInsufficientEffectiveFunds → emit FundsWithdrawalDeclined
  * - otherwise                     → emit FundsWithdrawalApproved
  */
-export const handleApproveWithdrawal: CommandHandler<
-  ApproveWithdrawal,
-  WithdrawalApprovalStreamType
-> = (stream, command) => {
+export const handleApproveWithdrawal: CommandHandler = async (command: ApproveWithdrawal) => {
+  const stream = await eventStore.getStream("WithdrawalApprovalStream", command.account) as WithdrawalApprovalStreamType;
   if (hasInsufficientEffectiveFunds(command)) {
     stream.appendEventFundsWithdrawalDeclined(
       new FundsWithdrawalDeclined({
@@ -44,4 +43,8 @@ export const handleApproveWithdrawal: CommandHandler<
       }),
     );
   }
+  const event = stream.getEvents()[0];
+  await stream.store();
+  return event;
+
 };

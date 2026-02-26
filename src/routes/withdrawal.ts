@@ -1,7 +1,7 @@
 import { Router } from "express";
 import type { Request, Response } from "express";
 import { ApproveWithdrawal } from "../slices/ApproveWithdrawal/command.js";
-import { handleApproveWithdrawal } from "../eventstore/WithdrawalApprovalsStream/commands/commandHandler.js";
+import { handleApproveWithdrawal } from "../slices/ApproveWithdrawal/commandHandler.js";
 import type { WithdrawalApprovalStreamType } from "../eventstore/WithdrawalApprovalsStream/withdrawalApprovalStreamFactory.js";
 
 type EventStore = {
@@ -31,8 +31,6 @@ export function createWithdrawalRouter(eventStore: EventStore): Router {
         return;
       }
 
-      const stream = await eventStore.getStream("WithdrawalApprovalStream", account);
-
       const command = new ApproveWithdrawal({
         account,
         amount,
@@ -46,11 +44,7 @@ export function createWithdrawalRouter(eventStore: EventStore): Router {
         currentBalance,
       });
 
-      handleApproveWithdrawal(stream, command);
-
-      const event = stream.getEvents()[0];
-
-      await stream.store();
+      const event = await handleApproveWithdrawal(command);
 
       res.json({
         streamId: account,

@@ -1,5 +1,3 @@
-import type { Command } from "../../eventstore/WithdrawalApprovalsStream/types/command.js";
-
 export interface ApproveWithdrawalProps {
   readonly account: string;
   readonly amount: number;
@@ -13,7 +11,7 @@ export interface ApproveWithdrawalProps {
   readonly currentBalance: number;
 }
 
-export class ApproveWithdrawal implements Command {
+export class ApproveWithdrawal {
   readonly commandType = "ApproveWithdrawal" as const;
 
   readonly account: string;

@@ -4,7 +4,7 @@ import StorageAdapterStub from "./StorageAdapterStub.js";
 import type { WithdrawalApprovalStreamType } from "../eventstore/WithdrawalApprovalsStream/withdrawalApprovalStreamFactory.js";
 import WithdrawalApprovalStreamFactory from "../eventstore/WithdrawalApprovalsStream/withdrawalApprovalStreamFactory.js";
 import { ApproveWithdrawal } from "../slices/ApproveWithdrawal/command.js";
-import { handleApproveWithdrawal } from "../eventstore/WithdrawalApprovalsStream/commands/commandHandler.js";
+import { handleApproveWithdrawal } from "../slices/ApproveWithdrawal/commandHandler.js";
 import type { FundsWithdrawalApproved } from "../eventstore/WithdrawalApprovalsStream/events/FundsWithdrawalApproved.js";
 import type { FundsWithdrawalDeclined } from "../eventstore/WithdrawalApprovalsStream/events/FundsWithdrawalDeclined.js";
 import { EvDbEventStoreBuilder } from "@eventualize/core/store/EvDbEventStoreBuilder";
@@ -49,7 +49,7 @@ export default class Steps {
       transactionTime: new Date("2025-01-01T11:00:00Z"),
       currentBalance: 200,
     });
-    handleApproveWithdrawal(stream, command);
+    handleApproveWithdrawal(command);
   }
 
   public static approveWithdrawalWithInsufficientFunds(stream: WithdrawalApprovalStreamType): void {
@@ -65,7 +65,7 @@ export default class Steps {
       transactionTime: new Date("2025-01-01T11:00:00Z"),
       currentBalance: 10,
     });
-    handleApproveWithdrawal(stream, command);
+    handleApproveWithdrawal(command);
   }
 
   // ──────────────────────────────────────────────

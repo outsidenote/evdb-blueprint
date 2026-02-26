@@ -1,5 +1,3 @@
-import type { Command } from "./command.js";
-
 /**
  * Generic command handler type.
  *
@@ -8,7 +6,4 @@ import type { Command } from "./command.js";
  *
  * Returns void because side effects (event appending) happen on the stream.
  */
-export type CommandHandler<
-  TCommand extends Command,
-  TStream,
-> = (stream: TStream, command: TCommand) => void;
+export type CommandHandler = (command: any) => void | any;
