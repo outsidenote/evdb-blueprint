@@ -1,3 +1,3 @@
-import type { ApproveWithdrawal } from "./ApproveWithdrawal.js";
+import type { ApproveWithdrawal } from "../../../slices/ApproveWithdrawal/command.js";
 
 export type WithdrawalStreamCommands = ApproveWithdrawal;

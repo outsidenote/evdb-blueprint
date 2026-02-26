@@ -1,4 +1,4 @@
-import type { Command } from "../types/command.js";
+import type { Command } from "../../eventstore/WithdrawalApprovalsStream/types/command.js";
 
 export interface ApproveWithdrawalProps {
   readonly account: string;

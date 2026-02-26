@@ -1,4 +1,4 @@
-import type { ApproveWithdrawal } from "./ApproveWithdrawal.js";
+import type { ApproveWithdrawal } from "../../../slices/ApproveWithdrawal/command.js";
 
 /**
  * Named spec predicates derived from the event model's GWT specifications.

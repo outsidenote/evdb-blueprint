@@ -1,5 +1,5 @@
 import type { CommandHandler } from "../types/commandHandler.js";
-import type { ApproveWithdrawal } from "./ApproveWithdrawal.js";
+import type { ApproveWithdrawal } from "../../../slices/ApproveWithdrawal/command.js";
 import { FundsWithdrawalApproved } from "../events/FundsWithdrawalApproved.js";
 import { FundsWithdrawalDeclined } from "../events/FundsWithdrawalDeclined.js";
 import type { WithdrawalApprovalStreamType } from "../withdrawalApprovalStreamFactory.js";

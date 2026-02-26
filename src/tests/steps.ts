@@ -3,7 +3,7 @@ import * as assert from "node:assert";
 import StorageAdapterStub from "./StorageAdapterStub.js";
 import type { WithdrawalApprovalStreamType } from "../eventstore/WithdrawalApprovalsStream/withdrawalApprovalStreamFactory.js";
 import WithdrawalApprovalStreamFactory from "../eventstore/WithdrawalApprovalsStream/withdrawalApprovalStreamFactory.js";
-import { ApproveWithdrawal } from "../eventstore/WithdrawalApprovalsStream/commands/ApproveWithdrawal.js";
+import { ApproveWithdrawal } from "../slices/ApproveWithdrawal/command.js";
 import { handleApproveWithdrawal } from "../eventstore/WithdrawalApprovalsStream/commands/commandHandler.js";
 import type { FundsWithdrawalApproved } from "../eventstore/WithdrawalApprovalsStream/events/FundsWithdrawalApproved.js";
 import type { FundsWithdrawalDeclined } from "../eventstore/WithdrawalApprovalsStream/events/FundsWithdrawalDeclined.js";

@@ -1,6 +1,6 @@
 import { Router } from "express";
 import type { Request, Response } from "express";
-import { ApproveWithdrawal } from "../eventstore/WithdrawalApprovalsStream/commands/ApproveWithdrawal.js";
+import { ApproveWithdrawal } from "../slices/ApproveWithdrawal/command.js";
 import { handleApproveWithdrawal } from "../eventstore/WithdrawalApprovalsStream/commands/commandHandler.js";
 import type { WithdrawalApprovalStreamType } from "../eventstore/WithdrawalApprovalsStream/withdrawalApprovalStreamFactory.js";
 
