@@ -1,6 +1,6 @@
-import type { FundsWithdrawalApproved } from "../events/FundsWithdrawalApproved.js";
-import type { FundsWithdrawalDeclined } from "../events/FundsWithdrawalDeclined.js";
-import type { WithdrawalsInProcessViewState } from "./WithdrawalsInProcessViewState.js";
+import type { FundsWithdrawalApproved } from "../../events/FundsWithdrawalApproved.js";
+import type { FundsWithdrawalDeclined } from "../../events/FundsWithdrawalDeclined.js";
+import type { WithdrawalsInProcessViewState } from "./state.js";
 
 export const withdrawalsInProcessViewHandlers = {
   FundsWithdrawalApproved: (
