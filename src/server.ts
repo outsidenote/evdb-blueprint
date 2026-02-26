@@ -1,11 +1,11 @@
 import express from "express";
 import swaggerUi from "swagger-ui-express";
-import { EvDbEventStoreBuilder } from "@eventualize/core/EvDbEventStore";
 import { EvDbPrismaStorageAdapter } from "@eventualize/relational-storage-adapter/EvDbPrismaStorageAdapter";
 import EvDbPostgresPrismaClientFactory from "@eventualize/postgres-storage-adapter/EvDbPostgresPrismaClientFactory";
-import WithdrawalApprovalStreamFactory from "./eventstore/withdrawal-approval-stream/withdrawalApprovalStreamFactory.js";
+import WithdrawalApprovalStreamFactory from "./eventstore/WithdrawalApprovalsStream/withdrawalApprovalStreamFactory.js";
 import { createWithdrawalRouter } from "./routes/withdrawal.js";
 import { swaggerDocument } from "./swagger.js";
+import { EvDbEventStoreBuilder } from "@eventualize/core/store/EvDbEventStoreBuilder";
 
 const PORT = Number(process.env.PORT) || 3000;
 const CONNECTION_URI =
@@ -13,7 +13,7 @@ const CONNECTION_URI =
 
 async function main() {
   const storeClient = EvDbPostgresPrismaClientFactory.create(CONNECTION_URI);
-  const storageAdapter = new EvDbPrismaStorageAdapter(storeClient);
+  const storageAdapter = new EvDbPrismaStorageAdapter(storeClient as any);
 
   const eventStore = new EvDbEventStoreBuilder()
     .withAdapter(storageAdapter)

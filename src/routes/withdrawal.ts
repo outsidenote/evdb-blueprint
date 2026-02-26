@@ -1,8 +1,8 @@
 import { Router } from "express";
 import type { Request, Response } from "express";
-import { ApproveWithdrawal } from "../eventstore/withdrawal-approval-stream/commands/ApproveWithdrawal.js";
-import { handleApproveWithdrawal } from "../eventstore/withdrawal-approval-stream/commands/commandHandler.js";
-import type { WithdrawalApprovalStreamType } from "../eventstore/withdrawal-approval-stream/withdrawalApprovalStreamFactory.js";
+import { ApproveWithdrawal } from "../eventstore/WithdrawalApprovalsStream/commands/ApproveWithdrawal.js";
+import { handleApproveWithdrawal } from "../eventstore/WithdrawalApprovalsStream/commands/commandHandler.js";
+import type { WithdrawalApprovalStreamType } from "../eventstore/WithdrawalApprovalsStream/withdrawalApprovalStreamFactory.js";
 
 type EventStore = {
   getStream(streamType: string, streamId: string): Promise<WithdrawalApprovalStreamType>;

@@ -1,16 +1,16 @@
-import type IEvDbStorageSnapshotAdapter from "@eventualize/types/IEvDbStorageSnapshotAdapter";
-import type IEvDbStorageStreamAdapter from "@eventualize/types/IEvDbStorageStreamAdapter";
-import type EvDbEvent from "@eventualize/types/EvDbEvent";
-import type EvDbMessage from "@eventualize/types/EvDbMessage";
-import type EvDbMessageFilter from "@eventualize/types/EvDbMessageFilter";
-import type EvDbStreamAddress from "@eventualize/types/EvDbStreamAddress";
-import type EvDbStreamCursor from "@eventualize/types/EvDbStreamCursor";
-import type EvDbContinuousFetchOptions from "@eventualize/types/EvDbContinuousFetchOptions";
-import type { EvDbShardName } from "@eventualize/types/primitiveTypes";
-import type EvDbViewAddress from "@eventualize/types/EvDbViewAddress";
-import type { EvDbStoredSnapshotData } from "@eventualize/types/EvDbStoredSnapshotData";
-import { EvDbStoredSnapshotResultRaw } from "@eventualize/types/EvDbStoredSnapshotResult";
-import StreamStoreAffected from "@eventualize/types/StreamStoreAffected";
+import IEvDbStorageSnapshotAdapter from "@eventualize/types/adapters/IEvDbStorageSnapshotAdapter";
+import IEvDbStorageStreamAdapter from "@eventualize/types/adapters/IEvDbStorageStreamAdapter";
+import EvDbEvent from "@eventualize/types/events/EvDbEvent";
+import EvDbMessage from "@eventualize/types/messages/EvDbMessage";
+import EvDbMessageFilter from "@eventualize/types/messages/EvDbMessageFilter";
+import EvDbContinuousFetchOptions from "@eventualize/types/primitives/EvDbContinuousFetchOptions";
+import { EvDbShardName } from "@eventualize/types/primitives/EvDbShardName";
+import { EvDbStoredSnapshotData } from "@eventualize/types/snapshots/EvDbStoredSnapshotData";
+import { EvDbStoredSnapshotResultRaw } from "@eventualize/types/snapshots/EvDbStoredSnapshotResultRaw";
+import EvDbStreamAddress from "@eventualize/types/stream/EvDbStreamAddress";
+import EvDbStreamCursor from "@eventualize/types/stream/EvDbStreamCursor";
+import StreamStoreAffected from "@eventualize/types/stream/StreamStoreAffected";
+import EvDbViewAddress from "@eventualize/types/view/EvDbViewAddress";
 
 export default class InMemoryStorageAdapter
   implements IEvDbStorageSnapshotAdapter, IEvDbStorageStreamAdapter

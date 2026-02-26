@@ -1,6 +1,6 @@
-import type EvDbEvent from "@eventualize/types/EvDbEvent";
-import EvDbMessage from "@eventualize/types/EvDbMessage";
 import type { FundsWithdrawalDeclined } from "../events/FundsWithdrawalDeclined.js";
+import type EvDbEvent from "@eventualize/types/events/EvDbEvent";
+import EvDbMessage from "@eventualize/types/messages/EvDbMessage";
 
 export const withdrawalDeclinedMessages = (
   event: EvDbEvent,

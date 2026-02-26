@@ -1,4 +1,4 @@
-import type IEvDbEventPayload from "@eventualize/types/IEvDbEventPayload";
+import type IEvDbEventPayload from "@eventualize/types/events/IEvDbEventPayload";
 
 export interface FundsWithdrawalApprovedProps {
   readonly account: string;
