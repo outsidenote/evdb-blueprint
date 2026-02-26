@@ -1,15 +1,13 @@
 import { Router } from "express";
 import type { Request, Response } from "express";
 import { ApproveWithdrawal } from "../slices/ApproveWithdrawal/command.js";
-import { handleApproveWithdrawal } from "../slices/ApproveWithdrawal/commandHandler.js";
+import { createApproveWithdrawalAdapter } from "../slices/ApproveWithdrawal/adapter.js";
 import type { WithdrawalApprovalStreamType } from "../eventstore/WithdrawalApprovalsStream/index.js";
+import type { EventStorePort } from "../types/createCommandAdapter.js";
 
-type EventStore = {
-  getStream(streamType: string, streamId: string): Promise<WithdrawalApprovalStreamType>;
-};
-
-export function createWithdrawalRouter(eventStore: EventStore): Router {
+export function createWithdrawalRouter(eventStore: EventStorePort): Router {
   const router = Router();
+  const approveWithdrawal = createApproveWithdrawalAdapter(eventStore);
 
   router.post("/approve", async (req: Request, res: Response) => {
     try {
@@ -44,19 +42,20 @@ export function createWithdrawalRouter(eventStore: EventStore): Router {
         currentBalance,
       });
 
-      const event = await handleApproveWithdrawal(command);
+      const event = await approveWithdrawal(command);
 
       res.json({
         streamId: account,
         event: event?.payload,
       });
-    } catch (err: any) {
-      if (err.message === "OPTIMISTIC_CONCURRENCY_VIOLATION") {
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      if (message === "OPTIMISTIC_CONCURRENCY_VIOLATION") {
         res.status(409).json({ error: "Conflict: stream was modified concurrently" });
         return;
       }
       console.error("POST /approve error:", err);
-      res.status(500).json({ error: err.message });
+      res.status(500).json({ error: message });
     }
   });
 
@@ -65,16 +64,17 @@ export function createWithdrawalRouter(eventStore: EventStore): Router {
       const stream = await eventStore.getStream(
         "WithdrawalApprovalStream",
         req.params.streamId as string,
-      );
+      ) as WithdrawalApprovalStreamType;
 
       res.json({
         streamId: req.params.streamId,
         storedOffset: stream.storedOffset,
         withdrawalsInProcess: stream.views.WithdrawalsInProcess.state,
       });
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
       console.error("GET /:streamId error:", err);
-      res.status(500).json({ error: err.message });
+      res.status(500).json({ error: message });
     }
   });
 

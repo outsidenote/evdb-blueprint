@@ -3,18 +3,15 @@ import EvDbPostgresPrismaClientFactory from "@eventualize/postgres-storage-adapt
 import EvDbPrismaStorageAdapter from "@eventualize/relational-storage-adapter/EvDbPrismaStorageAdapter";
 import WithdrawalApprovalStreamFactory from "./WithdrawalApprovalsStream/index.js";
 
-const PORT = Number(process.env.PORT) || 3000;
 const CONNECTION_URI =
   process.env.POSTGRES_CONNECTION ?? "postgres://eventualize:eventualize123@localhost:5433/eventualize";
 
-
 const storeClient = EvDbPostgresPrismaClientFactory.create(CONNECTION_URI);
-  const storageAdapter = new EvDbPrismaStorageAdapter(storeClient as any);
-
+const storageAdapter = new EvDbPrismaStorageAdapter(storeClient as any);
 
 export const eventStore = new EvDbEventStoreBuilder()
-    .withAdapter(storageAdapter)
-    .withStreamFactory(WithdrawalApprovalStreamFactory)
-    .build();
+  .withAdapter(storageAdapter)
+  .withStreamFactory(WithdrawalApprovalStreamFactory)
+  .build();
 
 export type EventStoreType = typeof eventStore;

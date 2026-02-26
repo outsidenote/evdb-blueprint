@@ -1,5 +1,5 @@
 
-interface WithdrawalsInProcessViewStateItem {
+export interface WithdrawalsInProcessViewStateItem {
   readonly account: string;
   readonly currency: string;
   readonly approvalDate: Date;
@@ -9,10 +9,4 @@ interface WithdrawalsInProcessViewStateItem {
 
 export type WithdrawalsInProcessViewState = ReadonlyArray<WithdrawalsInProcessViewStateItem>;
 
-export const defaultState: WithdrawalsInProcessViewState = [{
-  account: "",
-  currency: "",
-  approvalDate: new Date(0),
-  amount: 0,
-  session: "",
-}]
+export const defaultState: WithdrawalsInProcessViewState = [];

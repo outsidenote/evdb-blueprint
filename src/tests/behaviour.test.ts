@@ -16,7 +16,7 @@ function createTestApp() {
 
   const app = express();
   app.use(express.json());
-  app.use("/api/withdrawals", createWithdrawalRouter(eventStore as any));
+  app.use("/api/withdrawals", createWithdrawalRouter(eventStore));
   return app;
 }
 
@@ -126,10 +126,14 @@ describe("Withdrawal API — Behaviour Tests", () => {
       assert.strictEqual(res.status, 200);
       assert.strictEqual(res.body.streamId, "acc-003");
       assert.strictEqual(res.body.storedOffset, 1);
-      assert.strictEqual(res.body.withdrawalsInProcess.account, "acc-003");
-      assert.strictEqual(res.body.withdrawalsInProcess.amount, 50);
-      assert.strictEqual(res.body.withdrawalsInProcess.currency, "EUR");
-      assert.strictEqual(res.body.withdrawalsInProcess.session, "sess-003");
+
+      const withdrawals = res.body.withdrawalsInProcess;
+      assert.ok(Array.isArray(withdrawals), "withdrawalsInProcess should be an array");
+      assert.strictEqual(withdrawals.length, 1);
+      assert.strictEqual(withdrawals[0].account, "acc-003");
+      assert.strictEqual(withdrawals[0].amount, 50);
+      assert.strictEqual(withdrawals[0].currency, "EUR");
+      assert.strictEqual(withdrawals[0].session, "sess-003");
     });
   });
 

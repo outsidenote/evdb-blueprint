@@ -6,12 +6,10 @@ import { handleApproveWithdrawal } from "../slices/ApproveWithdrawal/commandHand
 import type { WithdrawalApprovalStreamType } from "../eventstore/WithdrawalApprovalsStream/index.js";
 import type { FundsWithdrawalApproved } from "../eventstore/WithdrawalApprovalsStream/events/FundsWithdrawalApproved.js";
 import type { FundsWithdrawalDeclined } from "../eventstore/WithdrawalApprovalsStream/events/FundsWithdrawalDeclined.js";
-import EvDbEvent from "@eventualize/types/events/EvDbEvent";
 
 interface TestContext {
   eventStore: ReturnType<typeof Steps.createEventStore>;
   stream: WithdrawalApprovalStreamType;
-  response?: EvDbEvent;
 }
 
 describe("Withdrawal Approval Slice - Unit Tests", () => {
@@ -26,12 +24,12 @@ describe("Withdrawal Approval Slice - Unit Tests", () => {
       ctx.stream = Steps.createWithdrawalStream("account-1234", ctx.eventStore);
     });
 
-    await t.test("When: ApproveWithdrawal command is issued with currentBalance=200, amount=20", async () => {
-      ctx.response = await Steps.approveWithdrawalWithSufficientFunds(ctx.stream!);
+    await t.test("When: ApproveWithdrawal command is issued with currentBalance=200, amount=20", () => {
+      Steps.approveWithdrawalWithSufficientFunds(ctx.stream!);
     });
 
     await t.test("Then: a FundsWithdrawalApproved event is emitted", () => {
-      Steps.assertWithdrawalApproved(ctx.response);
+      Steps.assertWithdrawalApproved(ctx.stream!);
     });
 
     await t.test("And: a withdrawal approved notification message is produced", () => {
@@ -87,7 +85,7 @@ describe("Withdrawal Approval Slice - Unit Tests", () => {
         transactionTime: new Date("2025-01-01T11:00:00Z"),
         currentBalance: 20,
       });
-      handleApproveWithdrawal(command);
+      handleApproveWithdrawal(ctx.stream!, command);
     });
 
     await t.test("Then: a FundsWithdrawalApproved event is emitted (balance == amount is sufficient)", () => {
@@ -127,7 +125,7 @@ describe("Withdrawal Approval Slice - Unit Tests", () => {
         transactionTime: new Date("2025-01-01T11:00:00Z"),
         currentBalance: 50,
       });
-      handleApproveWithdrawal(command);
+      handleApproveWithdrawal(ctx.stream!, command);
     });
 
     await t.test("Then: a FundsWithdrawalDeclined event is emitted", () => {

@@ -8,11 +8,6 @@ import { handleApproveWithdrawal } from "../slices/ApproveWithdrawal/commandHand
 import type { FundsWithdrawalApproved } from "../eventstore/WithdrawalApprovalsStream/events/FundsWithdrawalApproved.js";
 import type { FundsWithdrawalDeclined } from "../eventstore/WithdrawalApprovalsStream/events/FundsWithdrawalDeclined.js";
 import { EvDbEventStoreBuilder } from "@eventualize/core/store/EvDbEventStoreBuilder";
-import EvDbEvent from "@eventualize/types/events/EvDbEvent";
-
-export enum EVENT_STORE_TYPE {
-  STUB = "Stub",
-}
 
 export default class Steps {
   public static createEventStore() {
@@ -34,10 +29,10 @@ export default class Steps {
   }
 
   // ──────────────────────────────────────────────
-  // Commands
+  // Commands — call the pure handler directly with the stream
   // ──────────────────────────────────────────────
 
-  public static approveWithdrawalWithSufficientFunds(stream: WithdrawalApprovalStreamType): Promise<EvDbEvent> {
+  public static approveWithdrawalWithSufficientFunds(stream: WithdrawalApprovalStreamType): void {
     const command = new ApproveWithdrawal({
       account: "1234",
       amount: 20,
@@ -50,7 +45,7 @@ export default class Steps {
       transactionTime: new Date("2025-01-01T11:00:00Z"),
       currentBalance: 200,
     });
-    return handleApproveWithdrawal(command);
+    handleApproveWithdrawal(stream, command);
   }
 
   public static approveWithdrawalWithInsufficientFunds(stream: WithdrawalApprovalStreamType): void {
@@ -66,17 +61,18 @@ export default class Steps {
       transactionTime: new Date("2025-01-01T11:00:00Z"),
       currentBalance: 10,
     });
-    handleApproveWithdrawal(command);
+    handleApproveWithdrawal(stream, command);
   }
 
   // ──────────────────────────────────────────────
   // Assertions
   // ──────────────────────────────────────────────
 
-  public static assertWithdrawalApproved(response: EvDbEvent | undefined): void {
-    assert.ok(response, "Expected an event to be emitted");
+  public static assertWithdrawalApproved(stream: WithdrawalApprovalStreamType): void {
+    const events = stream.getEvents();
+    assert.strictEqual(events.length, 1, "Expected exactly 1 event");
 
-    const payload = response.payload as FundsWithdrawalApproved;
+    const payload = events[0].payload as FundsWithdrawalApproved;
     assert.strictEqual(payload.payloadType, "FundsWithdrawalApproved");
     assert.strictEqual(payload.amount, 20);
     assert.strictEqual(payload.account, "1234");
