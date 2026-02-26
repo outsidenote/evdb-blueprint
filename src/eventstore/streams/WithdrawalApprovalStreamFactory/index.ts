@@ -1,15 +1,14 @@
 import { FundsWithdrawalApproved } from "./events/FundsWithdrawalApproved.js";
 import { FundsWithdrawalDeclined } from "./events/FundsWithdrawalDeclined.js";
-import { StreamFactoryBuilder } from "@eventualize/core/EvDbStreamFactory";
 import { withdrawalApprovedMessages } from "./messages/approvedMessages.js";
 import { withdrawalDeclinedMessages } from "./messages/declinedMessages.js";
-import { WithdrawalsInProcessViewState } from "./views/WithdrawalsInProcessViewState.js";
-import { withdrawalsInProcessViewHandlers } from "./views/withdrawalsInProcessViewHandlers.js";
+import { handlers } from "./views/WithdrawIsInProcess/reduce.js";
+import { StreamFactoryBuilder } from "@eventualize/core/factories/StreamFactoryBuilder";
 
 const WithdrawalApprovalStreamFactory = new StreamFactoryBuilder("WithdrawalApprovalStream")
   .withEventType(FundsWithdrawalApproved, withdrawalApprovedMessages)
   .withEventType(FundsWithdrawalDeclined, withdrawalDeclinedMessages)
-  .withView("WithdrawalsInProcess", WithdrawalsInProcessViewState, withdrawalsInProcessViewHandlers)
+  .withView("WithdrawalsInProcess", [], handlers)
   .build();
 
 export default WithdrawalApprovalStreamFactory;

@@ -1,6 +1,5 @@
-import type EvDbEvent from "@eventualize/types/EvDbEvent";
-import EvDbMessage from "@eventualize/types/EvDbMessage";
-import type { FundsWithdrawalDeclined } from "../events/FundsWithdrawalDeclined.js";
+import EvDbMessage from "@eventualize/types/messages/EvDbMessage";
+import type EvDbEvent from "@eventualize/types/events/EvDbEvent";import type { FundsWithdrawalDeclined } from "../events/FundsWithdrawalDeclined.js";
 
 export const withdrawalDeclinedMessages = (
   event: EvDbEvent,
@@ -11,7 +10,7 @@ export const withdrawalDeclinedMessages = (
   return [
     EvDbMessage.createFromEvent(event, {
       payloadType: "Withdrawal Declined Notification",
-      account: payload.account,
+      account: payload.accountId,
       amount: payload.amount,
       reason: payload.reason,
       currency: payload.currency,

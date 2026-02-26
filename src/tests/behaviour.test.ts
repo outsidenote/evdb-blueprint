@@ -3,7 +3,7 @@ import { test, describe } from "node:test";
 import express from "express";
 import request from "supertest";
 import { EvDbEventStoreBuilder } from "@eventualize/core/EvDbEventStore";
-import WithdrawalApprovalStreamFactory from "../eventstore/withdrawal-approval-stream/withdrawalApprovalStreamFactory.js";
+import WithdrawalApprovalStreamFactory from "../eventstore/streams/WithdrawalApprovalStreamFactory/index.js";
 import { createWithdrawalRouter } from "../routes/withdrawal.js";
 import InMemoryStorageAdapter from "./InMemoryStorageAdapter.js";
 

@@ -1,5 +1,6 @@
-import type EvDbEvent from "@eventualize/types/EvDbEvent";
-import EvDbMessage from "@eventualize/types/EvDbMessage";
+
+import EvDbMessage from "@eventualize/types/messages/EvDbMessage";
+import type EvDbEvent from "@eventualize/types/events/EvDbEvent";
 import type { FundsWithdrawalApproved } from "../events/FundsWithdrawalApproved.js";
 
 export const withdrawalApprovedMessages = (
@@ -11,7 +12,7 @@ export const withdrawalApprovedMessages = (
   return [
     EvDbMessage.createFromEvent(event, {
       payloadType: "Withdrawal Approved Notification",
-      account: payload.account,
+      account: payload.accountId,
       amount: payload.amount,
       currency: payload.currency,
     }),

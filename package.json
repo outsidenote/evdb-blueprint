@@ -16,9 +16,9 @@
     "test": "node --import tsx --test 'src/tests/**/*.test.ts'"
   },
   "dependencies": {
-    "@eventualize/core": "^2.0.0",
-    "@eventualize/postgres-storage-adapter": "^2.0.0",
-    "@eventualize/relational-storage-adapter": "^2.0.0",
+    "@eventualize/core": "^2.1.0",
+    "@eventualize/postgres-storage-adapter": "^2.1.0",
+    "@eventualize/relational-storage-adapter": "^2.1.0",
     "@eventualize/types": "^2.0.0",
     "@prisma/adapter-pg": "7.3.0",
     "@prisma/client": "7.3.0",
