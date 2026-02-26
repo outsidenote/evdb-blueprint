@@ -2,7 +2,7 @@ import * as assert from "node:assert";
 import { test, describe } from "node:test";
 import express from "express";
 import request from "supertest";
-import WithdrawalApprovalStreamFactory from "../eventstore/WithdrawalApprovalsStream/withdrawalApprovalStreamFactory.js";
+import WithdrawalApprovalStreamFactory from "../eventstore/WithdrawalApprovalsStream/index.js";
 import { createWithdrawalRouter } from "../routes/withdrawal.js";
 import InMemoryStorageAdapter from "./InMemoryStorageAdapter.js";
 import { EvDbEventStoreBuilder } from "@eventualize/core/store/EvDbEventStoreBuilder";

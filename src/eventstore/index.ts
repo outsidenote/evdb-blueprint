@@ -1,7 +1,7 @@
 import { EvDbEventStoreBuilder } from "@eventualize/core/store/EvDbEventStoreBuilder";
 import EvDbPostgresPrismaClientFactory from "@eventualize/postgres-storage-adapter/EvDbPostgresPrismaClientFactory";
 import EvDbPrismaStorageAdapter from "@eventualize/relational-storage-adapter/EvDbPrismaStorageAdapter";
-import WithdrawalApprovalStreamFactory from "./WithdrawalApprovalsStream/withdrawalApprovalStreamFactory.js";
+import WithdrawalApprovalStreamFactory from "./WithdrawalApprovalsStream/index.js";
 
 const PORT = Number(process.env.PORT) || 3000;
 const CONNECTION_URI =

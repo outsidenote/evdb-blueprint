@@ -3,7 +3,7 @@ import { test, describe } from "node:test";
 import Steps from "./steps.js";
 import { ApproveWithdrawal } from "../slices/ApproveWithdrawal/command.js";
 import { handleApproveWithdrawal } from "../slices/ApproveWithdrawal/commandHandler.js";
-import type { WithdrawalApprovalStreamType } from "../eventstore/WithdrawalApprovalsStream/withdrawalApprovalStreamFactory.js";
+import type { WithdrawalApprovalStreamType } from "../eventstore/WithdrawalApprovalsStream/index.js";
 import type { FundsWithdrawalApproved } from "../eventstore/WithdrawalApprovalsStream/events/FundsWithdrawalApproved.js";
 import type { FundsWithdrawalDeclined } from "../eventstore/WithdrawalApprovalsStream/events/FundsWithdrawalDeclined.js";
 
