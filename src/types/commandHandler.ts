@@ -24,7 +24,7 @@ export type CommandHandler<
  * If no events were emitted (idempotent/no-op), events is empty
  * and the stream was NOT stored.
  */
-export interface CommandAdapterResult {
+export interface CommandHandlerOrchestratorResult {
   readonly streamId: string;
   readonly events: readonly EvDbEvent[];
 }
@@ -41,5 +41,5 @@ export interface CommandAdapterResult {
  *
  * @typeParam TCommand — the specific command type
  */
-export type CommandAdapter<TCommand> =
-  (command: TCommand) => Promise<CommandAdapterResult>;
+export type CommandHandlerOrchestrator<TCommand> =
+  (command: TCommand) => Promise<CommandHandlerOrchestratorResult>;

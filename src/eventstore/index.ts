@@ -1,7 +1,7 @@
 import { EvDbEventStoreBuilder } from "@eventualize/core/store/EvDbEventStoreBuilder";
 import EvDbPostgresPrismaClientFactory from "@eventualize/postgres-storage-adapter/EvDbPostgresPrismaClientFactory";
 import EvDbPrismaStorageAdapter from "@eventualize/relational-storage-adapter/EvDbPrismaStorageAdapter";
-import WithdrawalApprovalStreamFactory from "./WithdrawalApprovalsStream/index.js";
+import WithdrawalApprovalStreamFactory from "../BusinessCapabilities/Funds/swimlanes/WithdrawalApprovalsStream/index.js";
 
 const CONNECTION_URI =
   process.env.POSTGRES_CONNECTION ?? "postgres://eventualize:eventualize123@localhost:5433/eventualize";
@@ -11,7 +11,6 @@ const storageAdapter = new EvDbPrismaStorageAdapter(storeClient as any);
 
 export const eventStore = new EvDbEventStoreBuilder()
   .withAdapter(storageAdapter)
-  .withStreamFactory(WithdrawalApprovalStreamFactory)
   .build();
 
 export type EventStoreType = typeof eventStore;

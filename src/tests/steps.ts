@@ -1,12 +1,12 @@
 import * as assert from "node:assert";
 
 import StorageAdapterStub from "./StorageAdapterStub.js";
-import type { WithdrawalApprovalStreamType } from "../eventstore/WithdrawalApprovalsStream/index.js";
-import WithdrawalApprovalStreamFactory from "../eventstore/WithdrawalApprovalsStream/index.js";
-import { ApproveWithdrawal } from "../slices/ApproveWithdrawal/command.js";
-import { handleApproveWithdrawal } from "../slices/ApproveWithdrawal/commandHandler.js";
-import type { FundsWithdrawalApproved } from "../eventstore/WithdrawalApprovalsStream/events/FundsWithdrawalApproved.js";
-import type { FundsWithdrawalDeclined } from "../eventstore/WithdrawalApprovalsStream/events/FundsWithdrawalDeclined.js";
+import type { WithdrawalApprovalStreamType } from "../BusinessCapabilities/Funds/swimlanes/WithdrawalApprovalsStream/index.js";
+import WithdrawalApprovalStreamFactory from "../BusinessCapabilities/Funds/swimlanes/WithdrawalApprovalsStream/index.js";
+import { ApproveWithdrawal } from "../BusinessCapabilities/Funds/slices/ApproveWithdrawal/command.js";
+import { handleApproveWithdrawal } from "../BusinessCapabilities/Funds/slices/ApproveWithdrawal/commandHandler.js";
+import type { FundsWithdrawalApproved } from "../BusinessCapabilities/Funds/swimlanes/WithdrawalApprovalsStream/events/FundsWithdrawalApproved.js";
+import type { FundsWithdrawalDeclined } from "../BusinessCapabilities/Funds/swimlanes/WithdrawalApprovalsStream/events/FundsWithdrawalDeclined.js";
 import { EvDbEventStoreBuilder } from "@eventualize/core/store/EvDbEventStoreBuilder";
 
 export default class Steps {

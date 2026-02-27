@@ -1,11 +1,11 @@
 import * as assert from "node:assert";
 import { test, describe } from "node:test";
 import Steps from "./steps.js";
-import { ApproveWithdrawal } from "../slices/ApproveWithdrawal/command.js";
-import { handleApproveWithdrawal } from "../slices/ApproveWithdrawal/commandHandler.js";
-import type { WithdrawalApprovalStreamType } from "../eventstore/WithdrawalApprovalsStream/index.js";
-import type { FundsWithdrawalApproved } from "../eventstore/WithdrawalApprovalsStream/events/FundsWithdrawalApproved.js";
-import type { FundsWithdrawalDeclined } from "../eventstore/WithdrawalApprovalsStream/events/FundsWithdrawalDeclined.js";
+import { ApproveWithdrawal } from "../BusinessCapabilities/Funds/slices/ApproveWithdrawal/command.js";
+import { handleApproveWithdrawal } from "../BusinessCapabilities/Funds/slices/ApproveWithdrawal/commandHandler.js";
+import type { WithdrawalApprovalStreamType } from "../BusinessCapabilities/Funds/swimlanes/WithdrawalApprovalsStream/index.js";
+import type { FundsWithdrawalApproved } from "../BusinessCapabilities/Funds/swimlanes/WithdrawalApprovalsStream/events/FundsWithdrawalApproved.js";
+import type { FundsWithdrawalDeclined } from "../BusinessCapabilities/Funds/swimlanes/WithdrawalApprovalsStream/events/FundsWithdrawalDeclined.js";
 
 interface TestContext {
   eventStore: ReturnType<typeof Steps.createEventStore>;

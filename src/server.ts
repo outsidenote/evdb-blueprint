@@ -2,7 +2,7 @@ import express from "express";
 import swaggerUi from "swagger-ui-express";
 import { createWithdrawalRouter } from "./routes/withdrawal.js";
 import { swaggerDocument } from "./swagger.js";
-import { eventStore } from "./eventstore/index.js";
+import { eventStore } from "./EventStore/index.js";
 
 const PORT = Number(process.env.PORT) || 3000;
 
