@@ -7,25 +7,18 @@ import { ApproveWithdrawal } from "../BusinessCapabilities/Funds/slices/ApproveW
 import { handleApproveWithdrawal } from "../BusinessCapabilities/Funds/slices/ApproveWithdrawal/commandHandler.js";
 import type { FundsWithdrawalApproved } from "../BusinessCapabilities/Funds/swimlanes/WithdrawalApprovalsStream/events/FundsWithdrawalApproved.js";
 import type { FundsWithdrawalDeclined } from "../BusinessCapabilities/Funds/swimlanes/WithdrawalApprovalsStream/events/FundsWithdrawalDeclined.js";
-import { EvDbEventStoreBuilder } from "@eventualize/core/store/EvDbEventStoreBuilder";
+import { IEvDbStorageAdapter } from "@eventualize/core/adapters/IEvDbStorageAdapter";
 
 export default class Steps {
-  public static createEventStore() {
-    const storageAdapter = new StorageAdapterStub();
-
-    const eventstore = new EvDbEventStoreBuilder()
-      .withAdapter(storageAdapter)
-      .withStreamFactory(WithdrawalApprovalStreamFactory)
-      .build();
-
-    return eventstore;
+  public static createStorageAdapter() {
+    return new StorageAdapterStub();
   }
 
   public static createWithdrawalStream(
     streamId: string,
-    eventStore: ReturnType<typeof Steps.createEventStore>,
-  ): WithdrawalApprovalStreamType {
-    return eventStore.createWithdrawalApprovalStream(streamId) as WithdrawalApprovalStreamType;
+    storageAdapter: IEvDbStorageAdapter,
+  ) {
+    return WithdrawalApprovalStreamFactory.create(streamId, storageAdapter, storageAdapter);
   }
 
   // ──────────────────────────────────────────────

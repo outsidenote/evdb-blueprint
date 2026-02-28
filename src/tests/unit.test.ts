@@ -6,9 +6,10 @@ import { handleApproveWithdrawal } from "../BusinessCapabilities/Funds/slices/Ap
 import type { WithdrawalApprovalStreamType } from "../BusinessCapabilities/Funds/swimlanes/WithdrawalApprovalsStream/index.js";
 import type { FundsWithdrawalApproved } from "../BusinessCapabilities/Funds/swimlanes/WithdrawalApprovalsStream/events/FundsWithdrawalApproved.js";
 import type { FundsWithdrawalDeclined } from "../BusinessCapabilities/Funds/swimlanes/WithdrawalApprovalsStream/events/FundsWithdrawalDeclined.js";
+import { IEvDbStorageAdapter } from "@eventualize/core/adapters/IEvDbStorageAdapter";
 
 interface TestContext {
-  eventStore: ReturnType<typeof Steps.createEventStore>;
+  storageAdapter: IEvDbStorageAdapter;
   stream: WithdrawalApprovalStreamType;
 }
 
@@ -19,9 +20,9 @@ describe("Withdrawal Approval Slice - Unit Tests", () => {
   test("Approve withdrawal when balance is sufficient", async (t) => {
     const ctx: Partial<TestContext> = {};
 
-    await t.test("Given: an empty withdrawal approval stream", () => {
-      ctx.eventStore = Steps.createEventStore();
-      ctx.stream = Steps.createWithdrawalStream("account-1234", ctx.eventStore);
+    await t.test("Given: an empty withdrawal approval stream", async () => {
+      ctx.storageAdapter = Steps.createStorageAdapter();
+      ctx.stream = await Steps.createWithdrawalStream("account-1234", ctx.storageAdapter);
     });
 
     await t.test("When: ApproveWithdrawal command is issued with currentBalance=200, amount=20", () => {
@@ -43,9 +44,9 @@ describe("Withdrawal Approval Slice - Unit Tests", () => {
   test("Decline withdrawal when balance is insufficient", async (t) => {
     const ctx: Partial<TestContext> = {};
 
-    await t.test("Given: an empty withdrawal approval stream", () => {
-      ctx.eventStore = Steps.createEventStore();
-      ctx.stream = Steps.createWithdrawalStream("account-1234", ctx.eventStore);
+    await t.test("Given: an empty withdrawal approval stream", async () => {
+      ctx.storageAdapter = Steps.createStorageAdapter();
+      ctx.stream = await Steps.createWithdrawalStream("account-1234", ctx.storageAdapter);
     });
 
     await t.test("When: ApproveWithdrawal command is issued with currentBalance=10, amount=20", () => {
@@ -67,9 +68,10 @@ describe("Withdrawal Approval Slice - Unit Tests", () => {
   test("Approve withdrawal when balance equals withdrawal amount exactly", async (t) => {
     const ctx: Partial<TestContext> = {};
 
-    await t.test("Given: an empty withdrawal approval stream", () => {
-      ctx.eventStore = Steps.createEventStore();
-      ctx.stream = Steps.createWithdrawalStream("account-5678", ctx.eventStore);
+    await t.test("Given: an empty withdrawal approval stream", async () => {
+      ctx.storageAdapter = Steps.createStorageAdapter();
+      ctx.stream = await Steps.createWithdrawalStream("account-5678", ctx.storageAdapter);
+      ctx.stream.getEvents(); // Ensure stream is initialized
     });
 
     await t.test("When: ApproveWithdrawal command is issued with currentBalance=20, amount=20", () => {
@@ -107,9 +109,9 @@ describe("Withdrawal Approval Slice - Unit Tests", () => {
   test("Insufficient Effective Funds Withdrawals", async (t) => {
     const ctx: Partial<TestContext> = {};
 
-    await t.test("Given: an empty withdrawal approval stream for account 123", () => {
-      ctx.eventStore = Steps.createEventStore();
-      ctx.stream = Steps.createWithdrawalStream("account-123", ctx.eventStore);
+    await t.test("Given: an empty withdrawal approval stream for account 123", async () => {
+      ctx.storageAdapter = Steps.createStorageAdapter();
+      ctx.stream = await Steps.createWithdrawalStream("account-123", ctx.storageAdapter);
     });
 
     await t.test("When: ApproveWithdrawal command is issued with Account=123, Amount=100, CurrentBalance=50", () => {

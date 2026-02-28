@@ -2,7 +2,7 @@ import express from "express";
 import swaggerUi from "swagger-ui-express";
 import { createWithdrawalRouter } from "./routes/withdrawal.js";
 import { swaggerDocument } from "./swagger.js";
-import { eventStore } from "./EventStore/index.js";
+import { storageAdapter } from "./EventStore/index.js";
 
 const PORT = Number(process.env.PORT) || 3000;
 
@@ -11,7 +11,7 @@ async function main() {
   const app = express();
   app.use(express.json());
   app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
-  app.use("/api/withdrawals", createWithdrawalRouter(eventStore));
+  app.use("/api/withdrawals", createWithdrawalRouter(storageAdapter));
 
   app.listen(PORT, () => {
     console.log(`Withdrawal API running at http://localhost:${PORT}`);

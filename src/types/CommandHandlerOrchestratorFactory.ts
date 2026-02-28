@@ -1,5 +1,10 @@
 import type EvDbStream from "@eventualize/core/store/EvDbStream";
 import type { CommandHandler, CommandHandlerOrchestrator, CommandHandlerOrchestratorResult } from "./commandHandler.js";
+import { IEvDbStorageAdapter } from "@eventualize/core/adapters/IEvDbStorageAdapter";
+import { IEvDbStreamFactory } from "@eventualize/core/factories/IEvDbStreamFactory";
+import IEvDbEventPayload from "@eventualize/types/events/IEvDbEventPayload";
+import { EvDbView } from "@eventualize/core/view/EvDbView";
+import { StreamWithEventMethods } from "@eventualize/core/factories/EvDbStreamFactory";
 
 /**
  * Minimal interface for the event store dependency.
@@ -27,21 +32,26 @@ export interface EventStorePort {
 
 export class CommandHandlerOrchestratorFactory {
   static create<
-    TStream extends EvDbStream,
     TCommand,
+    TEvents extends IEvDbEventPayload,
+    TStreamType extends string,
+    TViews extends Record<string, EvDbView<any>> = {},
   >(
-    eventStore: EventStorePort,
-    streamType: string,
+    storageAdapter: IEvDbStorageAdapter,
+    streamFactory: IEvDbStreamFactory<TEvents, TStreamType, TViews>,
     getStreamId: (command: TCommand) => string,
-    commandHandler: CommandHandler<TStream, TCommand>,
+    commandHandler: CommandHandler<StreamWithEventMethods<TEvents, TViews>, TCommand>,
   ): CommandHandlerOrchestrator<TCommand> {
     async function orchestrate(command: TCommand) {
       const streamId = getStreamId(command);
       const fetchStream = () => {
-        return eventStore.getStream(
-          streamType,
-          streamId
-        ) as Promise<TStream>;
+        return streamFactory.get(
+          streamId,
+          storageAdapter,
+          storageAdapter
+        ) as Promise<
+            StreamWithEventMethods<TEvents, TViews>
+          >;
       };
       const stream = await fetchStream();
 
