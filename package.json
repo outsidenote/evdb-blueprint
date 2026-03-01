@@ -11,7 +11,7 @@
     "rebuild": "npm run clean && npm run build",
     "start": "node dist/server.js",
     "dev": "node --import tsx src/server.ts",
-    "test:unit": "node --import tsx --test 'src/tests/unit.test.ts'",
+    "test:unit": "node --import tsx --test 'src/BusinessCapabilities/Funds/slices/*/tests/unit.test.ts'",
     "test:behaviour": "node --import tsx --test 'src/tests/behaviour.test.ts'",
     "test": "node --import tsx --test 'src/tests/**/*.test.ts'"
   },

@@ -1,0 +1,44 @@
+import * as assert from "node:assert";
+import { CommandHandler } from "./commandHandler.js";
+import IEvDbEventPayload from "@eventualize/types/events/IEvDbEventPayload";
+import { EvDbView } from "@eventualize/core/view/EvDbView";
+import { StreamWithEventMethods } from "@eventualize/core/factories/EvDbStreamFactory";
+import { IEvDbStreamFactory } from "@eventualize/core/factories/IEvDbStreamFactory";
+import StorageAdapterStub from "../tests/StorageAdapterStub.js";
+import EvDbStream from "@eventualize/core/store/EvDbStream";
+
+export class SliceTester {
+    static async testCommandHandler<
+        TCommand,
+        TEvents extends IEvDbEventPayload,
+        TStreamType extends string,
+        TViews extends Record<string, EvDbView<any>> = {}
+    >(
+        commandHandler: CommandHandler<StreamWithEventMethods<TEvents, TViews>, TCommand>,
+        streamFactory: IEvDbStreamFactory<TEvents, TStreamType, TViews>,
+        givenEvents: TEvents[] = [],
+        command: TCommand,
+        thenResult: TEvents[] | Error = [],
+    ) {
+        const storageAdapter = new StorageAdapterStub();
+        const stream = await streamFactory.create("test-stream", storageAdapter);
+        givenEvents.forEach(event => {
+            const methodName = `appendEvent${event.payloadType}`;
+            ((stream as Record<string, any>)[methodName] as Function)(event)
+        });
+        try {
+            commandHandler(stream, command);
+        } catch (error: Error | unknown) {
+            assert.equal(error instanceof Error, true, "Expected an error to be thrown");
+            assert.equal(thenResult instanceof Error, true, "Expected result should not be an Error");
+            assert.strictEqual((error as Error).message, (thenResult as Error).message);
+        }
+        const streamEvents = (stream as EvDbStream).getEvents();
+        const start = streamEvents.length - (thenResult instanceof Error ? 0 : thenResult.length);
+        const actualEvents = streamEvents.slice(start).map(e => e.payload as TEvents);
+        assert.strictEqual(
+            JSON.stringify(actualEvents),
+            JSON.stringify(thenResult)
+        );
+    }
+}

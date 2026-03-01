@@ -30,7 +30,6 @@ export const handleApproveWithdrawal: CommandHandler<
         payer: command.payer,
         source: command.source,
         transactionId: command.transactionId,
-        declinedDate: new Date(),
       }),
     );
   } else {
@@ -38,7 +37,6 @@ export const handleApproveWithdrawal: CommandHandler<
       new FundsWithdrawalApproved({
         account: command.account,
         amount: command.amount,
-        approvalDate: command.approvalDate,
         currency: command.currency,
         session: command.session,
         source: command.source,
