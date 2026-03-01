@@ -1,7 +1,7 @@
 import type EvDbStream from "@eventualize/core/store/EvDbStream";
 import type { CommandHandler, CommandHandlerOrchestrator, CommandHandlerOrchestratorResult } from "./commandHandler.js";
 import { IEvDbStorageAdapter } from "@eventualize/core/adapters/IEvDbStorageAdapter";
-import { IEvDbStreamFactory } from "@eventualize/core/factories/IEvDbStreamFactory";
+import { EvDbStreamFactory } from "@eventualize/core/factories/EvDbStreamFactory";
 import IEvDbEventPayload from "@eventualize/types/events/IEvDbEventPayload";
 import { EvDbView } from "@eventualize/core/view/EvDbView";
 import { StreamWithEventMethods } from "@eventualize/core/factories/EvDbStreamFactory";
@@ -38,7 +38,7 @@ export class CommandHandlerOrchestratorFactory {
     TViews extends Record<string, EvDbView<any>> = {},
   >(
     storageAdapter: IEvDbStorageAdapter,
-    streamFactory: IEvDbStreamFactory<TEvents, TStreamType, TViews>,
+    streamFactory: EvDbStreamFactory<TEvents, TStreamType, TViews>,
     getStreamId: (command: TCommand) => string,
     commandHandler: CommandHandler<StreamWithEventMethods<TEvents, TViews>, TCommand>,
   ): CommandHandlerOrchestrator<TCommand> {

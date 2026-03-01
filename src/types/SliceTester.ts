@@ -3,7 +3,7 @@ import { CommandHandler } from "./commandHandler.js";
 import IEvDbEventPayload from "@eventualize/types/events/IEvDbEventPayload";
 import { EvDbView } from "@eventualize/core/view/EvDbView";
 import { StreamWithEventMethods } from "@eventualize/core/factories/EvDbStreamFactory";
-import { IEvDbStreamFactory } from "@eventualize/core/factories/IEvDbStreamFactory";
+import { EvDbStreamFactory } from "@eventualize/core/factories/EvDbStreamFactory";
 import StorageAdapterStub from "../tests/StorageAdapterStub.js";
 import EvDbStream from "@eventualize/core/store/EvDbStream";
 
@@ -15,7 +15,7 @@ export class SliceTester {
         TViews extends Record<string, EvDbView<any>> = {}
     >(
         commandHandler: CommandHandler<StreamWithEventMethods<TEvents, TViews>, TCommand>,
-        streamFactory: IEvDbStreamFactory<TEvents, TStreamType, TViews>,
+        streamFactory: EvDbStreamFactory<TEvents, TStreamType, TViews>,
         givenEvents: TEvents[] = [],
         command: TCommand,
         thenResult: TEvents[] | Error = [],
