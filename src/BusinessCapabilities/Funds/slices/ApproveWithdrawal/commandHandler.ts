@@ -4,6 +4,7 @@ import { FundsWithdrawalApproved } from "../../swimlanes/WithdrawalApprovalsStre
 import { FundsWithdrawalDeclined } from "../../swimlanes/WithdrawalApprovalsStream/events/FundsWithdrawalDeclined.js";
 import type { WithdrawalApprovalStreamType } from "../../swimlanes/WithdrawalApprovalsStream/index.js";
 import { hasInsufficientEffectiveFunds } from "./gwts.js";
+import { SliceStateApprovalWithdrawalViewState } from "../../swimlanes/WithdrawalApprovalsStream/views/SliceStateApproveWithdrawal/state.js";
 
 /**
  * Pure command handler for the ApproveWithdrawal command.
@@ -19,14 +20,15 @@ export const handleApproveWithdrawal: CommandHandler<
   WithdrawalApprovalStreamType,
   ApproveWithdrawal
 > = (stream, command) => {
-  if (hasInsufficientEffectiveFunds(command)) {
+  const { balance } = stream.views.SliceStateApproveWithdrawal.state;
+  if (hasInsufficientEffectiveFunds(balance, command)) {
     stream.appendEventFundsWithdrawalDeclined(
       new FundsWithdrawalDeclined({
         account: command.account,
         session: command.session,
         currency: command.currency,
         amount: command.amount,
-        reason: `Insufficient funds: balance ${command.currentBalance} is less than withdrawal amount ${command.amount}`,
+        reason: `Insufficient funds: balance ${balance} is less than withdrawal amount ${command.amount}`,
         payer: command.payer,
         source: command.source,
         transactionId: command.transactionId,

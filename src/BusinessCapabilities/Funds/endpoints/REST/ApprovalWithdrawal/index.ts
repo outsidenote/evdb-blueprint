@@ -39,7 +39,6 @@ export const createApprovalWithdrawalRestAdapter = (storageAdapter: IEvDbStorage
                 payer: payer ?? "unknown",
                 transactionId: transactionId ?? randomUUID(),
                 transactionTime: transactionTime ? new Date(transactionTime) : new Date(),
-                currentBalance,
             });
 
             const result = await approveWithdrawal(command);

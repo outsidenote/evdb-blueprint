@@ -11,5 +11,5 @@ import type { ApproveWithdrawal } from "./command.js";
  * WHEN: ApproveWithdrawal where currentBalance < amount
  * THEN: FundsWithdrawalDeclined
  */
-export const hasInsufficientEffectiveFunds = (command: ApproveWithdrawal): boolean =>
-  command.currentBalance < command.amount;
+export const hasInsufficientEffectiveFunds = (balance: number, command: ApproveWithdrawal): boolean =>
+  balance < command.amount;

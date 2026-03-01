@@ -11,7 +11,7 @@
                 "--import",
                 "tsx",
                 "--test",
-                "src/tests/unit.test.ts"
+                "src/BusinessCapabilities/Funds/slices/*/tests/unit.test.ts"
             ],
             "console": "integratedTerminal"
         },

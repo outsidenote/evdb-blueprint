@@ -21,7 +21,7 @@ export class SliceTester {
         thenResult: TEvents[] | Error = [],
     ) {
         const storageAdapter = new StorageAdapterStub();
-        const stream = await streamFactory.create("test-stream", storageAdapter);
+        const stream = await streamFactory.create("test-stream", storageAdapter, storageAdapter);
         givenEvents.forEach(event => {
             const methodName = `appendEvent${event.payloadType}`;
             ((stream as Record<string, any>)[methodName] as Function)(event)

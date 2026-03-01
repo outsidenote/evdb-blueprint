@@ -5,9 +5,21 @@ import { FundsWithdrawalApproved } from "../../../swimlanes/WithdrawalApprovalsS
 import { FundsWithdrawalDeclined } from "../../../swimlanes/WithdrawalApprovalsStream/events/FundsWithdrawalDeclined.js";
 import { SliceTester } from "../../../../../types/SliceTester.js";
 import WithdrawalApprovalStreamFactory from "../../../swimlanes/WithdrawalApprovalsStream/index.js";
+import { FundsDepositApproved } from "../../../swimlanes/WithdrawalApprovalsStream/events/FundsDepositApproved.js";
 
 describe("Withdrawal Approval Slice - Unit Tests", () => {
   test("main flow", async () => {
+    const givenEvents = [
+      new FundsDepositApproved({
+        account: '1234',
+        amount: 20,
+        currency: 'USD',
+        payer: 'John Doe',
+        session: '0011',
+        source: 'ATM',
+        transactionId: '0011'
+      })
+    ]
     const command = new ApproveWithdrawal({
       account: "1234",
       amount: 20,
@@ -18,7 +30,6 @@ describe("Withdrawal Approval Slice - Unit Tests", () => {
       payer: "John Doe",
       transactionId: "0011",
       transactionTime: new Date("2025-01-01T11:00:00Z"),
-      currentBalance: 200,
     });
     const expectedEvents = [
       new FundsWithdrawalApproved({
@@ -34,12 +45,24 @@ describe("Withdrawal Approval Slice - Unit Tests", () => {
     return SliceTester.testCommandHandler(
       handleApproveWithdrawal,
       WithdrawalApprovalStreamFactory,
-      [],
+      givenEvents,
       command,
       expectedEvents
     )
   });
   test("Can't withdraw when funds insufficient", async () => {
+    const givenEvents = [
+      new FundsDepositApproved({
+        account: '1234',
+        amount: 20,
+        currency: 'USD',
+        payer: 'John Doe',
+        session: '0011',
+        source: 'ATM',
+        transactionId: '0011'
+      })
+    ]
+
     const command = new ApproveWithdrawal({
       account: "123",
       amount: 100,
@@ -50,7 +73,6 @@ describe("Withdrawal Approval Slice - Unit Tests", () => {
       payer: "John Doe",
       transactionId: "0011",
       transactionTime: new Date("2025-01-01T11:00:00Z"),
-      currentBalance: 50,
     });
     const expectedEvents = [
       new FundsWithdrawalDeclined({
@@ -61,13 +83,13 @@ describe("Withdrawal Approval Slice - Unit Tests", () => {
         session: '0011',
         source: 'ATM',
         transactionId: '0011',
-        reason: 'Insufficient funds: balance 50 is less than withdrawal amount 100'
+        reason: 'Insufficient funds: balance 20 is less than withdrawal amount 100'
       })
     ]
     return SliceTester.testCommandHandler(
       handleApproveWithdrawal,
       WithdrawalApprovalStreamFactory,
-      [],
+      givenEvents,
       command,
       expectedEvents
     )
