@@ -3,6 +3,7 @@ import type { FundsWithdrawalApproved } from "../../events/FundsWithdrawalApprov
 import type { FundsWithdrawalDeclined } from "../../events/FundsWithdrawalDeclined.js";
 import type { WithdrawalsInProcessViewState } from "./state.js";
 import { FundsDepositApproved } from "../../events/FundsDepositApproved.js";
+import { WithdrawCommissionCalculated } from "../../events/WithdrawCommissionCalculated.js";
 
 export const handlers = {
   FundsWithdrawalApproved: (
@@ -23,6 +24,10 @@ export const handlers = {
   ): WithdrawalsInProcessViewState => state,
 
   FundsDepositApproved: (
+    state: WithdrawalsInProcessViewState,
+  ): WithdrawalsInProcessViewState => state,
+
+  WithdrawCommissionCalculated: (
     state: WithdrawalsInProcessViewState,
   ): WithdrawalsInProcessViewState => state,
 };

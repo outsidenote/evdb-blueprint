@@ -1,11 +1,11 @@
 import { test, describe } from "node:test";
 import { ApproveWithdrawal } from "../command.js";
 import { handleApproveWithdrawal } from "../commandHandler.js";
-import { FundsWithdrawalApproved } from "../../../swimlanes/WithdrawalApprovalsStream/events/FundsWithdrawalApproved.js";
-import { FundsWithdrawalDeclined } from "../../../swimlanes/WithdrawalApprovalsStream/events/FundsWithdrawalDeclined.js";
+import { FundsWithdrawalApproved } from "../../../swimlanes/Funds/events/FundsWithdrawalApproved.js";
+import { FundsWithdrawalDeclined } from "../../../swimlanes/Funds/events/FundsWithdrawalDeclined.js";
 import { SliceTester } from "../../../../../types/SliceTester.js";
-import WithdrawalApprovalStreamFactory from "../../../swimlanes/WithdrawalApprovalsStream/index.js";
-import { FundsDepositApproved } from "../../../swimlanes/WithdrawalApprovalsStream/events/FundsDepositApproved.js";
+import FundsStreamFactory from "../../../swimlanes/Funds/index.js";
+import { FundsDepositApproved } from "../../../swimlanes/Funds/events/FundsDepositApproved.js";
 
 describe("Withdrawal Approval Slice - Unit Tests", () => {
   test("main flow", async () => {
@@ -44,7 +44,7 @@ describe("Withdrawal Approval Slice - Unit Tests", () => {
     ]
     return SliceTester.testCommandHandler(
       handleApproveWithdrawal,
-      WithdrawalApprovalStreamFactory,
+      FundsStreamFactory,
       givenEvents,
       command,
       expectedEvents
@@ -88,7 +88,7 @@ describe("Withdrawal Approval Slice - Unit Tests", () => {
     ]
     return SliceTester.testCommandHandler(
       handleApproveWithdrawal,
-      WithdrawalApprovalStreamFactory,
+      FundsStreamFactory,
       givenEvents,
       command,
       expectedEvents

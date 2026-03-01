@@ -1,5 +1,5 @@
-import type { ApproveWithdrawal } from "./command.js";
-import { handleApproveWithdrawal } from "./commandHandler.js";
+import type { CalculateWithdrawCommissionCommand } from "./command.js";
+import { handleCalculateWithdrawCommission } from "./commandHandler.js";
 import { CommandHandlerOrchestratorFactory } from "../../../../types/CommandHandlerOrchestratorFactory.js";
 import type { CommandHandlerOrchestrator } from "../../../../types/commandHandler.js";
 import FundsStreamFactory from "../../swimlanes/Funds/index.js";
@@ -11,11 +11,11 @@ import { IEvDbStorageAdapter } from "@eventualize/core/adapters/IEvDbStorageAdap
  * Wires the pure handler to its stream type and event store.
  * The event store is injected — never imported as a global singleton.
  */
-export function createApproveWithdrawalAdapter(storageAdapter: IEvDbStorageAdapter): CommandHandlerOrchestrator<ApproveWithdrawal> {
+export function createCalculateWithdrawCommissionAdapter(storageAdapter: IEvDbStorageAdapter): CommandHandlerOrchestrator<CalculateWithdrawCommissionCommand> {
   return CommandHandlerOrchestratorFactory.create(
     storageAdapter,
     FundsStreamFactory,
-    (command: ApproveWithdrawal) => command.account,
-    handleApproveWithdrawal,
+    (command: CalculateWithdrawCommissionCommand) => command.account,
+    handleCalculateWithdrawCommission,
   );
 }

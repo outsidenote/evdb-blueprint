@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { createApprovalWithdrawalRestAdapter } from "../BusinessCapabilities/Funds/endpoints/REST/ApprovalWithdrawal/index.js";
+import { createApprovalWithdrawalRestAdapter } from "../BusinessCapabilities/Funds/endpoints/ApproveWithdrawal/REST/index.js";
 import { IEvDbStorageAdapter } from "@eventualize/core/adapters/IEvDbStorageAdapter";
 
 
