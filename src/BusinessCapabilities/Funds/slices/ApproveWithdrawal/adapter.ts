@@ -1,8 +1,6 @@
-import type { WithdrawalApprovalStreamType } from "../../swimlanes/WithdrawalApprovalsStream/index.js";
 import type { ApproveWithdrawal } from "./command.js";
 import { handleApproveWithdrawal } from "./commandHandler.js";
 import { CommandHandlerOrchestratorFactory } from "../../../../types/CommandHandlerOrchestratorFactory.js";
-import type { EventStorePort } from "../../../../types/CommandHandlerOrchestratorFactory.js";
 import type { CommandHandlerOrchestrator } from "../../../../types/commandHandler.js";
 import WithdrawalApprovalStreamFactory from "../../swimlanes/WithdrawalApprovalsStream/index.js";
 import { IEvDbStorageAdapter } from "@eventualize/core/adapters/IEvDbStorageAdapter";

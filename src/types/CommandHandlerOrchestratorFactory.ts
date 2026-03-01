@@ -1,18 +1,9 @@
-import type EvDbStream from "@eventualize/core/store/EvDbStream";
 import type { CommandHandler, CommandHandlerOrchestrator, CommandHandlerOrchestratorResult } from "./commandHandler.js";
 import { IEvDbStorageAdapter } from "@eventualize/core/adapters/IEvDbStorageAdapter";
 import { EvDbStreamFactory } from "@eventualize/core/factories/EvDbStreamFactory";
 import IEvDbEventPayload from "@eventualize/types/events/IEvDbEventPayload";
 import { EvDbView } from "@eventualize/core/view/EvDbView";
 import { StreamWithEventMethods } from "@eventualize/core/factories/EvDbStreamFactory";
-
-/**
- * Minimal interface for the event store dependency.
- * Accepts only what the adapter needs — no coupling to the full EvDbEventStore.
- */
-export interface EventStorePort {
-  getStream(streamType: string, streamId: string): Promise<EvDbStream>;
-}
 
 /**
  * Creates a CommandHandlerOrchestrator that orchestrates:

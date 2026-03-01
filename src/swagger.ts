@@ -60,33 +60,6 @@ export const swaggerDocument = {
         },
       },
     },
-    "/api/withdrawals/{streamId}": {
-      get: {
-        summary: "Get a withdrawal stream",
-        description: "Fetches the stream from Postgres and returns the current view state.",
-        tags: ["Withdrawals"],
-        parameters: [
-          {
-            name: "streamId",
-            in: "path",
-            required: true,
-            schema: { type: "string" },
-            description: "The account / stream ID",
-            example: "1234",
-          },
-        ],
-        responses: {
-          "200": {
-            description: "Stream state",
-            content: {
-              "application/json": {
-                schema: { $ref: "#/components/schemas/GetStreamResponse" },
-              },
-            },
-          },
-        },
-      },
-    },
   },
   components: {
     schemas: {
@@ -109,39 +82,11 @@ export const swaggerDocument = {
       ApproveWithdrawalResponse: {
         type: "object",
         properties: {
-          streamId: { type: "string" },
-          event: {
-            type: "object",
-            description: "FundsWithdrawalApproved or FundsWithdrawalDeclined payload",
-            properties: {
-              payloadType: { type: "string", enum: ["FundsWithdrawalApproved", "FundsWithdrawalDeclined"] },
-              account: { type: "string" },
-              amount: { type: "number" },
-              currency: { type: "string" },
-              payer: { type: "string" },
-              source: { type: "string" },
-              transactionId: { type: "string" },
-              reason: { type: "string", description: "Only present when declined" },
-            },
-          },
-          view: {
-            type: "object",
-            properties: {
-              balance: { type: "number" },
-            },
-          },
-        },
-      },
-      GetStreamResponse: {
-        type: "object",
-        properties: {
-          streamId: { type: "string" },
-          storedOffset: { type: "number" },
-          view: {
-            type: "object",
-            properties: {
-              balance: { type: "number" },
-            },
+          streamId: { type: "string", description: "The account / stream ID" },
+          emittedEventTypes: {
+            type: "array",
+            items: { type: "string", enum: ["FundsWithdrawalApproved", "FundsWithdrawalDeclined"] },
+            description: "List of event types emitted by the command",
           },
         },
       },

@@ -24,7 +24,6 @@ async function main() {
     console.log(`Withdrawal API running at http://localhost:${PORT}`);
     console.log(`  Swagger UI: http://localhost:${PORT}/api-docs`);
     console.log(`  POST /api/withdrawals/approve`);
-    console.log(`  GET  /api/withdrawals/:streamId`);
   });
 }
 
