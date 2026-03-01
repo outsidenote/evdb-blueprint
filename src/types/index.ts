@@ -1,3 +1,2 @@
-export type { CommandHandler, CommandAdapter, CommandAdapterResult } from "./commandHandler.js";
-export { createCommandAdapter } from "./createCommandAdapter.js";
-export type { EventStorePort } from "./createCommandAdapter.js";
+export type { CommandHandler, CommandHandlerOrchestrator as CommandAdapter, CommandHandlerOrchestratorResult as CommandAdapterResult } from "./commandHandler.js";
+export { CommandHandlerOrchestratorFactory } from "./CommandHandlerOrchestratorFactory.js";

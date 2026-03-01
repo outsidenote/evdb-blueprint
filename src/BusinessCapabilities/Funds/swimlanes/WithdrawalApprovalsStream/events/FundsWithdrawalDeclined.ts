@@ -9,7 +9,6 @@ export interface FundsWithdrawalDeclinedProps {
   readonly payer: string;
   readonly source: string;
   readonly transactionId: string;
-  readonly declinedDate: Date;
 }
 
 export class FundsWithdrawalDeclined implements IEvDbEventPayload {
@@ -23,7 +22,6 @@ export class FundsWithdrawalDeclined implements IEvDbEventPayload {
   readonly payer: string;
   readonly source: string;
   readonly transactionId: string;
-  readonly declinedDate: Date;
 
   constructor(props: FundsWithdrawalDeclinedProps) {
     this.account = props.account;
@@ -34,6 +32,5 @@ export class FundsWithdrawalDeclined implements IEvDbEventPayload {
     this.payer = props.payer;
     this.source = props.source;
     this.transactionId = props.transactionId;
-    this.declinedDate = props.declinedDate;
   }
 }

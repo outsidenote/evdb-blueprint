@@ -50,7 +50,6 @@ Swagger UI: `http://localhost:3000/api-docs`
 | Method | Path                       | Description                  |
 |--------|----------------------------|------------------------------|
 | POST   | `/api/withdrawals/approve` | Execute `ApproveWithdrawal`  |
-| GET    | `/api/withdrawals/:id`     | Fetch stream + view state    |
 
 ### POST `/api/withdrawals/approve`
 
@@ -82,23 +81,28 @@ Response:
 
 ```
 src/
-  eventstore/
-    WithdrawalApprovalsStream/
-      events/         # FundsWithdrawalApproved, FundsWithdrawalDeclined
-      messages/       # Outbox message producers
-      views/          # WithdrawalsInProcess view state + handlers
-      index.ts        # Stream factory registration
-    index.ts          # Event store wiring (Postgres adapter)
-  slices/
-    ApproveWithdrawal/
-      command.ts        # ApproveWithdrawal command class
-      commandHandler.ts # Pure decision function
-      adapter.ts        # Wires handler to stream via CommandAdapter
+  BusinessCapabilities/
+    Funds/
+      endpoints/REST/        # REST endpoint adapters
+      slices/
+        ApproveWithdrawal/
+          command.ts           # ApproveWithdrawal command class
+          commandHandler.ts    # Pure decision function
+          gwts.ts              # Named spec predicates (Given-When-Then)
+          adapter.ts           # Wires handler to stream via CommandHandlerOrchestratorFactory
+          tests/unit.test.ts   # Unit tests using SliceTester
+      swimlanes/
+        WithdrawalApprovalsStream/
+          events/              # FundsWithdrawalApproved, FundsWithdrawalDeclined
+          messages/            # Outbox message producers
+          views/               # WithdrawalsInProcess view state + handlers
+          index.ts             # Stream factory registration
   types/
-    commandHandler.ts       # CommandHandler, CommandAdapter, CommandAdapterResult
-    createCommandAdapter.ts # Generic adapter factory + EventStorePort
-  routes/           # Express router (transport layer)
-  tests/            # Unit + behaviour tests + in-memory adapter
-  server.ts         # Composition root
-  swagger.ts        # OpenAPI document
+    commandHandler.ts          # CommandHandler, CommandHandlerOrchestrator types
+    CommandHandlerOrchestratorFactory.ts  # Generic orchestrator factory
+    SliceTester.ts             # Generic GWT test harness for slices
+  routes/              # Express router (transport layer)
+  tests/               # Behaviour tests + in-memory adapter
+  server.ts            # Composition root
+  swagger.ts           # OpenAPI document
 ```
