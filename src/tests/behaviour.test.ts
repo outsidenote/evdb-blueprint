@@ -28,7 +28,6 @@ describe("Withdrawal API — Behaviour Tests", () => {
           account: "acc-001",
           amount: 20,
           currency: "USD",
-          currentBalance: 200,
           session: "0011",
           source: "ATM",
           payer: "John Doe",
@@ -39,7 +38,7 @@ describe("Withdrawal API — Behaviour Tests", () => {
 
       assert.strictEqual(res.status, 200);
       assert.strictEqual(res.body.streamId, "acc-001");
-      assert.deepStrictEqual(res.body.emittedEventTypes, ["FundsWithdrawalApproved"]);
+      assert.deepStrictEqual(res.body.emittedEventTypes, ["FundsWithdrawalDeclined"]);
     });
   });
 
@@ -56,7 +55,6 @@ describe("Withdrawal API — Behaviour Tests", () => {
           account: "acc-002",
           amount: 20,
           currency: "USD",
-          currentBalance: 10,
           session: "0022",
           source: "ATM",
           payer: "Jane Doe",

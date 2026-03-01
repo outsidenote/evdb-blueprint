@@ -1,5 +1,5 @@
 import type { Request, Response } from "express";
-import { randomUUID } from "crypto";
+import { randomUUID } from "node:crypto";
 import { ApproveWithdrawal } from "../../../slices/ApproveWithdrawal/command.js";
 import { createApproveWithdrawalAdapter } from "../../../slices/ApproveWithdrawal/adapter.js";
 import { IEvDbStorageAdapter } from "@eventualize/core/adapters/IEvDbStorageAdapter";
@@ -15,7 +15,6 @@ export const createApprovalWithdrawalRestAdapter = (storageAdapter: IEvDbStorage
                 account,
                 amount,
                 currency,
-                currentBalance,
                 session,
                 source,
                 payer,
@@ -24,8 +23,8 @@ export const createApprovalWithdrawalRestAdapter = (storageAdapter: IEvDbStorage
                 transactionTime,
             } = req.body;
 
-            if (!account || amount == null || currentBalance == null) {
-                res.status(400).json({ error: "account, amount, and currentBalance are required" });
+            if (!account || amount == null) {
+                res.status(400).json({ error: "account and amount are required" });
                 return;
             }
 
