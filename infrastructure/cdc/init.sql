@@ -53,6 +53,30 @@ CREATE INDEX IF NOT EXISTS ix_outbox_7ae7ea3b165349e09b3fe6d66a69fd72
 CREATE INDEX IF NOT EXISTS ix_storedat_outbox_captured_at_7ae7ea3b165349e09b3fe6d66a69fd72
   ON public.outbox USING btree (stored_at, channel, message_type, "offset");
 
+-- LISTEN/NOTIFY: push notification on every outbox INSERT (fires after transaction commits)
+CREATE OR REPLACE FUNCTION notify_outbox_insert()
+RETURNS trigger AS $$
+BEGIN
+  PERFORM pg_notify('outbox_events',
+    json_build_object(
+      'id', NEW.id,
+      'event_type', NEW.event_type
+    )::text
+  );
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DO $$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_trigger WHERE tgname = 'outbox_after_insert'
+  ) THEN
+    CREATE TRIGGER outbox_after_insert
+      AFTER INSERT ON public.outbox
+      FOR EACH ROW EXECUTE FUNCTION notify_outbox_insert();
+  END IF;
+END $$;
+
 CREATE TABLE IF NOT EXISTS public.snapshot
 (
    id                 uuid             NOT NULL,
