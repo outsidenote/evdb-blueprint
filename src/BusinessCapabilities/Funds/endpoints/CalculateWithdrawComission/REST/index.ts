@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { ApproveWithdrawal } from "../../../slices/ApproveWithdrawal/command.js";
 import { IEvDbStorageAdapter } from "@eventualize/core/adapters/IEvDbStorageAdapter";
 import { createCalculateWithdrawCommissionAdapter } from "../../../slices/CalculateWithdrawCommissionAdapter/adapter.js";
-import { lookup, LookupRequest } from "../lookup.js";
+import { enrich, EnrichmentRequest } from "../enrichment.js";
 
 
 
@@ -29,7 +29,7 @@ export const createApprovalWithdrawalRestAdapter = (storageAdapter: IEvDbStorage
                 return;
             }
 
-            const lookupRequest: LookupRequest = {
+            const lookupRequest: EnrichmentRequest = {
                 account,
                 amount,
                 approvalDate: approvalDate ? new Date(approvalDate) : new Date(),
@@ -41,7 +41,7 @@ export const createApprovalWithdrawalRestAdapter = (storageAdapter: IEvDbStorage
                 transactionTime: transactionTime ? new Date(transactionTime) : new Date(),
             };
 
-            const command = lookup(lookupRequest);
+            const command = enrich(lookupRequest);
 
             const result = await calculateWithdrwawalCommission(command);
 

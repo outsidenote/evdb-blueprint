@@ -1,7 +1,7 @@
 import { request } from "node:http";
 import { CalculateWithdrawCommissionCommand } from "../../slices/CalculateWithdrawCommissionAdapter/command.js";
 
-export interface LookupRequest {
+export interface EnrichmentRequest {
     readonly account: string;
     readonly amount: number;
     readonly currency: string;
@@ -13,7 +13,7 @@ export interface LookupRequest {
     readonly transactionTime: Date;
 }
 
-export const lookup = (request: LookupRequest): CalculateWithdrawCommissionCommand => {
+export const enrich = (request: EnrichmentRequest): CalculateWithdrawCommissionCommand => {
     const commission = request.amount * 0.01; // Example commission calculation logic
     return new CalculateWithdrawCommissionCommand(
         Object.assign({}, request, { commission })
