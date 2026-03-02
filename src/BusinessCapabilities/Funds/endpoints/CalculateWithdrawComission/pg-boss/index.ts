@@ -1,7 +1,9 @@
 import type { IEvDbStorageAdapter } from "@eventualize/core/adapters/IEvDbStorageAdapter";
-import type { OutboxWorkerConfig } from "../../../../types/OutboxWorkerFactory.js";
-import { createCalculateWithdrawCommissionAdapter } from "./adapter.js";
-import { CalculateWithdrawCommissionCommand } from "./command.js";
+import { type PgBossEndpointConfig, pgBossQueueName } from "../../../../../types/PgBossEndpointFactory.js";
+import { createCalculateWithdrawCommissionAdapter } from "../../../slices/CalculateWithdrawCommissionAdapter/adapter.js";
+import { CalculateWithdrawCommissionCommand } from "../../../slices/CalculateWithdrawCommissionAdapter/command.js";
+
+export const QUEUE_NAME = pgBossQueueName("FundsWithdrawalApproved", "CalculateWithdrawCommission");
 
 interface FundsWithdrawalApprovedPayload {
   readonly account: string;
@@ -10,7 +12,13 @@ interface FundsWithdrawalApprovedPayload {
 }
 
 /**
- * Outbox worker config for the CalculateWithdrawCommission slice.
+ * pg-boss endpoint for the CalculateWithdrawCommission slice.
+ *
+ * Follows the same flow as a REST endpoint:
+ *   receive input → enrich → create command → call adapter.
+ *
+ * The slice doesn't know if it was triggered by REST or a queue —
+ * it just receives a command.
  *
  * Listens for FundsWithdrawalApproved events in the outbox,
  * enriches them (calculates commission), and executes the
@@ -22,7 +30,7 @@ interface FundsWithdrawalApprovedPayload {
  */
 export function createFundsWithdrawalApprovedWorker(
   storageAdapter: IEvDbStorageAdapter,
-): OutboxWorkerConfig<FundsWithdrawalApprovedPayload> {
+): PgBossEndpointConfig<FundsWithdrawalApprovedPayload> {
   const calculateCommission = createCalculateWithdrawCommissionAdapter(storageAdapter);
 
   return {

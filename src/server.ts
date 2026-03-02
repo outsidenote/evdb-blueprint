@@ -3,8 +3,8 @@ import swaggerUi from "swagger-ui-express";
 import { PgBoss } from "pg-boss";
 import { createWithdrawalRouter } from "./routes/withdrawal.js";
 import { swaggerDocument } from "./swagger.js";
-import { OutboxWorkerFactory } from "./types/OutboxWorkerFactory.js";
-import { createFundsWithdrawalApprovedWorker } from "./BusinessCapabilities/Funds/slices/CalculateWithdrawCommissionAdapter/worker.js";
+import { PgBossEndpointFactory } from "./types/PgBossEndpointFactory.js";
+import { createFundsWithdrawalApprovedWorker } from "./BusinessCapabilities/Funds/endpoints/CalculateWithdrawComission/pg-boss/index.js";
 import EvDbPostgresPrismaClientFactory from "@eventualize/postgres-storage-adapter/EvDbPostgresPrismaClientFactory";
 import EvDbPrismaStorageAdapter from "@eventualize/relational-storage-adapter/EvDbPrismaStorageAdapter";
 
@@ -23,8 +23,8 @@ async function main() {
   await boss.start();
   console.log("pg-boss started");
 
-  // Start outbox workers: each slice registers which event types it listens to
-  await OutboxWorkerFactory.startAll(boss, CONNECTION_URI, [
+  // Register outbox pg-boss endpoints: trigger delivers jobs, factory registers handlers
+  await PgBossEndpointFactory.startAll(boss, [
     createFundsWithdrawalApprovedWorker(storageAdapter),
     // future workers go here
   ]);

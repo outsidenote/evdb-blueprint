@@ -1,6 +1,7 @@
 import type EvDbEvent from "@eventualize/types/events/EvDbEvent";
 import type { FundsWithdrawalApproved } from "../events/FundsWithdrawalApproved.js";
 import EvDbMessage from "@eventualize/types/messages/EvDbMessage";
+import { QUEUE_NAME as CALCULATE_WITHDRAW_COMMISSION_QUEUE } from "../../../endpoints/CalculateWithdrawComission/pg-boss/index.js";
 
 export const withdrawalApprovedMessages = (
   event: EvDbEvent,
@@ -10,10 +11,13 @@ export const withdrawalApprovedMessages = (
 
   return [
     EvDbMessage.createFromEvent(event, {
-      payloadType: "Withdrawal Approved Notification",
-      account: payload.account,
-      amount: payload.amount,
-      currency: payload.currency,
+      payloadType: "FundsWithdrawalApproved",
+      queues: [CALCULATE_WITHDRAW_COMMISSION_QUEUE],
+      message: {
+        account: payload.account,
+        amount: payload.amount,
+        currency: payload.currency,
+      },
     }),
   ];
 };
