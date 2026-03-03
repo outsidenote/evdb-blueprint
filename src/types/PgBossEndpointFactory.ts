@@ -15,6 +15,20 @@ export function pgBossQueueName(eventType: string, handlerName: string): string 
   return `outbox.${eventType}.${handlerName}`;
 }
 
+interface JobData {
+  metadata: {
+    outboxId: string;
+  };
+  payload: Record<string, unknown>;
+}
+
+const IDEMPOTENCY_SQL = `
+  INSERT INTO public.processed_jobs (idempotency_key)
+  VALUES ($1)
+  ON CONFLICT DO NOTHING
+  RETURNING idempotency_key
+`;
+
 /**
  * Generic pg-boss endpoint factory.
  *
@@ -32,10 +46,15 @@ export function pgBossQueueName(eventType: string, handlerName: string): string 
  * The trigger reads the queues array and inserts one job per queue.
  * Each queue is independent (separate retries, dead letter).
  *
+ * Idempotency: before calling the handler, the factory inserts the outboxId
+ * into the processed_jobs table. If the row already exists (redelivery),
+ * the handler is skipped entirely.
+ *
  * On restart: nothing to catch up — jobs already exist in pgboss.job.
  * boss.work() resumes processing any pending/failed jobs automatically.
  *
  * See: infrastructure/outbox-trigger.sql for the trigger definition.
+ * See: infrastructure/processed-jobs.sql for the idempotency table.
  */
 export class PgBossEndpointFactory {
 
@@ -43,17 +62,29 @@ export class PgBossEndpointFactory {
     boss: PgBoss,
     endpoints: PgBossEndpointConfig<any>[],
   ): Promise<void> {
+    const db = boss.getDb();
+
     for (const config of endpoints) {
       const queueName = pgBossQueueName(config.eventType, config.handlerName);
 
       await boss.createQueue(queueName);
 
       await boss.work(queueName, async ([job]) => {
-        const data = job.data as { outboxId: string; payload: Record<string, unknown> };
-        await config.handler(data.payload, { outboxId: data.outboxId });
+        const data = job.data as JobData;
+        const { outboxId } = data.metadata;
+
+        const { rows } = await db.executeSql(IDEMPOTENCY_SQL, [outboxId]);
+
+        if (rows.length === 0) {
+          console.log(`[PgBossEndpoint] Job already processed (${outboxId}), skipping`);
+          return;
+        }
+        console.log('Processing job', { outboxId, eventType: config.eventType, handlerName: config.handlerName });
+        await config.handler(data.payload, { outboxId });
       });
 
       console.log(`[PgBossEndpoint] Registered ${config.handlerName} for ${config.eventType}`);
     }
+
   }
 }
