@@ -1,4 +1,4 @@
-import { PgBoss } from "pg-boss";
+import { Job, PgBoss } from "pg-boss";
 
 export interface PgBossEndpointContext {
   readonly outboxId: string;
@@ -11,7 +11,8 @@ export interface PgBossEndpointConfig<TPayload = Record<string, unknown>> {
 }
 
 /** Builds the pg-boss queue name from event type and handler name. */
-export function pgBossQueueName(eventType: string, handlerName: string): string {
+export function pgBossQueueName(pgBossEndpointConfig: PgBossEndpointConfig<any>): string {
+  const { eventType, handlerName } = pgBossEndpointConfig;
   return `outbox.${eventType}.${handlerName}`;
 }
 
@@ -65,17 +66,20 @@ export class PgBossEndpointFactory {
     const db = boss.getDb();
 
     for (const config of endpoints) {
-      const queueName = pgBossQueueName(config.eventType, config.handlerName);
+      const queueName = pgBossQueueName(config);
 
       await boss.createQueue(queueName);
 
       await boss.work(queueName, async ([job]) => {
+        const isProcessed = async (outboxId: string) => {
+          const { rows } = await db.executeSql(IDEMPOTENCY_SQL, [outboxId]);
+          return rows.length === 0;
+        }
+
         const data = job.data as JobData;
         const { outboxId } = data.metadata;
 
-        const { rows } = await db.executeSql(IDEMPOTENCY_SQL, [outboxId]);
-
-        if (rows.length === 0) {
+        if (await isProcessed(outboxId)) {
           console.log(`[PgBossEndpoint] Job already processed (${outboxId}), skipping`);
           return;
         }
