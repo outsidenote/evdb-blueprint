@@ -1,73 +1,50 @@
 -- EvDb tables (created if they don't already exist)
-
-CREATE TABLE IF NOT EXISTS public.events
-(
-   id                 uuid             NOT NULL,
-   stream_type        varchar(150)     NOT NULL,
-   stream_id          varchar(150)     NOT NULL,
-   "offset"           bigint           NOT NULL,
-   event_type         varchar(150)     NOT NULL,
-   captured_by        varchar(150)     NOT NULL,
-   captured_at        timestamptz(6)   NOT NULL,
-   stored_at          timestamptz(6)   DEFAULT CURRENT_TIMESTAMP NOT NULL,
-   telemetry_context  bytea,
-   payload            json             NOT NULL
+CREATE TABLE IF NOT EXISTS events (
+    id UUID NOT NULL,
+    stream_type VARCHAR(150) NOT NULL,
+    stream_id VARCHAR(150) NOT NULL,
+    "offset" BIGINT NOT NULL,
+    event_type VARCHAR(150) NOT NULL,
+    telemetry_context JSON,
+    captured_by VARCHAR(150) NOT NULL,
+    captured_at TIMESTAMPTZ(6) NOT NULL,
+    stored_at TIMESTAMPTZ(6) NOT NULL DEFAULT NOW(),
+    payload JSON NOT NULL,
+    PRIMARY KEY (stream_type, stream_id, "offset")
 );
 
-DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'events_pkey') THEN
-    ALTER TABLE public.events
-      ADD CONSTRAINT events_pkey
-      PRIMARY KEY (stream_type, stream_id, "offset");
-  END IF;
-END $$;
+CREATE INDEX IF NOT EXISTS ix_event_7ae7ea3b165349e09b3fe6d66a69fd72 ON events (stream_type, stream_id, "offset");
+CREATE INDEX IF NOT EXISTS ix_event_stored_at_7ae7ea3b165349e09b3fe6d66a69fd72 ON events (stored_at);
 
-CREATE TABLE IF NOT EXISTS public.outbox
-(
-   id                 uuid             NOT NULL,
-   stream_type        varchar(150)     NOT NULL,
-   stream_id          varchar(150)     NOT NULL,
-   "offset"           bigint           NOT NULL,
-   event_type         varchar(150)     NOT NULL,
-   channel            varchar(150)     NOT NULL,
-   message_type       varchar(150)     NOT NULL,
-   serialize_type     varchar(150)     NOT NULL,
-   telemetry_context  bytea,
-   captured_by        varchar(150)     NOT NULL,
-   captured_at        timestamptz(6)   NOT NULL,
-   stored_at          timestamptz(6)   DEFAULT CURRENT_TIMESTAMP NOT NULL,
-   payload            json             NOT NULL
+CREATE TABLE IF NOT EXISTS outbox (
+    id UUID NOT NULL,
+    stream_type VARCHAR(150) NOT NULL,
+    stream_id VARCHAR(150) NOT NULL,
+    "offset" BIGINT NOT NULL,
+    event_type VARCHAR(150) NOT NULL,
+    channel VARCHAR(150) NOT NULL,
+    message_type VARCHAR(150) NOT NULL,
+    serialize_type VARCHAR(150) NOT NULL,
+    telemetry_context BYTEA,
+    captured_by VARCHAR(150) NOT NULL,
+    captured_at TIMESTAMPTZ(6) NOT NULL,
+    stored_at TIMESTAMPTZ(6) NOT NULL DEFAULT NOW(),
+    payload JSON NOT NULL,
+    PRIMARY KEY (captured_at, stream_type, stream_id, "offset", channel, message_type)
 );
 
-DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'outbox_pkey') THEN
-    ALTER TABLE public.outbox
-      ADD CONSTRAINT outbox_pkey
-      PRIMARY KEY (captured_at, stream_type, stream_id, "offset", channel, message_type);
-  END IF;
-END $$;
+CREATE INDEX IF NOT EXISTS ix_outbox_7ae7ea3b165349e09b3fe6d66a69fd72 ON outbox (stream_type, stream_id, "offset", channel, message_type);
+CREATE INDEX IF NOT EXISTS ix_storedat_outbox_captured_at_7ae7ea3b165349e09b3fe6d66a69fd72 ON outbox (stored_at, channel, message_type, "offset");
 
-CREATE INDEX IF NOT EXISTS ix_outbox_7ae7ea3b165349e09b3fe6d66a69fd72
-  ON public.outbox USING btree (stream_type, stream_id, "offset", channel, message_type);
-
-CREATE INDEX IF NOT EXISTS ix_storedat_outbox_captured_at_7ae7ea3b165349e09b3fe6d66a69fd72
-  ON public.outbox USING btree (stored_at, channel, message_type, "offset");
-
-CREATE TABLE IF NOT EXISTS public.snapshot
-(
-   id                 uuid             NOT NULL,
-   stream_type        varchar(150)     NOT NULL,
-   stream_id          varchar(150)     NOT NULL,
-   "offset"           bigint           NOT NULL,
-   view_name          varchar(150)     NOT NULL,
-   stored_at          timestamptz(6)   DEFAULT CURRENT_TIMESTAMP NOT NULL,
-   state              json             NOT NULL
+CREATE TABLE IF NOT EXISTS snapshot (
+    id UUID NOT NULL,
+    stream_type VARCHAR(150) NOT NULL,
+    stream_id VARCHAR(150) NOT NULL,
+    view_name VARCHAR(150) NOT NULL,
+    "offset" BIGINT NOT NULL,
+    state JSON NOT NULL,
+    stored_at TIMESTAMPTZ(6) NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (stream_type, stream_id, view_name, "offset")
 );
 
-DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'snapshot_pkey') THEN
-    ALTER TABLE public.snapshot
-      ADD CONSTRAINT snapshot_pkey
-      PRIMARY KEY (stream_type, stream_id, view_name , "offset");
-  END IF;
-END $$;
+CREATE INDEX IF NOT EXISTS ix_snapshot_earlier_stored_at_7ae7ea3b165349e09b3fe6d66a69fd72 ON snapshot (stream_type, stream_id, view_name, stored_at);
