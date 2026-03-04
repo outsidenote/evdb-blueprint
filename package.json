@@ -13,6 +13,7 @@
     "dev": "node --import tsx src/server.ts",
     "test:unit": "node --import tsx --test 'src/BusinessCapabilities/Funds/slices/*/tests/unit.test.ts'",
     "test:behaviour": "node --import tsx --test 'src/tests/behaviour.test.ts'",
+    "test:integration": "node --import tsx --test src/tests/integration.test.ts",
     "test": "node --import tsx --test 'src/tests/**/*.test.ts'"
   },
   "dependencies": {
@@ -28,6 +29,7 @@
     "swagger-ui-express": "^5.0.0"
   },
   "devDependencies": {
+    "@testcontainers/postgresql": "^11.12.0",
     "@types/express": "^5.0.0",
     "@types/node": "^24.0.0",
     "@types/pg": "^8.18.0",
@@ -35,6 +37,7 @@
     "@types/swagger-ui-express": "^4.1.0",
     "rimraf": "^6.0.0",
     "supertest": "^7.2.2",
+    "testcontainers": "^11.12.0",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3"
   }

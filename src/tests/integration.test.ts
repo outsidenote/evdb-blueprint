@@ -1,0 +1,117 @@
+import { test, describe, before, after } from "node:test";
+import * as assert from "node:assert";
+import { randomUUID } from "node:crypto";
+import { TestDatabase, createTestApp, waitFor } from "./harness/index.js";
+import { createFundsWithdrawalApprovedWorker, QUEUE_NAME } from "../BusinessCapabilities/Funds/endpoints/CalculateWithdrawComission/pg-boss/index.js";
+
+describe("E2E: CalculateWithdrawCommission automation slice", () => {
+  const db = new TestDatabase();
+
+  before(async () => {
+    await db.start();
+    await createTestApp(db, {
+      workers: (storageAdapter) => [
+        createFundsWithdrawalApprovedWorker(storageAdapter),
+      ],
+    });
+  });
+
+  after(async () => {
+    await db.stop();
+  });
+
+  /**
+   * Inserts an outbox row that the trigger will pick up and deliver to pg-boss.
+   */
+  async function insertOutboxMessage(account: string, payload: Record<string, unknown>): Promise<string> {
+    const outboxId = randomUUID();
+    await db.client.query(
+      `INSERT INTO public.outbox
+        (id, stream_type, stream_id, "offset", event_type, channel, message_type, serialize_type, captured_by, captured_at, payload)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), $10)`,
+      [
+        outboxId,
+        "FundsWithdrawalStream",
+        account,
+        0,
+        "FundsWithdrawalApproved",
+        "pg-boss",
+        "FundsWithdrawalApproved",
+        "json",
+        "integration-test",
+        JSON.stringify({ queues: [QUEUE_NAME], ...payload }),
+      ],
+    );
+    return outboxId;
+  }
+
+  // ──────────────────────────────────────────────────────────────────
+  // Worker pipeline: outbox INSERT → trigger → pg-boss → worker
+  //                  → downstream events
+  // ──────────────────────────────────────────────────────────────────
+  test("worker pipeline: outbox message triggers worker, creates downstream events", async () => {
+    const account = "e2e-account-001";
+
+    // GIVEN: An outbox message for this automation slice
+    await insertOutboxMessage(account, { account, amount: 0, currency: "USD" });
+
+    // THEN: Downstream events were created for this account
+    await waitFor(async () => {
+      const { rows } = await db.client.query(
+        "SELECT event_type FROM public.events WHERE stream_id = $1 AND event_type = 'WithdrawCommissionCalculated'",
+        [account],
+      );
+      return rows.length > 0;
+    });
+  });
+
+  // ──────────────────────────────────────────────────────────────────
+  // Worker idempotency: duplicate pg-boss job does not create
+  // duplicate downstream events
+  // ──────────────────────────────────────────────────────────────────
+  test("worker idempotency: duplicate job with same outboxId does not create duplicate events", async () => {
+    const account = "e2e-account-002";
+    const outboxId = randomUUID();
+
+    await db.boss.send(QUEUE_NAME, {
+      metadata: { outboxId },
+      payload: { account, amount: 0, currency: "EUR" },
+    });
+
+    await waitFor(async () => {
+      const { rows } = await db.client.query(
+        "SELECT * FROM public.processed_jobs WHERE idempotency_key = $1",
+        [outboxId],
+      );
+      return rows.length > 0;
+    });
+
+    // Snapshot: count downstream events scoped to this account
+    const { rows: eventsBefore } = await db.client.query(
+      "SELECT count(*)::int AS cnt FROM public.events WHERE stream_id = $1 AND event_type = 'WithdrawCommissionCalculated'",
+      [account],
+    );
+    // WHEN: Simulate pg-boss redelivery with the same outboxId
+    await db.boss.send(QUEUE_NAME, {
+      metadata: { outboxId },
+      payload: { account, amount: 0, currency: "EUR" },
+    });
+
+    // Wait for the duplicate job to be handled
+    await waitFor(async () => {
+      const { rows } = await db.client.query(
+        "SELECT count(*)::int AS cnt FROM pgboss.job WHERE name = $1 AND state = 'completed'",
+        [QUEUE_NAME],
+      );
+      // At least 2 jobs completed (original + duplicate)
+      return rows[0].cnt >= 2;
+    });
+
+    // THEN: No additional downstream events for this account
+    const { rows: eventsAfter } = await db.client.query(
+      "SELECT count(*)::int AS cnt FROM public.events WHERE stream_id = $1 AND event_type = 'WithdrawCommissionCalculated'",
+      [account],
+    );
+    assert.strictEqual(eventsAfter[0].cnt, eventsBefore[0].cnt, "No duplicate events from redelivery");
+  });
+});

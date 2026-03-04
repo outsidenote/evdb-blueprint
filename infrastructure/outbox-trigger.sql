@@ -76,7 +76,7 @@ BEGIN
     q.queue_name,
     jsonb_build_object(
       'metadata',    meta_jsonb,
-      'payload', payload_jsonb->'message'
+      'payload', payload_jsonb - 'queues'
     ),
     NEW.id::text || ':' || q.queue_name
   FROM (
