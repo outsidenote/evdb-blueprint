@@ -71,9 +71,12 @@ describe("E2E: CalculateWithdrawCommission automation slice", () => {
   // ──────────────────────────────────────────────────────────────────
   test("worker idempotency: duplicate job with same outboxId does not create duplicate events", async () => {
     const account = "e2e-account-002";
+    const outboxId = randomUUID();
 
-    // GIVEN: An outbox message that the worker has already processed
-    const outboxId = await insertOutboxMessage(account, { account, amount: 0, currency: "EUR" });
+    await db.boss.send(QUEUE_NAME, {
+      metadata: { outboxId },
+      payload: { account, amount: 0, currency: "EUR" },
+    });
 
     await waitFor(async () => {
       const { rows } = await db.client.query(
@@ -88,7 +91,6 @@ describe("E2E: CalculateWithdrawCommission automation slice", () => {
       "SELECT count(*)::int AS cnt FROM public.events WHERE stream_id = $1 AND event_type = 'WithdrawCommissionCalculated'",
       [account],
     );
-
     // WHEN: Simulate pg-boss redelivery with the same outboxId
     await db.boss.send(QUEUE_NAME, {
       metadata: { outboxId },
