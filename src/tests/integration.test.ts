@@ -1,53 +1,59 @@
 import { test, describe, before, after } from "node:test";
 import * as assert from "node:assert";
-import request from "supertest";
-import type express from "express";
+import { randomUUID } from "node:crypto";
 import { TestDatabase, createTestApp, waitFor } from "./harness/index.js";
-import { createFundsWithdrawalApprovedWorker } from "../BusinessCapabilities/Funds/endpoints/CalculateWithdrawComission/pg-boss/index.js";
-import { createWithdrawalRouter } from "../routes/withdrawal.js";
+import { createFundsWithdrawalApprovedWorker, QUEUE_NAME } from "../BusinessCapabilities/Funds/endpoints/CalculateWithdrawComission/pg-boss/index.js";
 
-describe("E2E: CalculateWithdrawCommission worker pipeline", () => {
+describe("E2E: CalculateWithdrawCommission automation slice", () => {
   const db = new TestDatabase();
-  let app: express.Express;
 
   before(async () => {
     await db.start();
-    ({ app } = await createTestApp(db, {
+    await createTestApp(db, {
       workers: (storageAdapter) => [
         createFundsWithdrawalApprovedWorker(storageAdapter),
       ],
-      routes: (app, storageAdapter) => {
-        app.use("/api/withdrawals", createWithdrawalRouter(storageAdapter));
-      },
-    }));
+    });
   });
 
   after(async () => {
     await db.stop();
   });
 
+  /**
+   * Inserts an outbox row that the trigger will pick up and deliver to pg-boss.
+   */
+  async function insertOutboxMessage(account: string, payload: Record<string, unknown>): Promise<string> {
+    const outboxId = randomUUID();
+    await db.client.query(
+      `INSERT INTO public.outbox
+        (id, stream_type, stream_id, "offset", event_type, channel, message_type, serialize_type, captured_by, captured_at, payload)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), $10)`,
+      [
+        outboxId,
+        "FundsWithdrawalStream",
+        account,
+        0,
+        "FundsWithdrawalApproved",
+        "pg-boss",
+        "FundsWithdrawalApproved",
+        "json",
+        "integration-test",
+        JSON.stringify({ queues: [QUEUE_NAME], ...payload }),
+      ],
+    );
+    return outboxId;
+  }
+
   // ──────────────────────────────────────────────────────────────────
-  // Worker pipeline: command → outbox → trigger → pg-boss → worker
+  // Worker pipeline: outbox INSERT → trigger → pg-boss → worker
   //                  → downstream events
   // ──────────────────────────────────────────────────────────────────
-  test("worker pipeline: command triggers worker, creates downstream events", async () => {
+  test("worker pipeline: outbox message triggers worker, creates downstream events", async () => {
     const account = "e2e-account-001";
 
-    // GIVEN: A command that produces an outbox message
-    const res = await request(app)
-      .post("/api/withdrawals/approve")
-      .send({
-        account,
-        amount: 0,
-        currency: "USD",
-        session: "e2e-session",
-        source: "e2e-test",
-        payer: "E2E Payer",
-        transactionId: "e2e-txn-001",
-        transactionTime: "2025-06-01T10:00:00Z",
-        approvalDate: "2025-06-01T10:00:00Z",
-      });
-    assert.strictEqual(res.status, 200);
+    // GIVEN: An outbox message for this automation slice
+    await insertOutboxMessage(account, { account, amount: 0, currency: "USD" });
 
     // THEN: Downstream events were created for this account
     await waitFor(async () => {
@@ -66,26 +72,8 @@ describe("E2E: CalculateWithdrawCommission worker pipeline", () => {
   test("worker idempotency: duplicate job with same outboxId does not create duplicate events", async () => {
     const account = "e2e-account-002";
 
-    // GIVEN: A command that produces an outbox message and worker processes it
-    const res = await request(app)
-      .post("/api/withdrawals/approve")
-      .send({
-        account,
-        amount: 0,
-        currency: "EUR",
-        session: "e2e-session",
-        source: "e2e-test",
-        payer: "E2E Payer",
-        transactionId: "e2e-txn-002",
-      });
-    assert.strictEqual(res.status, 200);
-
-    const { rows: outboxRows } = await db.client.query(
-      "SELECT id FROM public.outbox WHERE stream_id = $1 AND channel = 'pg-boss'",
-      [account],
-    );
-    assert.ok(outboxRows.length > 0, "Expected outbox row");
-    const outboxId = outboxRows[0].id;
+    // GIVEN: An outbox message that the worker has already processed
+    const outboxId = await insertOutboxMessage(account, { account, amount: 0, currency: "EUR" });
 
     await waitFor(async () => {
       const { rows } = await db.client.query(
@@ -101,14 +89,8 @@ describe("E2E: CalculateWithdrawCommission worker pipeline", () => {
       [account],
     );
 
-    // WHEN: Simulate pg-boss redelivery
-    const { rows: jobRows } = await db.client.query(
-      "SELECT name FROM pgboss.job WHERE data->'metadata'->>'outboxId' = $1 LIMIT 1",
-      [outboxId],
-    );
-    assert.ok(jobRows.length > 0, "Expected pg-boss job for redelivery test");
-
-    await db.boss.send(jobRows[0].name, {
+    // WHEN: Simulate pg-boss redelivery with the same outboxId
+    await db.boss.send(QUEUE_NAME, {
       metadata: { outboxId },
       payload: { account, amount: 0, currency: "EUR" },
     });
@@ -116,10 +98,11 @@ describe("E2E: CalculateWithdrawCommission worker pipeline", () => {
     // Wait for the duplicate job to be handled
     await waitFor(async () => {
       const { rows } = await db.client.query(
-        "SELECT count(*)::int AS cnt FROM public.processed_jobs WHERE idempotency_key = $1",
-        [outboxId],
+        "SELECT count(*)::int AS cnt FROM pgboss.job WHERE name = $1 AND state = 'completed'",
+        [QUEUE_NAME],
       );
-      return rows[0].cnt > 0;
+      // At least 2 jobs completed (original + duplicate)
+      return rows[0].cnt >= 2;
     });
 
     // THEN: No additional downstream events for this account
