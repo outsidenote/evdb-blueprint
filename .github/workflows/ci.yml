@@ -71,3 +71,9 @@ jobs:
 
       - name: Run integration tests
         run: npm run test:integration
+
+      - name: Run outbox integration tests
+        run: npm run test:integration-outbox
+
+      - name: Run CDC integration tests
+        run: npm run test:integration-cdc
