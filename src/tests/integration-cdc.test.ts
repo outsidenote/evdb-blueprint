@@ -90,6 +90,49 @@ describe("CDC pipeline: outbox → Debezium → Kafka", { timeout: 180_000 }, ()
     );
   });
 
+  test("pg-boss channel messages are excluded from Kafka by publication filter", async () => {
+    const topic = "events.WithdrawalApprovalStream";
+    const pgBossStreamId = `pgboss-${randomUUID()}`;
+    const defaultStreamId = `default-${randomUUID()}`;
+
+    const startOffsets = await stack.snapshotOffset(topic);
+
+    // Insert a pg-boss message — should NOT appear on Kafka
+    await stack.insertOutboxMessage({
+      streamType: "WithdrawalApprovalStream",
+      streamId: pgBossStreamId,
+      eventType: "FundsWithdrawalDeclined",
+      messageType: "Notification",
+      channel: "pg-boss",
+      payload: { payloadType: "PgBossTest", account: pgBossStreamId },
+    });
+
+    // Insert a default message — SHOULD appear on Kafka (acts as a sentinel)
+    await stack.insertOutboxMessage({
+      streamType: "WithdrawalApprovalStream",
+      streamId: defaultStreamId,
+      eventType: "FundsWithdrawalDeclined",
+      messageType: "Notification",
+      offset: 1,
+      payload: { payloadType: "DefaultTest", account: defaultStreamId },
+    });
+
+    // Wait for the sentinel (default channel) message to arrive
+    const messages = await stack.waitForMessages(topic, [defaultStreamId], startOffsets);
+
+    // The sentinel should be there
+    assert.ok(
+      messages.some((m) => m.key === defaultStreamId),
+      "Default channel message should appear on Kafka",
+    );
+
+    // The pg-boss message should NOT be there
+    assert.ok(
+      !messages.some((m) => m.key === pgBossStreamId),
+      "pg-boss channel message should NOT appear on Kafka",
+    );
+  });
+
   test("Kafka message key equals stream_id for correct partitioning", async () => {
     const streamId = `key-test-${randomUUID()}`;
     const topic = "events.WithdrawalApprovalStream";

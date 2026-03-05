@@ -36,6 +36,11 @@ CREATE TABLE IF NOT EXISTS outbox (
 CREATE INDEX IF NOT EXISTS ix_outbox_7ae7ea3b165349e09b3fe6d66a69fd72 ON outbox (stream_type, stream_id, "offset", channel, message_type);
 CREATE INDEX IF NOT EXISTS ix_storedat_outbox_captured_at_7ae7ea3b165349e09b3fe6d66a69fd72 ON outbox (stored_at, channel, message_type, "offset");
 
+CREATE PUBLICATION outbox_cdc
+  FOR TABLE public.outbox
+  WHERE (channel = 'default')
+  WITH (publish = 'insert');
+
 CREATE TABLE IF NOT EXISTS snapshot (
     id UUID NOT NULL,
     stream_type VARCHAR(150) NOT NULL,

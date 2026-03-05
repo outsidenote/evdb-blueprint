@@ -31,6 +31,7 @@ export type OutboxMessageOpts = {
   messageType: string;
   payload: Record<string, unknown>;
   offset?: number;
+  channel?: string;
 };
 
 /**
@@ -105,7 +106,7 @@ export class TestCDCStack {
         opts.streamId,
         opts.offset ?? 0,
         opts.eventType,
-        "default",
+        opts.channel ?? "default",
         opts.messageType,
         "json",
         "cdc-integration-test",

@@ -12,7 +12,8 @@
 
     "plugin.name": "pgoutput",
     "slot.name": "pg1_outbox_slot",
-    "publication.autocreate.mode": "filtered",
+    "publication.name": "outbox_cdc",
+    "publication.autocreate.mode": "disabled",
 
     "schema.include.list": "public",
     "table.include.list": "public.outbox",
