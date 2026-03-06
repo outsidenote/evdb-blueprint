@@ -17,7 +17,7 @@ describe("CDC pipeline: outbox → Debezium → Kafka", { timeout: 180_000 }, ()
 
   test("external outbox message appears on Kafka topic via Debezium CDC", async () => {
     const streamId = `cdc-test-${randomUUID()}`;
-    const topic = "events.WithdrawalApprovalStream";
+    const topic = "events.WithdrawalDeclinedNotification";
 
     const startOffsets = await stack.snapshotOffset(topic);
 
@@ -25,9 +25,9 @@ describe("CDC pipeline: outbox → Debezium → Kafka", { timeout: 180_000 }, ()
       streamType: "WithdrawalApprovalStream",
       streamId,
       eventType: "FundsWithdrawalDeclined",
-      messageType: "Withdrawal Declined Notification",
+      messageType: "WithdrawalDeclinedNotification",
       payload: {
-        payloadType: "Withdrawal Declined Notification",
+        payloadType: "WithdrawalDeclinedNotification",
         account: streamId,
         amount: 100,
         currency: "USD",
@@ -46,14 +46,15 @@ describe("CDC pipeline: outbox → Debezium → Kafka", { timeout: 180_000 }, ()
 
     // Verify Debezium header placement from connector config
     assert.strictEqual(msg.headers.channel, "default", "Header 'channel' should be 'default'");
-    assert.strictEqual(msg.headers.message_type, "Withdrawal Declined Notification", "Header 'message_type' should match");
+    assert.strictEqual(msg.headers.message_type, "WithdrawalDeclinedNotification", "Header 'message_type' should match");
+    assert.strictEqual(msg.headers.stream_type, "WithdrawalApprovalStream", "Header 'stream_type' should match");
   });
 
-  test("messages are routed to topics by stream_type", async () => {
+  test("messages are routed to topics by message_type", async () => {
     const streamIdA = `route-a-${randomUUID()}`;
     const streamIdB = `route-b-${randomUUID()}`;
-    const topicA = "events.WithdrawalApprovalStream";
-    const topicB = "events.AnotherStream";
+    const topicA = "events.WithdrawalDeclinedNotification";
+    const topicB = "events.FraudAlertNotification";
 
     const startOffsetsA = await stack.snapshotOffset(topicA);
     const startOffsetsB = await stack.snapshotOffset(topicB);
@@ -62,15 +63,15 @@ describe("CDC pipeline: outbox → Debezium → Kafka", { timeout: 180_000 }, ()
       streamType: "WithdrawalApprovalStream",
       streamId: streamIdA,
       eventType: "FundsWithdrawalDeclined",
-      messageType: "Notification",
+      messageType: "WithdrawalDeclinedNotification",
       payload: { payloadType: "TestA", account: streamIdA },
     });
 
     await stack.insertOutboxMessage({
-      streamType: "AnotherStream",
+      streamType: "WithdrawalApprovalStream",
       streamId: streamIdB,
-      eventType: "SomeEvent",
-      messageType: "Notification",
+      eventType: "FraudDetected",
+      messageType: "FraudAlertNotification",
       offset: 1,
       payload: { payloadType: "TestB", account: streamIdB },
     });
@@ -82,16 +83,16 @@ describe("CDC pipeline: outbox → Debezium → Kafka", { timeout: 180_000 }, ()
 
     assert.ok(
       messagesA.some((m) => m.key === streamIdA),
-      "Message A should be on events.WithdrawalApprovalStream",
+      "Message A should be on events.WithdrawalDeclinedNotification",
     );
     assert.ok(
       messagesB.some((m) => m.key === streamIdB),
-      "Message B should be on events.AnotherStream",
+      "Message B should be on events.FraudAlertNotification",
     );
   });
 
   test("pg-boss channel messages are excluded from Kafka by publication filter", async () => {
-    const topic = "events.WithdrawalApprovalStream";
+    const topic = "events.WithdrawalDeclinedNotification";
     const pgBossStreamId = `pgboss-${randomUUID()}`;
     const defaultStreamId = `default-${randomUUID()}`;
 
@@ -102,7 +103,7 @@ describe("CDC pipeline: outbox → Debezium → Kafka", { timeout: 180_000 }, ()
       streamType: "WithdrawalApprovalStream",
       streamId: pgBossStreamId,
       eventType: "FundsWithdrawalDeclined",
-      messageType: "Notification",
+      messageType: "WithdrawalDeclinedNotification",
       channel: "pg-boss",
       payload: { payloadType: "PgBossTest", account: pgBossStreamId },
     });
@@ -112,7 +113,7 @@ describe("CDC pipeline: outbox → Debezium → Kafka", { timeout: 180_000 }, ()
       streamType: "WithdrawalApprovalStream",
       streamId: defaultStreamId,
       eventType: "FundsWithdrawalDeclined",
-      messageType: "Notification",
+      messageType: "WithdrawalDeclinedNotification",
       offset: 1,
       payload: { payloadType: "DefaultTest", account: defaultStreamId },
     });
@@ -135,7 +136,7 @@ describe("CDC pipeline: outbox → Debezium → Kafka", { timeout: 180_000 }, ()
 
   test("Kafka message key equals stream_id for correct partitioning", async () => {
     const streamId = `key-test-${randomUUID()}`;
-    const topic = "events.WithdrawalApprovalStream";
+    const topic = "events.WithdrawalDeclinedNotification";
 
     const startOffsets = await stack.snapshotOffset(topic);
 
@@ -143,7 +144,7 @@ describe("CDC pipeline: outbox → Debezium → Kafka", { timeout: 180_000 }, ()
       streamType: "WithdrawalApprovalStream",
       streamId,
       eventType: "FundsWithdrawalDeclined",
-      messageType: "Notification",
+      messageType: "WithdrawalDeclinedNotification",
       offset: 2,
       payload: { payloadType: "KeyTest", account: streamId },
     });

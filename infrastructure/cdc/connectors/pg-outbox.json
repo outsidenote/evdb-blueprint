@@ -28,9 +28,9 @@
     "transforms.outbox.table.field.event.type": "event_type",
     "transforms.outbox.table.field.event.payload": "payload",
 
-    "transforms.outbox.route.by.field": "stream_type",
+    "transforms.outbox.route.by.field": "message_type",
     "transforms.outbox.route.topic.replacement": "events.${routedByValue}",
 
-    "transforms.outbox.table.fields.additional.placement": "channel:header,message_type:header,offset:header,captured_at:header,stored_at:header"
+    "transforms.outbox.table.fields.additional.placement": "stream_type:header,channel:header,message_type:header,offset:header,captured_at:header,stored_at:header"
   }
 }
