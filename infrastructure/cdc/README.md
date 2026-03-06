@@ -10,11 +10,12 @@ A self-contained Docker stack that captures changes from the `public.outbox` tab
 ┌─────────────┐     WAL stream      ┌───────────────┐    produce     ┌─────────┐
 │  Postgres   │ ──────────────────→  │   Debezium    │ ────────────→ │  Kafka  │
 │  (outbox    │   logical repl.      │   Connect     │   per-topic   │  topics │
-│   table)    │                      │   (CDC)       │               │         │
+│   table)    │   (filtered by       │   (CDC)       │               │         │
+│             │    publication)       │               │               │         │
 └─────────────┘                      └───────────────┘               └─────────┘
 ```
 
-Your app writes rows into `public.outbox`. Debezium tails the Postgres WAL and publishes each row as a clean event to a Kafka topic named `events.<stream_type>`. Your app never talks to Kafka directly.
+Your app writes rows into `public.outbox`. A PostgreSQL publication filters rows at the WAL level — only `channel = 'default'` inserts are streamed to Debezium. Rows with `channel = 'pg-boss'` (internal queue) never leave Postgres. Debezium tails the WAL and publishes each row as a clean event to a Kafka topic named `events.<message_type>`. Your app never talks to Kafka directly.
 
 ## What's Included
 
@@ -22,7 +23,7 @@ Your app writes rows into `public.outbox`. Debezium tails the Postgres WAL and p
 infrastructure/cdc/
 ├── docker-compose.yml          # Postgres + Kafka (KRaft) + Debezium Connect
 ├── .env.example                # Postgres credentials template
-├── init.sql                    # Auto-creates events, outbox, snapshot tables
+├── init.sql                    # Auto-creates events, outbox, snapshot tables + publication
 ├── connectors/
 │   └── pg-outbox.json          # Debezium connector config with Outbox Event Router SMT
 └── scripts/
@@ -84,7 +85,7 @@ You should see:
 ```bash
 docker exec cdc-kafka kafka-console-consumer \
   --bootstrap-server localhost:9092 \
-  --topic events.WithdrawalApprovalStream \
+  --topic events.FundsWithdrawalApproved \
   --from-beginning
 ```
 
@@ -102,7 +103,7 @@ INSERT INTO public.outbox (
   1,
   'FundsWithdrawalApproved',
   'default',
-  'event',
+  'FundsWithdrawalApproved',
   'json',
   'test',
   now(),
@@ -111,10 +112,9 @@ INSERT INTO public.outbox (
 SQL
 ```
 
-**Terminal 1** should display:
-```json
-{"schema":{"type":"string","optional":false},"payload":"{\"account\": \"ACC-001\", \"amount\": 1000, \"currency\": \"USD\"}"}
-```
+**Terminal 1** should display the event payload.
+
+> **Note:** Only rows with `channel = 'default'` appear on Kafka. Rows with `channel = 'pg-boss'` are filtered out by the PostgreSQL publication.
 
 List all topics:
 ```bash
@@ -130,26 +130,50 @@ List all topics:
 ## How It Works
 
 1. **App inserts** a row into `public.outbox` (transactionally, alongside the domain event)
-2. **Postgres writes** the change to the WAL (Write-Ahead Log) with `wal_level=logical`
-3. **Debezium reads** the WAL via a replication slot (`pg1_outbox_slot`) — push, not poll
+2. **PostgreSQL publication** (`outbox_cdc`) filters at the WAL level — only `channel = 'default'` inserts are streamed
+3. **Debezium reads** the filtered WAL via a replication slot (`pg1_outbox_slot`) — push, not poll
 4. **Outbox Event Router SMT** transforms the raw Debezium envelope into a clean event:
-   - `stream_type` → determines the Kafka topic (`events.<stream_type>`)
+   - `message_type` → determines the Kafka topic (`events.<message_type>`)
    - `stream_id` → becomes the Kafka message key (partition ordering)
    - `payload` → becomes the message value
-   - `channel`, `message_type`, `offset`, `captured_at`, `stored_at` → Kafka headers
+   - `stream_type`, `channel`, `message_type`, `offset`, `captured_at`, `stored_at` → Kafka headers
 5. **Event lands** on the Kafka topic, ready for downstream consumers
+
+### Channel Filtering
+
+The outbox table serves two channels:
+
+| Channel | Purpose | Destination |
+|---------|---------|-------------|
+| `default` | External events for other services | Kafka via CDC |
+| `pg-boss` | Internal job queue processing | pg-boss (stays in Postgres) |
+
+Filtering is done via a PostgreSQL publication defined in `init.sql`:
+
+```sql
+CREATE PUBLICATION outbox_cdc
+  FOR TABLE public.outbox
+  WHERE (channel = 'default')
+  WITH (publish = 'insert');
+```
+
+This filters at the WAL level — pg-boss rows never reach Debezium. Only inserts are published (no updates, deletes, or truncates).
 
 ### Topic Routing
 
-Topics are auto-created by Kafka when the first message for a `stream_type` flows through:
+Topics are auto-created by Kafka when the first message for a `message_type` flows through:
 
-| `stream_type` column value | Kafka topic |
-|----------------------------|-------------|
-| `WithdrawalApprovalStream` | `events.WithdrawalApprovalStream` |
-| `DepositStream` | `events.DepositStream` |
+| `message_type` column value | Kafka topic |
+|-----------------------------|-------------|
+| `FundsWithdrawalApproved` | `events.FundsWithdrawalApproved` |
+| `WithdrawalDeclinedNotification` | `events.WithdrawalDeclinedNotification` |
 | Any new value | `events.<value>` (auto-created) |
 
-No config changes needed when you add new stream types.
+No config changes needed when you add new message types. Use clean identifiers (no spaces) for message_type values since they become topic names.
+
+### Partitioning
+
+Messages are keyed by `stream_id`, so all events for the same entity land on the same Kafka partition — guaranteeing ordering per aggregate instance.
 
 ## Connector Field Mappings
 
@@ -159,9 +183,9 @@ No config changes needed when you add new stream types.
 | `stream_id` | Event key | Message key (partitioning) |
 | `event_type` | Event type | Type field in value |
 | `payload` | Event payload | Message value (body) |
-| `stream_type` | Route field | Topic name: `events.<value>` |
+| `message_type` | Route field | Topic name: `events.<value>` |
+| `stream_type` | Additional | Kafka header |
 | `channel` | Additional | Kafka header |
-| `message_type` | Additional | Kafka header |
 | `offset` | Additional | Kafka header |
 | `captured_at` | Additional | Kafka header |
 | `stored_at` | Additional | Kafka header |
@@ -190,8 +214,8 @@ Both Postgres and Kafka data are stored in Docker volumes:
 
 ## Customizing Topic Routing
 
-**One topic per stream_type (default):**
-Topics are named `events.<stream_type>`.
+**One topic per message_type (default):**
+Topics are named `events.<message_type>`.
 
 **Single topic for all events:**
 Edit `connectors/pg-outbox.json` — remove `route.by.field` and set:
@@ -225,8 +249,9 @@ FROM pg_replication_slots;
 
 1. Check connector is RUNNING: `./scripts/status.sh`
 2. Check `table.include.list` matches `public.outbox`
-3. Check connector logs: `docker logs cdc-connect 2>&1 | tail -50`
-4. Remember: `snapshot.mode=never` means only new inserts (after connector registration) are captured
+3. Verify the row has `channel = 'default'` (pg-boss rows are filtered out)
+4. Check connector logs: `docker logs cdc-connect 2>&1 | tail -50`
+5. Remember: `snapshot.mode=never` means only new inserts (after connector registration) are captured
 
 ### Port conflicts
 
