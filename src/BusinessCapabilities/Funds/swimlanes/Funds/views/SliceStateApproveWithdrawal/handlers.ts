@@ -22,4 +22,12 @@ export const handlers = {
   WithdrawCommissionCalculated: (
     state: SliceStateApprovalWithdrawalViewState,
   ): SliceStateApprovalWithdrawalViewState => state,
+
+  FundsWithdrew: (
+    state: SliceStateApprovalWithdrawalViewState,
+  ): SliceStateApprovalWithdrawalViewState => state,
+
+  FundsWithdrawDeclined: (
+    state: SliceStateApprovalWithdrawalViewState,
+  ): SliceStateApprovalWithdrawalViewState => state,
 };
