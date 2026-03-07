@@ -1,7 +1,7 @@
 import { test, describe } from "node:test";
 import { WithdrawFunds } from "../command.js";
 import { handleWithdrawFunds } from "../commandHandler.js";
-import { FundsWithdrew } from "../../../swimlanes/Funds/events/FundsWithdrew.js";
+import { FundsWithdrawn } from "../../../swimlanes/Funds/events/FundsWithdrawn.js";
 import { FundsWithdrawDeclined } from "../../../swimlanes/Funds/events/FundsWithdrawDeclined.js";
 import { SliceTester } from "../../../../../types/SliceTester.js";
 import FundsStreamFactory from "../../../swimlanes/Funds/index.js";
@@ -28,7 +28,7 @@ describe("Withdraw Funds Slice - Unit Tests", () => {
       session: "0011",
     });
     const expectedEvents = [
-      new FundsWithdrew({
+      new FundsWithdrawn({
         account: '1234',
         amount: 21,
         commission: 0.21,

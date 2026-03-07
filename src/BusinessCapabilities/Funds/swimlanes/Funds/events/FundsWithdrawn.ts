@@ -1,6 +1,6 @@
 import type IEvDbEventPayload from "@eventualize/types/events/IEvDbEventPayload";
 
-export interface FundsWithdrewProps {
+export interface FundsWithdrawnProps {
   readonly account: string;
   readonly amount: number;
   readonly commission: number;
@@ -8,8 +8,8 @@ export interface FundsWithdrewProps {
   readonly session: string;
 }
 
-export class FundsWithdrew implements IEvDbEventPayload {
-  readonly payloadType = "FundsWithdrew" as const;
+export class FundsWithdrawn implements IEvDbEventPayload {
+  readonly payloadType = "FundsWithdrawn" as const;
 
   readonly account: string;
   readonly amount: number;
@@ -17,7 +17,7 @@ export class FundsWithdrew implements IEvDbEventPayload {
   readonly currency: string;
   readonly session: string;
 
-  constructor(props: FundsWithdrewProps) {
+  constructor(props: FundsWithdrawnProps) {
     this.account = props.account;
     this.amount = props.amount;
     this.commission = props.commission;

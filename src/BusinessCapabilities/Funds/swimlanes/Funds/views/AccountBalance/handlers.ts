@@ -1,6 +1,6 @@
 import type { FundsDepositApproved } from "../../events/FundsDepositApproved.js";
 import type { FundsWithdrawalApproved } from "../../events/FundsWithdrawalApproved.js";
-import type { FundsWithdrew } from "../../events/FundsWithdrew.js";
+import type { FundsWithdrawn } from "../../events/FundsWithdrawn.js";
 import type { AccountBalanceViewState } from "./state.js";
 
 export const handlers = {
@@ -22,7 +22,7 @@ export const handlers = {
     state: AccountBalanceViewState,
   ): AccountBalanceViewState => state,
 
-  FundsWithdrew: (
+  FundsWithdrawn: (
     state: AccountBalanceViewState,
   ): AccountBalanceViewState => state,
 

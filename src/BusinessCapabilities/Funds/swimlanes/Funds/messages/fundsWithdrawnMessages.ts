@@ -1,16 +1,16 @@
 import type EvDbEvent from "@eventualize/types/events/EvDbEvent";
-import type { FundsWithdrew } from "../events/FundsWithdrew.js";
+import type { FundsWithdrawn } from "../events/FundsWithdrawn.js";
 import EvDbMessage from "@eventualize/types/messages/EvDbMessage";
 
-export const fundsWithdrewMessages = (
+export const fundsWithdrawnMessages = (
   event: EvDbEvent,
   _viewStates: Readonly<Record<string, unknown>>,
 ) => {
-  const payload = event.payload as FundsWithdrew;
+  const payload = event.payload as FundsWithdrawn;
 
   return [
     EvDbMessage.createFromEvent(event, {
-      payloadType: "FundsWithdrew",
+      payloadType: "FundsWithdrawn",
       account: payload.account,
       amount: payload.amount,
       commission: payload.commission,
