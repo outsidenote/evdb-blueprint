@@ -17,7 +17,7 @@ export const handleCalculateWithdrawCommission: CommandHandler<
   FundsStreamType,
   CalculateWithdrawCommissionCommand
 > = (stream, command) => {
-
+  console.log(`Calculating withdraw commission for account ${command.account} and amount ${command.amount}...`);
   stream.appendEventWithdrawCommissionCalculated(
     new WithdrawCommissionCalculated(command)
   );

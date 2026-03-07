@@ -30,4 +30,12 @@ export const handlers = {
   WithdrawCommissionCalculated: (
     state: WithdrawalsInProcessViewState,
   ): WithdrawalsInProcessViewState => state,
+
+  FundsWithdrawn: (
+    state: WithdrawalsInProcessViewState,
+  ): WithdrawalsInProcessViewState => state,
+
+  FundsWithdrawDeclined: (
+    state: WithdrawalsInProcessViewState,
+  ): WithdrawalsInProcessViewState => state,
 };
