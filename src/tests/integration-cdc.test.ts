@@ -1,17 +1,51 @@
 import { test, describe, before, after } from "node:test";
 import * as assert from "node:assert";
 import { randomUUID } from "node:crypto";
+import { Kafka } from "kafkajs";
+import { PgBoss } from "pg-boss";
 import { TestCDCStack } from "./harness/TestCDCStack.js";
+import { waitFor } from "./harness/helpers.js";
+import { KafkaConsumerEndpointFactory } from "../types/KafkaConsumerEndpointFactory.js";
+import { PgBossEndpointFactory } from "../types/PgBossEndpointFactory.js";
+import { createFundsWithdrewKafkaConsumer } from "../BusinessCapabilities/FraudAnalysis/endpoints/RecordFundWithdrawAction/kafka/index.js";
+import { createFundsWithdrewWorker } from "../BusinessCapabilities/FraudAnalysis/endpoints/RecordFundWithdrawAction/pg-boss/index.js";
+import EvDbPostgresPrismaClientFactory from "@eventualize/postgres-storage-adapter/EvDbPostgresPrismaClientFactory";
+import EvDbPrismaStorageAdapter from "@eventualize/relational-storage-adapter/EvDbPrismaStorageAdapter";
 
 describe("CDC pipeline: outbox → Debezium → Kafka", { timeout: 180_000 }, () => {
   const stack = new TestCDCStack();
+  let boss: PgBoss;
+  let kafkaConsumers: KafkaConsumerEndpointFactory;
 
   before(async () => {
     await stack.start();
     await stack.waitForConnectorReady();
+
+    // Start pg-boss + Kafka consumer for the cross-boundary consumer test
+    const connectionUri = `postgresql://${stack.client.user}:eventualize123@${stack.client.host}:${stack.client.port}/${stack.client.database}`;
+
+    boss = new PgBoss({ connectionString: connectionUri });
+    await boss.start();
+
+    const storeClient = EvDbPostgresPrismaClientFactory.create(connectionUri);
+    const storageAdapter = new EvDbPrismaStorageAdapter(storeClient as any);
+
+    await PgBossEndpointFactory.startAll(boss, [
+      createFundsWithdrewWorker(storageAdapter),
+    ]);
+
+    const kafka = new Kafka({
+      clientId: "cdc-integration-test-consumer",
+      brokers: [stack.kafkaBootstrap],
+    });
+    kafkaConsumers = await KafkaConsumerEndpointFactory.startAll(kafka, boss, [
+      createFundsWithdrewKafkaConsumer(storageAdapter),
+    ]);
   });
 
   after(async () => {
+    await kafkaConsumers?.stop();
+    await boss?.stop();
     await stack.stop();
   });
 
@@ -157,5 +191,48 @@ describe("CDC pipeline: outbox → Debezium → Kafka", { timeout: 180_000 }, ()
 
     const payload = typeof msg.value === "string" ? JSON.parse(msg.value) : msg.value;
     assert.strictEqual(payload.outboxId, outboxId, "Payload should contain the original outboxId");
+  });
+
+  // ──────────────────────────────────────────────────────────────────
+  // Cross-boundary consumer: outbox → Debezium → Kafka
+  //   → KafkaConsumerEndpointFactory → pg-boss → worker → event
+  // ──────────────────────────────────────────────────────────────────
+  test("Kafka consumer bridges CDC message to pg-boss worker and produces downstream event", async () => {
+    const account = `cdc-consumer-${randomUUID()}`;
+
+    // Insert a FundsWithdrew outbox row (default channel → CDC → Kafka)
+    await stack.insertOutboxMessage({
+      streamType: "FundsWithdrawalStream",
+      streamId: account,
+      eventType: "FundsWithdrew",
+      messageType: "FundsWithdrew",
+      payload: {
+        payloadType: "FundsWithdrew",
+        account,
+        amount: 200,
+        commission: 2,
+        currency: "GBP",
+        session: "sess-cdc-001",
+      },
+    });
+
+    // Wait for the full pipeline to complete
+    await waitFor(async () => {
+      const { rows } = await stack.client.query(
+        "SELECT payload FROM public.events WHERE stream_id = $1 AND event_type = 'FundsWithdrawActionRecorded'",
+        [account],
+      );
+      return rows.length > 0;
+    }, 60_000);
+
+    const { rows } = await stack.client.query(
+      "SELECT payload FROM public.events WHERE stream_id = $1 AND event_type = 'FundsWithdrawActionRecorded'",
+      [account],
+    );
+    const recorded = rows[0].payload;
+
+    assert.strictEqual(recorded.amount, 202, "Recorded amount should be amount + commission (200 + 2)");
+    assert.strictEqual(recorded.account, account);
+    assert.strictEqual(recorded.currency, "GBP");
   });
 });
