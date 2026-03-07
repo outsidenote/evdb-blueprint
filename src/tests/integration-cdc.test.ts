@@ -29,15 +29,15 @@ describe("CDC pipeline: outbox → Debezium → Kafka", { timeout: 180_000 }, ()
     const storeClient = EvDbPostgresPrismaClientFactory.create(connectionUri);
     const storageAdapter = new EvDbPrismaStorageAdapter(storeClient as any);
 
+    const fundsWithdrawnWorker = createFundsWithdrawnWorker(storageAdapter);
     await PgBossEndpointFactory.startAll(boss, [
-      createFundsWithdrawnWorker(storageAdapter),
+      fundsWithdrawnWorker,
     ]);
 
     const kafka = new Kafka({
       clientId: "cdc-integration-test-consumer",
       brokers: [stack.kafkaBootstrap],
     });
-    const fundsWithdrawnWorker = createFundsWithdrawnWorker(storageAdapter);
     kafkaConsumers = await KafkaConsumerEndpointFactory.startAll(kafka, boss, [
       { topic: "events.FundsWithdrawn", pgBossEndpoint: fundsWithdrawnWorker },
     ]);
