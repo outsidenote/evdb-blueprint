@@ -8,7 +8,6 @@ import { PgBossEndpointFactory } from "./types/PgBossEndpointFactory.js";
 import { KafkaConsumerEndpointFactory } from "./types/KafkaConsumerEndpointFactory.js";
 import { createFundsWithdrawalApprovedWorker } from "./BusinessCapabilities/Funds/endpoints/CalculateWithdrawComission/pg-boss/index.js";
 import { createWithdrawCommissionCalculatedWorker } from "./BusinessCapabilities/Funds/endpoints/WithdrawFunds/pg-boss/index.js";
-import { createFundsWithdrawnKafkaConsumer } from "./BusinessCapabilities/FraudAnalysis/endpoints/RecordFundWithdrawAction/kafka/index.js";
 import { createFundsWithdrawnWorker } from "./BusinessCapabilities/FraudAnalysis/endpoints/RecordFundWithdrawAction/pg-boss/index.js";
 import EvDbPostgresPrismaClientFactory from "@eventualize/postgres-storage-adapter/EvDbPostgresPrismaClientFactory";
 import EvDbPrismaStorageAdapter from "@eventualize/relational-storage-adapter/EvDbPrismaStorageAdapter";
@@ -39,8 +38,9 @@ async function main() {
   const kafkaBootstrap = process.env.KAFKA_BOOTSTRAP ?? "localhost:9092";
   const kafka = new Kafka({ clientId: "evdb-blueprint", brokers: [kafkaBootstrap] });
   let kafkaConsumers: KafkaConsumerEndpointFactory | undefined;
+  const fundsWithdrawnWorker = createFundsWithdrawnWorker(storageAdapter);
   KafkaConsumerEndpointFactory.startAll(kafka, boss, [
-    createFundsWithdrawnKafkaConsumer(storageAdapter),
+    { topic: "events.FundsWithdrawn", pgBossEndpoint: fundsWithdrawnWorker },
   ]).then((consumers) => {
     kafkaConsumers = consumers;
   }).catch((err) => {
