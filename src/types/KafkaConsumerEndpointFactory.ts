@@ -3,7 +3,7 @@ import { PgBoss } from "pg-boss";
 import { pgBossQueueName, type PgBossEndpointConfig } from "./PgBossEndpointFactory.js";
 
 export interface KafkaConsumerEndpointConfig {
-  /** The Kafka topic to consume from (e.g. "events.FundsWithdrew"). */
+  /** The Kafka topic to consume from (e.g. "events.FundsWithdrawn"). */
   readonly topic: string;
   /** The pg-boss endpoint config that will process the message. */
   readonly pgBossEndpoint: PgBossEndpointConfig<any>;

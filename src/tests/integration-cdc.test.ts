@@ -7,8 +7,8 @@ import { TestCDCStack } from "./harness/TestCDCStack.js";
 import { waitFor } from "./harness/helpers.js";
 import { KafkaConsumerEndpointFactory } from "../types/KafkaConsumerEndpointFactory.js";
 import { PgBossEndpointFactory } from "../types/PgBossEndpointFactory.js";
-import { createFundsWithdrewKafkaConsumer } from "../BusinessCapabilities/FraudAnalysis/endpoints/RecordFundWithdrawAction/kafka/index.js";
-import { createFundsWithdrewWorker } from "../BusinessCapabilities/FraudAnalysis/endpoints/RecordFundWithdrawAction/pg-boss/index.js";
+import { createFundsWithdrawnKafkaConsumer } from "../BusinessCapabilities/FraudAnalysis/endpoints/RecordFundWithdrawAction/kafka/index.js";
+import { createFundsWithdrawnWorker } from "../BusinessCapabilities/FraudAnalysis/endpoints/RecordFundWithdrawAction/pg-boss/index.js";
 import EvDbPostgresPrismaClientFactory from "@eventualize/postgres-storage-adapter/EvDbPostgresPrismaClientFactory";
 import EvDbPrismaStorageAdapter from "@eventualize/relational-storage-adapter/EvDbPrismaStorageAdapter";
 
@@ -31,7 +31,7 @@ describe("CDC pipeline: outbox → Debezium → Kafka", { timeout: 180_000 }, ()
     const storageAdapter = new EvDbPrismaStorageAdapter(storeClient as any);
 
     await PgBossEndpointFactory.startAll(boss, [
-      createFundsWithdrewWorker(storageAdapter),
+      createFundsWithdrawnWorker(storageAdapter),
     ]);
 
     const kafka = new Kafka({
@@ -39,7 +39,7 @@ describe("CDC pipeline: outbox → Debezium → Kafka", { timeout: 180_000 }, ()
       brokers: [stack.kafkaBootstrap],
     });
     kafkaConsumers = await KafkaConsumerEndpointFactory.startAll(kafka, boss, [
-      createFundsWithdrewKafkaConsumer(storageAdapter),
+      createFundsWithdrawnKafkaConsumer(storageAdapter),
     ]);
   });
 
@@ -200,14 +200,14 @@ describe("CDC pipeline: outbox → Debezium → Kafka", { timeout: 180_000 }, ()
   test("Kafka consumer bridges CDC message to pg-boss worker and produces downstream event", async () => {
     const account = `cdc-consumer-${randomUUID()}`;
 
-    // Insert a FundsWithdrew outbox row (default channel → CDC → Kafka)
+    // Insert a FundsWithdrawn outbox row (default channel → CDC → Kafka)
     await stack.insertOutboxMessage({
       streamType: "FundsWithdrawalStream",
       streamId: account,
-      eventType: "FundsWithdrew",
-      messageType: "FundsWithdrew",
+      eventType: "FundsWithdrawn",
+      messageType: "FundsWithdrawn",
       payload: {
-        payloadType: "FundsWithdrew",
+        payloadType: "FundsWithdrawn",
         account,
         amount: 200,
         commission: 2,

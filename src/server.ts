@@ -8,8 +8,8 @@ import { PgBossEndpointFactory } from "./types/PgBossEndpointFactory.js";
 import { KafkaConsumerEndpointFactory } from "./types/KafkaConsumerEndpointFactory.js";
 import { createFundsWithdrawalApprovedWorker } from "./BusinessCapabilities/Funds/endpoints/CalculateWithdrawComission/pg-boss/index.js";
 import { createWithdrawCommissionCalculatedWorker } from "./BusinessCapabilities/Funds/endpoints/WithdrawFunds/pg-boss/index.js";
-import { createFundsWithdrewKafkaConsumer } from "./BusinessCapabilities/FraudAnalysis/endpoints/RecordFundWithdrawAction/kafka/index.js";
-import { createFundsWithdrewWorker } from "./BusinessCapabilities/FraudAnalysis/endpoints/RecordFundWithdrawAction/pg-boss/index.js";
+import { createFundsWithdrawnKafkaConsumer } from "./BusinessCapabilities/FraudAnalysis/endpoints/RecordFundWithdrawAction/kafka/index.js";
+import { createFundsWithdrawnWorker } from "./BusinessCapabilities/FraudAnalysis/endpoints/RecordFundWithdrawAction/pg-boss/index.js";
 import EvDbPostgresPrismaClientFactory from "@eventualize/postgres-storage-adapter/EvDbPostgresPrismaClientFactory";
 import EvDbPrismaStorageAdapter from "@eventualize/relational-storage-adapter/EvDbPrismaStorageAdapter";
 
@@ -32,7 +32,7 @@ async function main() {
   await PgBossEndpointFactory.startAll(boss, [
     createFundsWithdrawalApprovedWorker(storageAdapter),
     createWithdrawCommissionCalculatedWorker(storageAdapter),
-    createFundsWithdrewWorker(storageAdapter),
+    createFundsWithdrawnWorker(storageAdapter),
   ]);
 
   // Register Kafka consumer endpoints (non-blocking): CDC → Kafka → pg-boss → command handler
@@ -40,7 +40,7 @@ async function main() {
   const kafka = new Kafka({ clientId: "evdb-blueprint", brokers: [kafkaBootstrap] });
   let kafkaConsumers: KafkaConsumerEndpointFactory | undefined;
   KafkaConsumerEndpointFactory.startAll(kafka, boss, [
-    createFundsWithdrewKafkaConsumer(storageAdapter),
+    createFundsWithdrawnKafkaConsumer(storageAdapter),
   ]).then((consumers) => {
     kafkaConsumers = consumers;
   }).catch((err) => {
