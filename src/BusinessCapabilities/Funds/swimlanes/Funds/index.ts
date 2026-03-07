@@ -11,6 +11,7 @@ import { defaultState } from "./views/WithdrawalsInProcess/state.js";
 import { handlers } from "./views/WithdrawalsInProcess/handlers.js";
 import { handlers as sliceStateApproveWithdrawalHandlers } from "./views/SliceStateApproveWithdrawal/handlers.js";
 import { handlers as accountBalanceHandlers } from "./views/AccountBalance/handlers.js";
+import { handlers as accountBalanceHandlers } from "./views/AccountBalance/handlers.js";
 import { FundsDepositApproved } from "./events/FundsDepositApproved.js";
 import { WithdrawCommissionCalculated } from "./events/WithdrawCommissionCalculated.js";
 
