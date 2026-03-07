@@ -1,11 +1,15 @@
 import express from "express";
 import swaggerUi from "swagger-ui-express";
+import { Kafka } from "kafkajs";
 import { PgBoss } from "pg-boss";
 import { createWithdrawalRouter } from "./routes/withdrawal.js";
 import { swaggerDocument } from "./swagger.js";
 import { PgBossEndpointFactory } from "./types/PgBossEndpointFactory.js";
+import { KafkaConsumerEndpointFactory } from "./types/KafkaConsumerEndpointFactory.js";
 import { createFundsWithdrawalApprovedWorker } from "./BusinessCapabilities/Funds/endpoints/CalculateWithdrawComission/pg-boss/index.js";
 import { createWithdrawCommissionCalculatedWorker } from "./BusinessCapabilities/Funds/endpoints/WithdrawFunds/pg-boss/index.js";
+import { createFundsWithdrewKafkaConsumer } from "./BusinessCapabilities/FraudAnalysis/endpoints/RecordFundWithdrawAction/kafka/index.js";
+import { createFundsWithdrewWorker } from "./BusinessCapabilities/FraudAnalysis/endpoints/RecordFundWithdrawAction/pg-boss/index.js";
 import EvDbPostgresPrismaClientFactory from "@eventualize/postgres-storage-adapter/EvDbPostgresPrismaClientFactory";
 import EvDbPrismaStorageAdapter from "@eventualize/relational-storage-adapter/EvDbPrismaStorageAdapter";
 
@@ -28,7 +32,20 @@ async function main() {
   await PgBossEndpointFactory.startAll(boss, [
     createFundsWithdrawalApprovedWorker(storageAdapter),
     createWithdrawCommissionCalculatedWorker(storageAdapter),
+    createFundsWithdrewWorker(storageAdapter),
   ]);
+
+  // Register Kafka consumer endpoints (non-blocking): CDC → Kafka → pg-boss → command handler
+  const kafkaBootstrap = process.env.KAFKA_BOOTSTRAP ?? "localhost:9092";
+  const kafka = new Kafka({ clientId: "evdb-blueprint", brokers: [kafkaBootstrap] });
+  let kafkaConsumers: KafkaConsumerEndpointFactory | undefined;
+  KafkaConsumerEndpointFactory.startAll(kafka, boss, [
+    createFundsWithdrewKafkaConsumer(storageAdapter),
+  ]).then((consumers) => {
+    kafkaConsumers = consumers;
+  }).catch((err) => {
+    console.error("[KafkaConsumer] Failed to start (will retry on next restart):", err.message);
+  });
 
   const app = express();
   app.use(express.json());
@@ -43,6 +60,7 @@ async function main() {
 
   // Graceful shutdown
   process.on("SIGTERM", async () => {
+    await kafkaConsumers?.stop();
     await boss.stop();
     process.exit(0);
   });

@@ -83,7 +83,6 @@ export class PgBossEndpointFactory {
           console.log(`[PgBossEndpoint] Job already processed (${outboxId}), skipping`);
           return;
         }
-        console.log('Processing job', { outboxId, eventType: config.eventType, handlerName: config.handlerName });
         await config.handler(data.payload, { outboxId });
       });
 

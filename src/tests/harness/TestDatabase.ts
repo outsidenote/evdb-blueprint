@@ -10,11 +10,6 @@ const PROJECT_ROOT = path.resolve(__dirname, "../../..");
 
 const MIGRATIONS = [
   "infrastructure/cdc/init.sql",
-  "infrastructure/processed-jobs.sql",
-] as const;
-
-const POST_PGBOSS_MIGRATIONS = [
-  "infrastructure/outbox-trigger.sql",
 ] as const;
 
 function readSql(relativePath: string): string {
@@ -24,10 +19,8 @@ function readSql(relativePath: string): string {
 /**
  * Manages a PostgreSQL testcontainer with all schema migrations applied.
  *
- * Encapsulates the ordering:
- *   1. Core tables (events, outbox, snapshot, processed_jobs)
- *   2. pg-boss start (creates pgboss schema)
- *   3. Outbox trigger (depends on pgboss schema)
+ * init.sql includes EvDb tables, pgboss schema, and the outbox trigger.
+ * boss.start() detects the existing schema and skips creation.
  *
  * Reusable across all integration test files.
  */
@@ -55,10 +48,6 @@ export class TestDatabase {
 
     this.boss = new PgBoss({ connectionString: this.connectionUri });
     await this.boss.start();
-
-    for (const migration of POST_PGBOSS_MIGRATIONS) {
-      await this.client.query(readSql(migration));
-    }
   }
 
   async stop(): Promise<void> {

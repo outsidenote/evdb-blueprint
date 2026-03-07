@@ -30,3 +30,4 @@ echo "  Kafka Connect: localhost:8083"
 echo ""
 echo "Registering Debezium connector..."
 "$SCRIPT_DIR/create-connector.sh"
+
