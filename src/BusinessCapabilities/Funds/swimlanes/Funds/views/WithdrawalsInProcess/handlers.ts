@@ -31,7 +31,7 @@ export const handlers = {
     state: WithdrawalsInProcessViewState,
   ): WithdrawalsInProcessViewState => state,
 
-  FundsWithdrawn: (
+  FundsWithdrew: (
     state: WithdrawalsInProcessViewState,
   ): WithdrawalsInProcessViewState => state,
 

@@ -23,7 +23,7 @@ export const handlers = {
     state: SliceStateApprovalWithdrawalViewState,
   ): SliceStateApprovalWithdrawalViewState => state,
 
-  FundsWithdrawn: (
+  FundsWithdrew: (
     state: SliceStateApprovalWithdrawalViewState,
   ): SliceStateApprovalWithdrawalViewState => state,
 
