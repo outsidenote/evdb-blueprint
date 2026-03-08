@@ -1,10 +1,10 @@
 import type { IEvDbStorageAdapter } from "@eventualize/core/adapters/IEvDbStorageAdapter";
-import { type PgBossEndpointConfig, pgBossQueueName } from "../../../../../types/PgBossEndpointFactory.js";
+import { PgBossEndpointConfig } from "../../../../../types/PgBossEndpointFactory.js";
 import { createRecordFundWithdrawActionAdapter } from "../../../slices/RecordFundWithdrawAction/adapter.js";
 import { RecordFundWithdrawAction } from "../../../slices/RecordFundWithdrawAction/command.js";
 
 export const CHANNEL = "pg-boss" as const;
-export const QUEUE_NAME = pgBossQueueName({ eventType: "FundsWithdrawn", handlerName: "RecordFundWithdrawAction" } as PgBossEndpointConfig);
+export const QUEUE_NAME = "outbox.FundsWithdrawn.RecordFundWithdrawAction";
 
 interface FundsWithdrawnPayload {
   readonly account: string;
@@ -31,7 +31,7 @@ export function createFundsWithdrawnWorker(
 ): PgBossEndpointConfig<FundsWithdrawnPayload> {
   const recordFundWithdrawAction = createRecordFundWithdrawActionAdapter(storageAdapter);
 
-  return {
+  return new PgBossEndpointConfig({
     eventType: "FundsWithdrawn",
     handlerName: "RecordFundWithdrawAction",
 
@@ -50,5 +50,5 @@ export function createFundsWithdrawnWorker(
         `account=${payload.account} events=[${result.events.map(e => e.payload.payloadType).join(", ")}]`,
       );
     },
-  };
+  });
 }

@@ -1,6 +1,6 @@
 import { Kafka, type Consumer, type EachMessagePayload } from "kafkajs";
 import { PgBoss } from "pg-boss";
-import { pgBossQueueName, type PgBossEndpointConfig } from "./PgBossEndpointFactory.js";
+import { PgBossEndpointConfig } from "./PgBossEndpointFactory.js";
 
 export interface KafkaConsumerEndpointConfig {
   /** The Kafka topic to consume from (e.g. "events.FundsWithdrawn"). */
@@ -45,7 +45,7 @@ export class KafkaConsumerEndpointFactory {
     const factory = new KafkaConsumerEndpointFactory();
 
     for (const config of endpoints) {
-      const queueName = pgBossQueueName(config.pgBossEndpoint);
+      const queueName = config.pgBossEndpoint.queueName;
 
       // Ensure the pg-boss queue exists
       await boss.createQueue(queueName);
@@ -81,6 +81,9 @@ export class KafkaConsumerEndpointFactory {
 
       const consumer = kafka.consumer({ groupId });
       await consumer.connect();
+      // fromBeginning: true ensures no messages are missed on first deployment.
+      // On subsequent connections, kafkajs resumes from the last committed offset
+      // regardless of this setting — it only affects the initial consumer group join.
       await consumer.subscribe({ topic: config.topic, fromBeginning: true });
 
       await consumer.run({

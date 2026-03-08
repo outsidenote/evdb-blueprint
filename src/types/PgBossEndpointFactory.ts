@@ -4,16 +4,24 @@ export interface PgBossEndpointContext {
   readonly outboxId: string;
 }
 
-export interface PgBossEndpointConfig<TPayload = Record<string, unknown>> {
+export class PgBossEndpointConfig<TPayload = Record<string, unknown>> {
   readonly eventType: string;
   readonly handlerName: string;
   readonly handler: (payload: TPayload, context: PgBossEndpointContext) => Promise<void>;
-}
 
-/** Builds the pg-boss queue name from event type and handler name. */
-export function pgBossQueueName(pgBossEndpointConfig: PgBossEndpointConfig<any>): string {
-  const { eventType, handlerName } = pgBossEndpointConfig;
-  return `outbox.${eventType}.${handlerName}`;
+  constructor(config: {
+    eventType: string;
+    handlerName: string;
+    handler: (payload: TPayload, context: PgBossEndpointContext) => Promise<void>;
+  }) {
+    this.eventType = config.eventType;
+    this.handlerName = config.handlerName;
+    this.handler = config.handler;
+  }
+
+  get queueName(): string {
+    return `outbox.${this.eventType}.${this.handlerName}`;
+  }
 }
 
 interface JobData {
@@ -66,7 +74,7 @@ export class PgBossEndpointFactory {
     const db = boss.getDb();
 
     for (const config of endpoints) {
-      const queueName = pgBossQueueName(config);
+      const queueName = config.queueName;
 
       await boss.createQueue(queueName);
 
