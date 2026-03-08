@@ -4,7 +4,7 @@ import { createCalculateWithdrawCommissionAdapter } from "../../../slices/Calcul
 import { enrich } from "../enrichment.js";
 
 export const CHANNEL = "pg-boss" as const;
-export const QUEUE_NAME = "outbox.FundsWithdrawalApproved.CalculateWithdrawCommission";
+export const QUEUE_NAME = "event.FundsWithdrawalApproved.CalculateWithdrawCommission";
 
 interface FundsWithdrawalApprovedPayload {
   readonly account: string;
@@ -37,6 +37,7 @@ export function createFundsWithdrawalApprovedWorker(
   return new PgBossEndpointConfig({
     eventType: "FundsWithdrawalApproved",
     handlerName: "CalculateWithdrawCommission",
+    source: "event",
 
     handler: async (payload, { outboxId }) => {
       const command = enrich({

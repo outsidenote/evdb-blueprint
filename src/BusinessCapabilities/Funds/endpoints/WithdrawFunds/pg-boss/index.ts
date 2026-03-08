@@ -4,7 +4,7 @@ import { createWithdrawFundsAdapter } from "../../../slices/WithdrawFunds/adapte
 import { WithdrawFunds } from "../../../slices/WithdrawFunds/command.js";
 
 export const CHANNEL = "pg-boss" as const;
-export const QUEUE_NAME = "outbox.WithdrawCommissionCalculated.WithdrawFunds";
+export const QUEUE_NAME = "event.WithdrawCommissionCalculated.WithdrawFunds";
 
 interface WithdrawCommissionCalculatedPayload {
   readonly account: string;
@@ -34,6 +34,7 @@ export function createWithdrawCommissionCalculatedWorker(
   return new PgBossEndpointConfig({
     eventType: "WithdrawCommissionCalculated",
     handlerName: "WithdrawFunds",
+    source: "event",
 
     handler: async (payload, { outboxId }) => {
       const command = new WithdrawFunds({

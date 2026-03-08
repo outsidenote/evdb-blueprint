@@ -4,7 +4,7 @@ import { createRecordFundWithdrawActionAdapter } from "../../../slices/RecordFun
 import { RecordFundWithdrawAction } from "../../../slices/RecordFundWithdrawAction/command.js";
 
 export const CHANNEL = "pg-boss" as const;
-export const QUEUE_NAME = "outbox.FundsWithdrawn.RecordFundWithdrawAction";
+export const QUEUE_NAME = "message.FundsWithdrawn.RecordFundWithdrawAction";
 
 interface FundsWithdrawnPayload {
   readonly account: string;
@@ -34,6 +34,7 @@ export function createFundsWithdrawnWorker(
   return new PgBossEndpointConfig({
     eventType: "FundsWithdrawn",
     handlerName: "RecordFundWithdrawAction",
+    source: "message",
 
     handler: async (payload, { outboxId }) => {
       const command = new RecordFundWithdrawAction({

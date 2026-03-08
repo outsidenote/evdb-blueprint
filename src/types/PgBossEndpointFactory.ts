@@ -4,23 +4,43 @@ export interface PgBossEndpointContext {
   readonly outboxId: string;
 }
 
+/**
+ * Delivery source determines how jobs arrive in the pg-boss queue:
+ *
+ * - "event": internal automation — the outbox SQL trigger inserts jobs
+ *   directly into pgboss.job within the same transaction as the outbox INSERT.
+ *   Used for same-context event reactions (e.g., FundsWithdrawalApproved → CalculateWithdrawCommission).
+ *
+ * - "message": cross-boundary automation — CDC/Debezium publishes to Kafka,
+ *   then KafkaConsumerEndpointFactory bridges messages into pg-boss via boss.send().
+ *   Used for cross-context event consumption (e.g., FundsWithdrawn → RecordFundWithdrawAction).
+ *
+ * The source is encoded in the queue name to prevent collisions when the same
+ * event type is consumed by both an internal trigger handler and an external
+ * Kafka consumer (e.g., FundsWithdrawn for a to-do list vs. external fraud analysis).
+ */
+export type PgBossDeliverySource = "event" | "message";
+
 export class PgBossEndpointConfig<TPayload = Record<string, unknown>> {
   readonly eventType: string;
   readonly handlerName: string;
+  readonly source: PgBossDeliverySource;
   readonly handler: (payload: TPayload, context: PgBossEndpointContext) => Promise<void>;
 
   constructor(config: {
     eventType: string;
     handlerName: string;
+    source: PgBossDeliverySource;
     handler: (payload: TPayload, context: PgBossEndpointContext) => Promise<void>;
   }) {
     this.eventType = config.eventType;
     this.handlerName = config.handlerName;
+    this.source = config.source;
     this.handler = config.handler;
   }
 
   get queueName(): string {
-    return `outbox.${this.eventType}.${this.handlerName}`;
+    return `${this.source}.${this.eventType}.${this.handlerName}`;
   }
 }
 
