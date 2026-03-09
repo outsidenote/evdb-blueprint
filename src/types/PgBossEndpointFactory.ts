@@ -1,4 +1,6 @@
-import { Job, PgBoss } from "pg-boss";
+import { PgBoss } from "pg-boss";
+import { Kafka } from "kafkajs";
+import { KafkaConsumerEndpointFactory } from "./KafkaConsumerEndpointFactory.js";
 
 export interface PgBossEndpointContext {
   readonly outboxId: string;
@@ -25,17 +27,20 @@ export class PgBossEndpointConfig<TPayload = Record<string, unknown>> {
   readonly eventType: string;
   readonly handlerName: string;
   readonly source: PgBossDeliverySource;
+  readonly kafkaTopic?: string;
   readonly handler: (payload: TPayload, context: PgBossEndpointContext) => Promise<void>;
 
   constructor(config: {
     eventType: string;
     handlerName: string;
     source: PgBossDeliverySource;
+    kafkaTopic?: string;
     handler: (payload: TPayload, context: PgBossEndpointContext) => Promise<void>;
   }) {
     this.eventType = config.eventType;
     this.handlerName = config.handlerName;
     this.source = config.source;
+    this.kafkaTopic = config.kafkaTopic;
     this.handler = config.handler;
   }
 
@@ -86,11 +91,20 @@ const IDEMPOTENCY_SQL = `
  * See: infrastructure/processed-jobs.sql for the idempotency table.
  */
 export class PgBossEndpointFactory {
+  private kafkaConsumers?: KafkaConsumerEndpointFactory;
 
+  /**
+   * Registers all pg-boss workers and, for any config with a `kafkaTopic`,
+   * automatically starts a Kafka consumer that bridges messages into pg-boss.
+   *
+   * Pass a `kafka` instance if any endpoint has `source: "message"` with a `kafkaTopic`.
+   */
   static async startAll(
     boss: PgBoss,
     endpoints: PgBossEndpointConfig<any>[],
-  ): Promise<void> {
+    kafka?: Kafka,
+  ): Promise<PgBossEndpointFactory> {
+    const factory = new PgBossEndpointFactory();
     const db = boss.getDb();
 
     for (const config of endpoints) {
@@ -117,5 +131,28 @@ export class PgBossEndpointFactory {
       console.log(`[PgBossEndpoint] Registered ${config.handlerName} for ${config.eventType}`);
     }
 
+    // Auto-wire Kafka consumers for endpoints that declare a kafkaTopic
+    const kafkaEndpoints = endpoints.filter(e => e.kafkaTopic);
+    if (kafkaEndpoints.length > 0) {
+      if (!kafka) {
+        throw new Error(
+          `[PgBossEndpointFactory] ${kafkaEndpoints.length} endpoint(s) declare a kafkaTopic ` +
+          `but no Kafka instance was provided to startAll()`,
+        );
+      }
+
+      factory.kafkaConsumers = await KafkaConsumerEndpointFactory.startAll(kafka, boss,
+        kafkaEndpoints.map(e => ({
+          topic: e.kafkaTopic!,
+          pgBossEndpoint: e,
+        })),
+      );
+    }
+
+    return factory;
+  }
+
+  async stop(): Promise<void> {
+    await this.kafkaConsumers?.stop();
   }
 }

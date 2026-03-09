@@ -7,7 +7,6 @@ import { createServer, type Server } from "node:http";
 import { createWithdrawalRouter } from "./routes/withdrawal.js";
 import { swaggerDocument } from "./swagger.js";
 import { PgBossEndpointFactory } from "./types/PgBossEndpointFactory.js";
-import { KafkaConsumerEndpointFactory } from "./types/KafkaConsumerEndpointFactory.js";
 import { createFundsWithdrawalApprovedWorker } from "./BusinessCapabilities/Funds/endpoints/CalculateWithdrawComission/pg-boss/index.js";
 import { createWithdrawCommissionCalculatedWorker } from "./BusinessCapabilities/Funds/endpoints/WithdrawFunds/pg-boss/index.js";
 import { createFundsWithdrawnWorker } from "./BusinessCapabilities/FraudAnalysis/endpoints/RecordFundWithdrawAction/pg-boss/index.js";
@@ -54,24 +53,12 @@ async function main() {
   await boss.start();
   console.log("[Startup] pg-boss started");
 
-  const fundsWithdrawnWorker = createFundsWithdrawnWorker(storageAdapter);
-
-  await PgBossEndpointFactory.startAll(boss, [
+  const pgBossFactory = await PgBossEndpointFactory.startAll(boss, [
     createFundsWithdrawalApprovedWorker(storageAdapter),
     createWithdrawCommissionCalculatedWorker(storageAdapter),
-    fundsWithdrawnWorker,
-  ]);
+    createFundsWithdrawnWorker(storageAdapter),
+  ], kafka);
   console.log("[Startup] pg-boss workers registered");
-
-  let kafkaConsumers: KafkaConsumerEndpointFactory | undefined;
-  try {
-    kafkaConsumers = await KafkaConsumerEndpointFactory.startAll(kafka, boss, [
-      { topic: "events.FundsWithdrawn", pgBossEndpoint: fundsWithdrawnWorker },
-    ]);
-    console.log("[Startup] Kafka consumers started");
-  } catch (err: any) {
-    console.error("[KafkaConsumer] Failed to start:", err?.message ?? err);
-  }
 
   const app = express();
   app.use(express.json());
@@ -81,10 +68,7 @@ async function main() {
   });
 
   app.get("/ready", (_req, res) => {
-    res.status(200).json({
-      status: "ready",
-      kafkaConsumerStarted: Boolean(kafkaConsumers),
-    });
+    res.status(200).json({ status: "ready" });
   });
 
   app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
@@ -106,7 +90,7 @@ async function main() {
     console.log(`[Shutdown] Received ${signal}, stopping services...`);
 
     const results = await Promise.allSettled([
-      kafkaConsumers?.stop(),
+      pgBossFactory.stop(),
       stopServer(httpServer),
       boss.stop(),
     ]);

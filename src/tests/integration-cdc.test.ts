@@ -5,7 +5,6 @@ import { Kafka } from "kafkajs";
 import { PgBoss } from "pg-boss";
 import { TestCDCStack } from "./harness/TestCDCStack.js";
 import { waitFor } from "./harness/helpers.js";
-import { KafkaConsumerEndpointFactory } from "../types/KafkaConsumerEndpointFactory.js";
 import { PgBossEndpointFactory } from "../types/PgBossEndpointFactory.js";
 import { createFundsWithdrawnWorker } from "../BusinessCapabilities/FraudAnalysis/endpoints/RecordFundWithdrawAction/pg-boss/index.js";
 import EvDbPostgresPrismaClientFactory from "@eventualize/postgres-storage-adapter/EvDbPostgresPrismaClientFactory";
@@ -14,7 +13,7 @@ import EvDbPrismaStorageAdapter from "@eventualize/relational-storage-adapter/Ev
 describe("CDC pipeline: outbox → Debezium → Kafka", { timeout: 180_000 }, () => {
   const stack = new TestCDCStack();
   let boss: PgBoss;
-  let kafkaConsumers: KafkaConsumerEndpointFactory;
+  let pgBossFactory: PgBossEndpointFactory;
 
   before(async () => {
     await stack.start();
@@ -29,22 +28,18 @@ describe("CDC pipeline: outbox → Debezium → Kafka", { timeout: 180_000 }, ()
     const storeClient = EvDbPostgresPrismaClientFactory.create(connectionUri);
     const storageAdapter = new EvDbPrismaStorageAdapter(storeClient as any);
 
-    const fundsWithdrawnWorker = createFundsWithdrawnWorker(storageAdapter);
-    await PgBossEndpointFactory.startAll(boss, [
-      fundsWithdrawnWorker,
-    ]);
-
     const kafka = new Kafka({
       clientId: "cdc-integration-test-consumer",
       brokers: [stack.kafkaBootstrap],
     });
-    kafkaConsumers = await KafkaConsumerEndpointFactory.startAll(kafka, boss, [
-      { topic: "events.FundsWithdrawn", pgBossEndpoint: fundsWithdrawnWorker },
-    ]);
+
+    pgBossFactory = await PgBossEndpointFactory.startAll(boss, [
+      createFundsWithdrawnWorker(storageAdapter),
+    ], kafka);
   });
 
   after(async () => {
-    await kafkaConsumers?.stop();
+    await pgBossFactory?.stop();
     await boss?.stop();
     await stack.stop();
   });
