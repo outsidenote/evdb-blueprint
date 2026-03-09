@@ -35,6 +35,7 @@ export function createFundsWithdrawnWorker(
     eventType: "FundsWithdrawn",
     handlerName: "RecordFundWithdrawAction",
     source: "message",
+    kafkaTopic: "events.FundsWithdrawn",
 
     handler: async (payload, { outboxId }) => {
       const command = new RecordFundWithdrawAction({
