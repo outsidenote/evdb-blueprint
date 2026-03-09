@@ -141,6 +141,7 @@ export class PgBossEndpointFactory {
         );
       }
 
+      console.log(`[PgBossEndpointFactory] Starting Kafka consumers for ${kafkaEndpoints.length} endpoint(s)`);
       factory.kafkaConsumers = await KafkaConsumerEndpointFactory.startAll(kafka, boss,
         kafkaEndpoints.map(e => ({
           topic: e.kafkaTopic!,

@@ -47,9 +47,6 @@ export class KafkaConsumerEndpointFactory {
     for (const config of endpoints) {
       const queueName = config.pgBossEndpoint.queueName;
 
-      // Ensure the pg-boss queue exists
-      await boss.createQueue(queueName);
-
       // Start each consumer with retry — topic may not exist yet
       factory.startConsumerWithRetry(kafka, boss, config, queueName);
     }
