@@ -46,15 +46,13 @@ export class KafkaConsumerEndpointFactory {
 
     for (const config of endpoints) {
       const queueName = config.pgBossEndpoint.queueName;
-
-      // Start each consumer with retry — topic may not exist yet
-      factory.startConsumerWithRetry(kafka, boss, config, queueName);
+      factory.startConsumer(kafka, boss, config, queueName);
     }
 
     return factory;
   }
 
-  private startConsumerWithRetry(
+  private startConsumer(
     kafka: Kafka,
     boss: PgBoss,
     config: KafkaConsumerEndpointConfig,
@@ -63,19 +61,6 @@ export class KafkaConsumerEndpointFactory {
     const groupId = config.groupId ?? queueName;
 
     const attempt = async () => {
-      const admin = kafka.admin();
-      try {
-        await admin.connect();
-        const topics = await admin.listTopics();
-        if (!topics.includes(config.topic)) {
-          console.log(`[KafkaConsumer] Topic ${config.topic} not found, retrying in ${RETRY_INTERVAL_MS / 1000}s...`);
-          this.retryTimers.push(setTimeout(() => attempt(), RETRY_INTERVAL_MS));
-          return;
-        }
-      } finally {
-        await admin.disconnect().catch(() => {});
-      }
-
       const consumer = kafka.consumer({ groupId });
       await consumer.connect();
       // fromBeginning: true ensures no messages are missed on first deployment.
