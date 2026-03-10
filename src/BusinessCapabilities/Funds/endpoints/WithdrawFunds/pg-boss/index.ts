@@ -1,10 +1,10 @@
 import type { IEvDbStorageAdapter } from "@eventualize/core/adapters/IEvDbStorageAdapter";
-import { type PgBossEndpointConfig, pgBossQueueName } from "../../../../../types/PgBossEndpointFactory.js";
+import { PgBossEndpointConfig } from "../../../../../types/PgBossEndpointFactory.js";
 import { createWithdrawFundsAdapter } from "../../../slices/WithdrawFunds/adapter.js";
 import { WithdrawFunds } from "../../../slices/WithdrawFunds/command.js";
 
 export const CHANNEL = "pg-boss" as const;
-export const QUEUE_NAME = pgBossQueueName({ eventType: "WithdrawCommissionCalculated", handlerName: "WithdrawFunds" } as PgBossEndpointConfig);
+export const QUEUE_NAME = "event.WithdrawCommissionCalculated.WithdrawFunds";
 
 interface WithdrawCommissionCalculatedPayload {
   readonly account: string;
@@ -31,9 +31,10 @@ export function createWithdrawCommissionCalculatedWorker(
 ): PgBossEndpointConfig<WithdrawCommissionCalculatedPayload> {
   const withdrawFunds = createWithdrawFundsAdapter(storageAdapter);
 
-  return {
+  return new PgBossEndpointConfig({
     eventType: "WithdrawCommissionCalculated",
     handlerName: "WithdrawFunds",
+    source: "event",
 
     handler: async (payload, { outboxId }) => {
       const command = new WithdrawFunds({
@@ -51,5 +52,5 @@ export function createWithdrawCommissionCalculatedWorker(
         `account=${payload.account} events=[${result.events.map(e => e.payload.payloadType).join(", ")}]`,
       );
     },
-  };
+  });
 }
