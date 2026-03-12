@@ -12,6 +12,7 @@ interface WithdrawCommissionCalculatedPayload {
   readonly amount: number;
   readonly commission: number;
   readonly currency: string;
+  readonly transactionId: string;
 }
 
 /**
@@ -37,16 +38,16 @@ export function createWithdrawCommissionCalculatedWorker(
     handlerName: "WithdrawFunds",
     source: "event",
 
-    getIdempotencyKey: (_payload, { outboxId }) =>
-      getIdempotencyKey(outboxId, "WithdrawFunds"),
+    getIdempotencyKey: (payload, _context) =>
+      getIdempotencyKey(payload.transactionId, "WithdrawFunds"),
 
-    handler: async (payload, { outboxId }) => {
+    handler: async (payload) => {
       const command = new WithdrawFunds({
         account: payload.account,
         amount: payload.amount,
         commission: payload.commission,
         currency: payload.currency,
-        session: outboxId,
+        session: payload.transactionId,
       });
 
       const result = await withdrawFunds(command);

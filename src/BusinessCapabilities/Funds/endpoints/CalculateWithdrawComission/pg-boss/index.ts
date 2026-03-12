@@ -11,6 +11,7 @@ interface FundsWithdrawalApprovedPayload {
   readonly account: string;
   readonly amount: number;
   readonly currency: string;
+  readonly transactionId: string;
 }
 
 /**
@@ -40,10 +41,10 @@ export function createFundsWithdrawalApprovedWorker(
     handlerName: "CalculateWithdrawCommission",
     source: "event",
 
-    getIdempotencyKey: (_payload, { outboxId }) =>
-      getIdempotencyKey(outboxId, "CalculateWithdrawCommission"),
+    getIdempotencyKey: (payload, _context) =>
+      getIdempotencyKey(payload.transactionId, "CalculateWithdrawCommission"),
 
-    handler: async (payload, { outboxId }) => {
+    handler: async (payload) => {
       const command = enrich({
         account: payload.account,
         amount: payload.amount,
@@ -52,7 +53,7 @@ export function createFundsWithdrawalApprovedWorker(
         source: "outbox",
         payer: "unknown",
         approvalDate: new Date(),
-        transactionId: outboxId,
+        transactionId: payload.transactionId,
         transactionTime: new Date(),
       });
 

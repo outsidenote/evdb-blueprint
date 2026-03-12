@@ -9,7 +9,7 @@ export const withdrawCommissionCalculatedMessages = (
   _viewStates: Readonly<Record<string, unknown>>,
 ) => {
   const { account, amount, commission, currency, transactionId } = event.payload as WithdrawCommissionCalculated;
-  const payload = { payloadType: "WithdrawFunds", account, amount, commission, currency };
+  const payload = { payloadType: "WithdrawFunds", account, amount, commission, currency, transactionId };
 
   return [
     createPgBossQueueMessageFromEvent([WITHDRAW_FUNDS_QUEUE], event, payload),
