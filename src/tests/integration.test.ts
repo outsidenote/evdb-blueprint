@@ -121,13 +121,16 @@ describe("E2E: CalculateWithdrawCommission automation slice", () => {
     );
     assert.strictEqual(eventsAfter[0].cnt, eventsBefore[0].cnt, "No duplicate events from redelivery");
 
-    // THEN: Idempotency marker exists in outbox with correct observability fields
+    // THEN: Idempotency marker exists in outbox (written atomically by stream message handler)
+    // Key is derived from business identifier (transactionId=outboxId) + slice name
+    const CONSUMER_ID = "CalculateWithdrawCommission";
     const { rows: idempotencyRows } = await db.client.query(
-      "SELECT event_type, message_type FROM public.outbox WHERE channel = 'idempotent' AND payload->>'idempotencyKey' = $1",
-      [`${outboxId}:${QUEUE_NAME}`],
+      "SELECT event_type, message_type, payload FROM public.outbox WHERE channel = 'idempotent' AND payload->>'idempotencyKey' = $1",
+      [`${outboxId}:${CONSUMER_ID}`],
     );
     assert.strictEqual(idempotencyRows.length, 1, "Idempotency marker exists in outbox");
-    assert.strictEqual(idempotencyRows[0].event_type, "IdempotencyKeyAddedForConsumer");
-    assert.strictEqual(idempotencyRows[0].message_type, "CalculateWithdrawCommission.IdempotencyKeyAddedForConsumer");
+    assert.strictEqual(idempotencyRows[0].event_type, "WithdrawCommissionCalculated");
+    assert.strictEqual(idempotencyRows[0].message_type, `${CONSUMER_ID}.IdempotencyKeyAddedForConsumer`);
+    assert.strictEqual(idempotencyRows[0].payload.consumerId, CONSUMER_ID);
   });
 });

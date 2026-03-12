@@ -88,7 +88,7 @@ describe("Outbox verification: external events (CDC channel)", () => {
     assert.strictEqual(rows[0].channel, "default", "Channel should be 'default' for external/CDC events");
     assert.strictEqual(rows[0].stream_type, "WithdrawalApprovalStream");
     assert.strictEqual(rows[0].event_type, "FundsWithdrawalDeclined");
-    assert.strictEqual(rows[0].message_type, "Withdrawal Declined Notification");
+    assert.strictEqual(rows[0].message_type, "WithdrawalDeclinedNotification");
 
     const payload = typeof rows[0].payload === "string" ? JSON.parse(rows[0].payload) : rows[0].payload;
     assert.strictEqual(payload.account, account);

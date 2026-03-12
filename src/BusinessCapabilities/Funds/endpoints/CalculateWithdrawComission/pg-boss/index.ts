@@ -2,6 +2,7 @@ import type { IEvDbStorageAdapter } from "@eventualize/core/adapters/IEvDbStorag
 import { PgBossEndpointConfig } from "../../../../../types/PgBossEndpointFactory.js";
 import { createCalculateWithdrawCommissionAdapter } from "../../../slices/CalculateWithdrawCommissionAdapter/adapter.js";
 import { enrich } from "../enrichment.js";
+import { getIdempotencyKey } from "../../../../../types/IdempotencyMessage.js";
 
 export const CHANNEL = "pg-boss" as const;
 export const QUEUE_NAME = "event.FundsWithdrawalApproved.CalculateWithdrawCommission";
@@ -38,6 +39,9 @@ export function createFundsWithdrawalApprovedWorker(
     eventType: "FundsWithdrawalApproved",
     handlerName: "CalculateWithdrawCommission",
     source: "event",
+
+    getIdempotencyKey: (_payload, { outboxId }) =>
+      getIdempotencyKey(outboxId, "CalculateWithdrawCommission"),
 
     handler: async (payload, { outboxId }) => {
       const command = enrich({
