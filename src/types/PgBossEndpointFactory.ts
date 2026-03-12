@@ -57,7 +57,7 @@ interface JobData {
 }
 
 const IDEMPOTENCY_SQL = `
-  INSERT INTO public.processed_jobs (idempotency_key)
+  INSERT INTO public.outbox_idempotency (idempotency_key)
   VALUES ($1)
   ON CONFLICT DO NOTHING
   RETURNING idempotency_key
@@ -80,15 +80,16 @@ const IDEMPOTENCY_SQL = `
  * The trigger reads the queues array and inserts one job per queue.
  * Each queue is independent (separate retries, dead letter).
  *
- * Idempotency: before calling the handler, the factory inserts the outboxId
- * into the processed_jobs table. If the row already exists (redelivery),
- * the handler is skipped entirely.
+ * Idempotency: before calling the handler, the factory inserts outboxId:queueName
+ * into the outbox_idempotency table. If the row already exists (redelivery),
+ * the handler is skipped. The composite key ensures fan-out to multiple queues
+ * from the same outbox entry is processed independently per queue.
  *
  * On restart: nothing to catch up — jobs already exist in pgboss.job.
  * boss.work() resumes processing any pending/failed jobs automatically.
  *
  * See: infrastructure/outbox-trigger.sql for the trigger definition.
- * See: infrastructure/processed-jobs.sql for the idempotency table.
+ * See: infrastructure/outbox-idempotency.sql for the idempotency table.
  */
 export class PgBossEndpointFactory {
   private kafkaConsumers?: KafkaConsumerEndpointFactory;
