@@ -5,13 +5,12 @@ import { KafkaConsumerEndpointFactory } from "./KafkaConsumerEndpointFactory.js"
 
 export interface PgBossEndpointContext {
   readonly outboxId: string;
-  readonly markProcessed: () => Promise<void>;
 }
 
 /**
  * Checks the outbox table for an existing idempotency marker.
  */
-async function isAlreadyProcessed(pool: pg.Pool, idempotencyKey: string): Promise<boolean> {
+async function isAlreadyProcessed(pool: pg.Pool | pg.PoolClient, idempotencyKey: string): Promise<boolean> {
   const { rows } = await pool.query(
     `SELECT 1 FROM public.outbox WHERE channel = 'idempotent' AND payload->>'idempotencyKey' = $1 LIMIT 1`,
     [idempotencyKey],
@@ -22,7 +21,7 @@ async function isAlreadyProcessed(pool: pg.Pool, idempotencyKey: string): Promis
 /**
  * Writes an idempotency marker to the outbox table.
  */
-async function markProcessed(pool: pg.Pool, idempotencyKey: string, queueName: string): Promise<void> {
+async function markProcessed(pool: pg.Pool | pg.PoolClient, idempotencyKey: string, queueName: string): Promise<void> {
   await pool.query(
     `INSERT INTO public.outbox
       (id, stream_type, stream_id, "offset", event_type, channel, message_type, serialize_type, captured_by, captured_at, payload)
@@ -101,8 +100,8 @@ interface JobData {
  * Idempotency: the factory gates every job with an outbox-based check.
  * Before calling the handler, it queries the outbox table for a row with
  * channel = 'idempotent' and a composite key of `outboxId:queueName`.
- * If found, the job is skipped. The consumer is responsible for calling
- * `context.markProcessed()` to write the idempotency marker to the outbox.
+ * If found, the job is skipped. After the handler returns successfully,
+ * the factory writes the idempotency marker to the outbox automatically.
  *
  * On restart: nothing to catch up — jobs already exist in pgboss.job.
  * boss.work() resumes processing any pending/failed jobs automatically.
@@ -136,15 +135,36 @@ export class PgBossEndpointFactory {
         const { outboxId } = data.metadata;
         const idempotencyKey = `${outboxId}:${queueName}`;
 
-        if (await isAlreadyProcessed(pool, idempotencyKey)) {
-          console.log(`[PgBossEndpoint] Duplicate detected for ${idempotencyKey}, skipping`);
-          return;
-        }
+        if (config.source === "message") {
+          // Message-sourced endpoints (Kafka) need advisory lock because
+          // Kafka's at-least-once delivery can enqueue duplicate pg-boss jobs
+          // with the same outboxId, which may be picked up concurrently.
+          const client = await pool.connect();
+          try {
+            await client.query(`SELECT pg_advisory_lock(hashtext($1))`, [idempotencyKey]);
 
-        await config.handler(data.payload, {
-          outboxId,
-          markProcessed: () => markProcessed(pool, idempotencyKey, queueName),
-        });
+            if (await isAlreadyProcessed(client, idempotencyKey)) {
+              console.log(`[PgBossEndpoint] Duplicate detected for ${idempotencyKey}, skipping`);
+              return;
+            }
+
+            await config.handler(data.payload, { outboxId });
+            await markProcessed(client, idempotencyKey, queueName);
+          } finally {
+            await client.query(`SELECT pg_advisory_unlock(hashtext($1))`, [idempotencyKey]);
+            client.release();
+          }
+        } else {
+          // Event-sourced endpoints (trigger) guarantee one job per outbox row —
+          // no concurrent duplicates possible, so no lock needed.
+          if (await isAlreadyProcessed(pool, idempotencyKey)) {
+            console.log(`[PgBossEndpoint] Duplicate detected for ${idempotencyKey}, skipping`);
+            return;
+          }
+
+          await config.handler(data.payload, { outboxId });
+          await markProcessed(pool, idempotencyKey, queueName);
+        }
       });
 
       console.log(`[PgBossEndpoint] Registered ${config.handlerName} for ${config.eventType}`);

@@ -37,7 +37,7 @@ export function createFundsWithdrawnWorker(
     source: "message",
     kafkaTopic: "events.FundsWithdrawn",
 
-    handler: async (payload, { outboxId, markProcessed }) => {
+    handler: async (payload, { outboxId }) => {
       const command = new RecordFundWithdrawAction({
         account: payload.account,
         amount: payload.amount + payload.commission,
@@ -46,7 +46,6 @@ export function createFundsWithdrawnWorker(
       });
 
       const result = await recordFundWithdrawAction(command);
-      await markProcessed();
 
       console.log(
         `[OutboxWorker] FundsWithdrawn → RecordFundWithdrawAction ` +

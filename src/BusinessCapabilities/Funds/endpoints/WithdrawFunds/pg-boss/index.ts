@@ -36,7 +36,7 @@ export function createWithdrawCommissionCalculatedWorker(
     handlerName: "WithdrawFunds",
     source: "event",
 
-    handler: async (payload, { outboxId, markProcessed }) => {
+    handler: async (payload, { outboxId }) => {
       const command = new WithdrawFunds({
         account: payload.account,
         amount: payload.amount,
@@ -46,7 +46,6 @@ export function createWithdrawCommissionCalculatedWorker(
       });
 
       const result = await withdrawFunds(command);
-      await markProcessed();
 
       console.log(
         `[OutboxWorker] WithdrawCommissionCalculated → WithdrawFunds ` +
