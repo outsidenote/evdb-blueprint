@@ -1,9 +1,24 @@
 import { PgBoss } from "pg-boss";
 import { Kafka } from "kafkajs";
+import pg from "pg";
 import { KafkaConsumerEndpointFactory } from "./KafkaConsumerEndpointFactory.js";
 
 export interface PgBossEndpointContext {
   readonly outboxId: string;
+}
+
+/**
+ * Checks the outbox table for an existing idempotency marker.
+ *
+ * The marker is written atomically with the events by the stream's
+ * message handler — not by this factory. This function is the gate only.
+ */
+async function isAlreadyProcessed(pool: pg.Pool, idempotencyKey: string): Promise<boolean> {
+  const { rows } = await pool.query(
+    `SELECT 1 FROM public.outbox WHERE channel = 'idempotent' AND payload->>'idempotencyKey' = $1 LIMIT 1`,
+    [idempotencyKey],
+  );
+  return rows.length > 0;
 }
 
 /**
@@ -29,6 +44,7 @@ export class PgBossEndpointConfig<TPayload = Record<string, unknown>> {
   readonly source: PgBossDeliverySource;
   readonly kafkaTopic?: string;
   readonly handler: (payload: TPayload, context: PgBossEndpointContext) => Promise<void>;
+  readonly getIdempotencyKey: (message: TPayload, context: PgBossEndpointContext) => string;
 
   constructor(config: {
     eventType: string;
@@ -36,12 +52,14 @@ export class PgBossEndpointConfig<TPayload = Record<string, unknown>> {
     source: PgBossDeliverySource;
     kafkaTopic?: string;
     handler: (payload: TPayload, context: PgBossEndpointContext) => Promise<void>;
+    getIdempotencyKey: (message: TPayload, context: PgBossEndpointContext) => string;
   }) {
     this.eventType = config.eventType;
     this.handlerName = config.handlerName;
     this.source = config.source;
     this.kafkaTopic = config.kafkaTopic;
     this.handler = config.handler;
+    this.getIdempotencyKey = config.getIdempotencyKey;
   }
 
   get queueName(): string {
@@ -55,13 +73,6 @@ interface JobData {
   };
   payload: Record<string, unknown>;
 }
-
-const IDEMPOTENCY_SQL = `
-  INSERT INTO public.processed_jobs (idempotency_key)
-  VALUES ($1)
-  ON CONFLICT DO NOTHING
-  RETURNING idempotency_key
-`;
 
 /**
  * Generic pg-boss endpoint factory.
@@ -80,15 +91,19 @@ const IDEMPOTENCY_SQL = `
  * The trigger reads the queues array and inserts one job per queue.
  * Each queue is independent (separate retries, dead letter).
  *
- * Idempotency: before calling the handler, the factory inserts the outboxId
- * into the processed_jobs table. If the row already exists (redelivery),
- * the handler is skipped entirely.
+ * Idempotency: the factory gates every job with an outbox-based check.
+ * Before calling the handler, it queries the outbox table for a row with
+ * channel = 'idempotent' and a composite key of `outboxId:consumerId`.
+ * If found, the job is skipped.
+ *
+ * The idempotency marker itself is written atomically with the events
+ * by the stream's message handler (GWT messaging config) — NOT by this
+ * factory. This ensures the marker and events are in the same transaction.
  *
  * On restart: nothing to catch up — jobs already exist in pgboss.job.
  * boss.work() resumes processing any pending/failed jobs automatically.
  *
  * See: infrastructure/outbox-trigger.sql for the trigger definition.
- * See: infrastructure/processed-jobs.sql for the idempotency table.
  */
 export class PgBossEndpointFactory {
   private kafkaConsumers?: KafkaConsumerEndpointFactory;
@@ -102,10 +117,10 @@ export class PgBossEndpointFactory {
   static async startAll(
     boss: PgBoss,
     endpoints: PgBossEndpointConfig<any>[],
+    pool: pg.Pool,
     kafka?: Kafka,
   ): Promise<PgBossEndpointFactory> {
     const factory = new PgBossEndpointFactory();
-    const db = boss.getDb();
 
     for (const config of endpoints) {
       const queueName = config.queueName;
@@ -113,19 +128,17 @@ export class PgBossEndpointFactory {
       await boss.createQueue(queueName);
 
       await boss.work(queueName, async ([job]) => {
-        const isProcessed = async (outboxId: string) => {
-          const { rows } = await db.executeSql(IDEMPOTENCY_SQL, [outboxId]);
-          return rows.length === 0;
-        }
-
         const data = job.data as JobData;
         const { outboxId } = data.metadata;
+        const context: PgBossEndpointContext = { outboxId };
+        const idempotencyKey = config.getIdempotencyKey(data.payload, context);
 
-        if (await isProcessed(outboxId)) {
-          console.log(`[PgBossEndpoint] Job already processed (${outboxId}), skipping`);
+        if (await isAlreadyProcessed(pool, idempotencyKey)) {
+          console.log(`[PgBossEndpoint] Duplicate detected for ${idempotencyKey}, skipping`);
           return;
         }
-        await config.handler(data.payload, { outboxId });
+
+        await config.handler(data.payload, context);
       });
 
       console.log(`[PgBossEndpoint] Registered ${config.handlerName} for ${config.eventType}`);

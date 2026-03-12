@@ -1,24 +1,28 @@
 import { test, describe, before, after } from "node:test";
 import * as assert from "node:assert";
 import { randomUUID } from "node:crypto";
+import type pg from "pg";
 import { TestDatabase, createTestApp, waitFor } from "./harness/index.js";
 import { createFundsWithdrawalApprovedWorker, QUEUE_NAME } from "../BusinessCapabilities/Funds/endpoints/CalculateWithdrawComission/pg-boss/index.js";
 import { createWithdrawCommissionCalculatedWorker } from "../BusinessCapabilities/Funds/endpoints/WithdrawFunds/pg-boss/index.js";
 
 describe("E2E: CalculateWithdrawCommission automation slice", () => {
   const db = new TestDatabase();
+  let pool: pg.Pool;
 
   before(async () => {
     await db.start();
-    await createTestApp(db, {
+    const app = await createTestApp(db, {
       workers: (storageAdapter) => [
         createFundsWithdrawalApprovedWorker(storageAdapter),
         createWithdrawCommissionCalculatedWorker(storageAdapter),
       ],
     });
+    pool = app.pool;
   });
 
   after(async () => {
+    await pool?.end();
     await db.stop();
   });
 
@@ -55,7 +59,7 @@ describe("E2E: CalculateWithdrawCommission automation slice", () => {
     const account = "e2e-account-001";
 
     // GIVEN: An outbox message for this automation slice
-    await insertOutboxMessage(account, { account, amount: 0, currency: "USD" });
+    await insertOutboxMessage(account, { account, amount: 0, currency: "USD", transactionId: randomUUID() });
 
     // THEN: Downstream events were created for this account
     await waitFor(async () => {
@@ -71,21 +75,22 @@ describe("E2E: CalculateWithdrawCommission automation slice", () => {
   // Worker idempotency: duplicate pg-boss job does not create
   // duplicate downstream events
   // ──────────────────────────────────────────────────────────────────
-  test("worker idempotency: duplicate job with same outboxId does not create duplicate events", async () => {
+  test("worker idempotency: duplicate job with same transactionId does not create duplicate events", async () => {
     const account = "e2e-account-002";
-    const outboxId = randomUUID();
+    const transactionId = randomUUID();
 
     await db.boss.send(QUEUE_NAME, {
-      metadata: { outboxId },
-      payload: { account, amount: 0, currency: "EUR" },
+      metadata: { outboxId: randomUUID() },
+      payload: { account, amount: 0, currency: "EUR", transactionId },
     });
 
+    // Wait for the first job to be processed (event appears in stream)
     await waitFor(async () => {
       const { rows } = await db.client.query(
-        "SELECT * FROM public.processed_jobs WHERE idempotency_key = $1",
-        [outboxId],
+        "SELECT count(*)::int AS cnt FROM public.events WHERE stream_id = $1 AND event_type = 'WithdrawCommissionCalculated'",
+        [account],
       );
-      return rows.length > 0;
+      return rows[0].cnt > 0;
     });
 
     // Snapshot: count downstream events scoped to this account
@@ -93,10 +98,10 @@ describe("E2E: CalculateWithdrawCommission automation slice", () => {
       "SELECT count(*)::int AS cnt FROM public.events WHERE stream_id = $1 AND event_type = 'WithdrawCommissionCalculated'",
       [account],
     );
-    // WHEN: Simulate pg-boss redelivery with the same outboxId
+    // WHEN: Simulate pg-boss redelivery with the same transactionId
     await db.boss.send(QUEUE_NAME, {
-      metadata: { outboxId },
-      payload: { account, amount: 0, currency: "EUR" },
+      metadata: { outboxId: randomUUID() },
+      payload: { account, amount: 0, currency: "EUR", transactionId },
     });
 
     // Wait for the duplicate job to be handled
@@ -115,5 +120,17 @@ describe("E2E: CalculateWithdrawCommission automation slice", () => {
       [account],
     );
     assert.strictEqual(eventsAfter[0].cnt, eventsBefore[0].cnt, "No duplicate events from redelivery");
+
+    // THEN: Idempotency marker exists in outbox (written atomically by stream message handler)
+    // Key is derived from business identifier (transactionId) + consumer name
+    const CONSUMER_ID = "CalculateWithdrawCommission";
+    const { rows: idempotencyRows } = await db.client.query(
+      "SELECT event_type, message_type, payload FROM public.outbox WHERE channel = 'idempotent' AND payload->>'idempotencyKey' = $1",
+      [`${transactionId}:${CONSUMER_ID}`],
+    );
+    assert.strictEqual(idempotencyRows.length, 1, "Idempotency marker exists in outbox");
+    assert.strictEqual(idempotencyRows[0].event_type, "WithdrawCommissionCalculated");
+    assert.strictEqual(idempotencyRows[0].message_type, `${CONSUMER_ID}.IdempotencyKeyAddedForConsumer`);
+    assert.strictEqual(idempotencyRows[0].payload.consumerId, CONSUMER_ID);
   });
 });
