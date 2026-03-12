@@ -21,12 +21,18 @@ async function isAlreadyProcessed(pool: pg.Pool | pg.PoolClient, idempotencyKey:
 /**
  * Writes an idempotency marker to the outbox table.
  */
-async function markProcessed(pool: pg.Pool | pg.PoolClient, idempotencyKey: string, queueName: string): Promise<void> {
+async function markProcessed(
+  pool: pg.Pool | pg.PoolClient,
+  idempotencyKey: string,
+  queueName: string,
+  handlerName: string,
+): Promise<void> {
+  const messageType = `${handlerName}.IdempotencyKeyAddedForConsumer`;
   await pool.query(
     `INSERT INTO public.outbox
       (id, stream_type, stream_id, "offset", event_type, channel, message_type, serialize_type, captured_by, captured_at, payload)
-     VALUES (gen_random_uuid(), 'idempotent', $1, 0, 'idempotent', 'idempotent', 'idempotent', 'json', $2, NOW(), $3)`,
-    [idempotencyKey, queueName, JSON.stringify({ idempotencyKey })],
+     VALUES (gen_random_uuid(), 'idempotent', $1, 0, 'IdempotencyKeyAddedForConsumer', 'idempotent', $2, 'json', $3, NOW(), $4)`,
+    [idempotencyKey, messageType, queueName, JSON.stringify({ idempotencyKey })],
   );
 }
 
@@ -166,7 +172,7 @@ export class PgBossEndpointFactory {
               }
 
               await config.handler(data.payload, { outboxId });
-              await markProcessed(client, idempotencyKey, queueName);
+              await markProcessed(client, idempotencyKey, queueName, config.handlerName);
             } finally {
               await client.query(`SELECT pg_advisory_unlock(hashtext($1), hashtext($2))`, [outboxId, queueName]);
             }
@@ -184,7 +190,7 @@ export class PgBossEndpointFactory {
           }
 
           await config.handler(data.payload, { outboxId });
-          await markProcessed(pool, idempotencyKey, queueName);
+          await markProcessed(pool, idempotencyKey, queueName, config.handlerName);
         }
       });
 
