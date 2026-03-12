@@ -3,27 +3,33 @@ import * as assert from "node:assert";
 import { randomUUID } from "node:crypto";
 import { Kafka } from "kafkajs";
 import { PgBoss } from "pg-boss";
+import { Pool } from "pg";
 import { TestCDCStack } from "./harness/TestCDCStack.js";
 import { waitFor } from "./harness/helpers.js";
 import { PgBossEndpointFactory } from "../types/PgBossEndpointFactory.js";
+import { ProjectionFactory } from "../types/ProjectionFactory.js";
 import { createFundsWithdrawnWorker } from "../BusinessCapabilities/FraudAnalysis/endpoints/RecordFundWithdrawAction/pg-boss/index.js";
+import { pendingWithdrawalLookupSlice } from "../BusinessCapabilities/Funds/slices/PendingWithdrawalLookup/index.js";
 import EvDbPostgresPrismaClientFactory from "@eventualize/postgres-storage-adapter/EvDbPostgresPrismaClientFactory";
 import EvDbPrismaStorageAdapter from "@eventualize/relational-storage-adapter/EvDbPrismaStorageAdapter";
 
 describe("CDC pipeline: outbox → Debezium → Kafka", { timeout: 180_000 }, () => {
   const stack = new TestCDCStack();
   let boss: PgBoss;
+  let pool: Pool;
   let pgBossFactory: PgBossEndpointFactory;
+  let projectionFactory: ProjectionFactory;
 
   before(async () => {
     await stack.start();
     await stack.waitForConnectorReady();
 
-    // Start pg-boss + Kafka consumer for the cross-boundary consumer test
     const connectionUri = `postgresql://${stack.client.user}:eventualize123@${stack.client.host}:${stack.client.port}/${stack.client.database}`;
 
     boss = new PgBoss({ connectionString: connectionUri });
     await boss.start();
+
+    pool = new Pool({ connectionString: connectionUri });
 
     const storeClient = EvDbPostgresPrismaClientFactory.create(connectionUri);
     const storageAdapter = new EvDbPrismaStorageAdapter(storeClient as any);
@@ -36,10 +42,16 @@ describe("CDC pipeline: outbox → Debezium → Kafka", { timeout: 180_000 }, ()
     pgBossFactory = await PgBossEndpointFactory.startAll(boss, [
       createFundsWithdrawnWorker(storageAdapter),
     ], kafka);
+
+    projectionFactory = await ProjectionFactory.startAll(kafka, pool, [
+      pendingWithdrawalLookupSlice,
+    ]);
   });
 
   after(async () => {
+    await projectionFactory?.stop();
     await pgBossFactory?.stop();
+    await pool?.end();
     await boss?.stop();
     await stack.stop();
   });
@@ -229,5 +241,94 @@ describe("CDC pipeline: outbox → Debezium → Kafka", { timeout: 180_000 }, ()
     assert.strictEqual(recorded.amount, 202, "Recorded amount should be amount + commission (200 + 2)");
     assert.strictEqual(recorded.account, account);
     assert.strictEqual(recorded.currency, "GBP");
+  });
+
+  // ──────────────────────────────────────────────────────────────────
+  // Projection: outbox → Debezium → Kafka → ProjectionFactory
+  //   → projections table (full pipeline for PendingWithdrawalLookup)
+  //
+  // Event order: FundsWithdrawalApproved → UPSERT, FundsWithdrawn → DELETE
+  // ──────────────────────────────────────────────────────────────────
+  test("FundsWithdrawalApproved CDC message creates a PendingWithdrawalLookup projection row", async () => {
+    const account = `proj-cdc-${randomUUID()}`;
+
+    await stack.insertOutboxMessage({
+      streamType: "FundsWithdrawalStream",
+      streamId: account,
+      eventType: "FundsWithdrawalApproved",
+      messageType: "FundsWithdrawalApproved",
+      payload: {
+        payloadType: "FundsWithdrawalApproved",
+        account,
+        amount: 300,
+        currency: "USD",
+        session: "sess-proj-001",
+      },
+    });
+
+    // Wait for projection row to appear
+    await waitFor(async () => {
+      const { rows } = await pool.query(
+        `SELECT payload FROM projections WHERE name = 'PendingWithdrawalLookup' AND key = $1`,
+        [account],
+      );
+      return rows.length > 0;
+    }, 60_000);
+
+    const { rows } = await pool.query(
+      `SELECT payload FROM projections WHERE name = 'PendingWithdrawalLookup' AND key = $1`,
+      [account],
+    );
+
+    assert.strictEqual(rows.length, 1);
+    assert.strictEqual(rows[0].payload.account, account);
+    assert.strictEqual(rows[0].payload.amount, 300);
+    assert.strictEqual(rows[0].payload.currency, "USD");
+    assert.strictEqual(rows[0].payload.session, "sess-proj-001");
+  });
+
+  test("FundsWithdrawn CDC message removes the PendingWithdrawalLookup projection row", async () => {
+    const account = `proj-cdc-del-${randomUUID()}`;
+
+    // Insert an approval → projection row created
+    await stack.insertOutboxMessage({
+      streamType: "FundsWithdrawalStream",
+      streamId: account,
+      eventType: "FundsWithdrawalApproved",
+      messageType: "FundsWithdrawalApproved",
+      payload: { payloadType: "FundsWithdrawalApproved", account, amount: 100, currency: "USD", session: "s1" },
+    });
+
+    await waitFor(async () => {
+      const { rows } = await pool.query(
+        `SELECT 1 FROM projections WHERE name = 'PendingWithdrawalLookup' AND key = $1`,
+        [account],
+      );
+      return rows.length > 0;
+    }, 60_000);
+
+    // Insert a withdrawal → projection row removed
+    await stack.insertOutboxMessage({
+      streamType: "FundsWithdrawalStream",
+      streamId: account,
+      eventType: "FundsWithdrawn",
+      messageType: "FundsWithdrawn",
+      offset: 1,
+      payload: { payloadType: "FundsWithdrawn", account, amount: 100, commission: 1, currency: "USD", session: "s1", capturedAt: new Date().toISOString() },
+    });
+
+    await waitFor(async () => {
+      const { rows } = await pool.query(
+        `SELECT 1 FROM projections WHERE name = 'PendingWithdrawalLookup' AND key = $1`,
+        [account],
+      );
+      return rows.length === 0;
+    }, 60_000);
+
+    const { rows } = await pool.query(
+      `SELECT 1 FROM projections WHERE name = 'PendingWithdrawalLookup' AND key = $1`,
+      [account],
+    );
+    assert.strictEqual(rows.length, 0, "Projection row must be deleted after FundsWithdrawn");
   });
 });

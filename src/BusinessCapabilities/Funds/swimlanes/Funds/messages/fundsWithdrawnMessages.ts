@@ -16,6 +16,7 @@ export const fundsWithdrawnMessages = (
       commission: payload.commission,
       currency: payload.currency,
       session: payload.session,
+      capturedAt: event.capturedAt.toISOString(),
     }),
   ];
 };

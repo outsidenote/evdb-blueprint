@@ -98,10 +98,11 @@ describe("Outbox verification: external events (CDC channel)", () => {
   });
 
   // ──────────────────────────────────────────────────────────────────
-  // Approved withdrawal → outbox message with channel='pg-boss' (internal queue)
-  // This confirms channel separation: approved events do NOT go to CDC
+  // Approved withdrawal → two outbox messages:
+  //   1. channel='pg-boss'  → outbox trigger → CalculateWithdrawCommission worker
+  //   2. channel='default'  → CDC → Kafka → PendingWithdrawalLookup projection
   // ──────────────────────────────────────────────────────────────────
-  test("approved withdrawal creates outbox message with channel='pg-boss' (not external)", async () => {
+  test("approved withdrawal creates two outbox messages: pg-boss (internal) + default (CDC)", async () => {
     const account = `approved-${randomUUID()}`;
     const adapter = createApproveWithdrawalAdapter(storageAdapter);
 
@@ -115,19 +116,32 @@ describe("Outbox verification: external events (CDC channel)", () => {
     assert.strictEqual(result.events.length, 1);
     assert.strictEqual(result.events[0].payload.payloadType, "FundsWithdrawalApproved");
 
-    // THEN: Outbox contains a pg-boss message (NOT external/CDC)
+    // THEN: Two outbox rows — one per message producer in withdrawalApprovedMessages
     const { rows } = await db.client.query(
-      `SELECT id, channel, event_type, payload
-       FROM public.outbox WHERE stream_id = $1`,
+      `SELECT id, channel, event_type, message_type, payload
+       FROM public.outbox WHERE stream_id = $1 ORDER BY channel`,
       [account],
     );
 
-    assert.strictEqual(rows.length, 1, "Exactly one outbox message for approved withdrawal");
-    assert.strictEqual(rows[0].channel, "pg-boss", "Approved events use pg-boss channel, not CDC");
-    assert.strictEqual(rows[0].event_type, "FundsWithdrawalApproved");
+    assert.strictEqual(rows.length, 2, "FundsWithdrawalApproved should produce two outbox rows");
 
-    const payload = typeof rows[0].payload === "string" ? JSON.parse(rows[0].payload) : rows[0].payload;
-    assert.ok(Array.isArray(payload.queues), "pg-boss messages should have queues array");
+    const pgBossRow = rows.find((r: { channel: string }) => r.channel === "pg-boss");
+    const defaultRow = rows.find((r: { channel: string }) => r.channel === "default");
+
+    assert.ok(pgBossRow, "One row must have channel='pg-boss' for CalculateWithdrawCommission");
+    assert.ok(defaultRow, "One row must have channel='default' for CDC → projection slice");
+
+    // pg-boss row drives the CalculateWithdrawCommission worker
+    const pgBossPayload = typeof pgBossRow.payload === "string"
+      ? JSON.parse(pgBossRow.payload) : pgBossRow.payload;
+    assert.ok(Array.isArray(pgBossPayload.queues), "pg-boss message must have queues array");
+
+    // default row drives the PendingWithdrawalLookup projection via Kafka
+    assert.strictEqual(defaultRow.event_type, "FundsWithdrawalApproved");
+    assert.strictEqual(defaultRow.message_type, "FundsWithdrawalApproved");
+    const defaultPayload = typeof defaultRow.payload === "string"
+      ? JSON.parse(defaultRow.payload) : defaultRow.payload;
+    assert.strictEqual(defaultPayload.account, account);
   });
 
   // ──────────────────────────────────────────────────────────────────

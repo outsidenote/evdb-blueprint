@@ -54,6 +54,17 @@ CREATE TABLE IF NOT EXISTS snapshot (
 
 CREATE INDEX IF NOT EXISTS ix_snapshot_earlier_stored_at_7ae7ea3b165349e09b3fe6d66a69fd72 ON snapshot (stream_type, stream_id, view_name, stored_at);
 
+-- Projections table for key/value read models
+CREATE TABLE IF NOT EXISTS public.projections (
+  name       VARCHAR(150)             NOT NULL,
+  key        VARCHAR(150)             NOT NULL,
+  payload    JSONB                    NOT NULL,
+  created_at TIMESTAMPTZ              NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ              NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (name, key)
+);
+
+
 -- Idempotency table for pg-boss endpoint workers
 CREATE TABLE IF NOT EXISTS public.outbox_idempotency (
   idempotency_key TEXT PRIMARY KEY,
