@@ -1,24 +1,28 @@
 import { test, describe, before, after } from "node:test";
 import * as assert from "node:assert";
 import { randomUUID } from "node:crypto";
+import type pg from "pg";
 import { TestDatabase, createTestApp, waitFor } from "./harness/index.js";
 import { createFundsWithdrawalApprovedWorker, QUEUE_NAME } from "../BusinessCapabilities/Funds/endpoints/CalculateWithdrawComission/pg-boss/index.js";
 import { createWithdrawCommissionCalculatedWorker } from "../BusinessCapabilities/Funds/endpoints/WithdrawFunds/pg-boss/index.js";
 
 describe("E2E: CalculateWithdrawCommission automation slice", () => {
   const db = new TestDatabase();
+  let pool: pg.Pool;
 
   before(async () => {
     await db.start();
-    await createTestApp(db, {
+    const app = await createTestApp(db, {
       workers: (storageAdapter) => [
         createFundsWithdrawalApprovedWorker(storageAdapter),
         createWithdrawCommissionCalculatedWorker(storageAdapter),
       ],
     });
+    pool = app.pool;
   });
 
   after(async () => {
+    await pool?.end();
     await db.stop();
   });
 

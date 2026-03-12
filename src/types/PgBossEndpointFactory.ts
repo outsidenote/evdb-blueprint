@@ -1,9 +1,34 @@
 import { PgBoss } from "pg-boss";
 import { Kafka } from "kafkajs";
+import pg from "pg";
 import { KafkaConsumerEndpointFactory } from "./KafkaConsumerEndpointFactory.js";
 
 export interface PgBossEndpointContext {
   readonly outboxId: string;
+  readonly markProcessed: () => Promise<void>;
+}
+
+/**
+ * Checks the outbox table for an existing idempotency marker.
+ */
+async function isAlreadyProcessed(pool: pg.Pool, idempotencyKey: string): Promise<boolean> {
+  const { rows } = await pool.query(
+    `SELECT 1 FROM public.outbox WHERE channel = 'idempotent' AND payload->>'idempotencyKey' = $1 LIMIT 1`,
+    [idempotencyKey],
+  );
+  return rows.length > 0;
+}
+
+/**
+ * Writes an idempotency marker to the outbox table.
+ */
+async function markProcessed(pool: pg.Pool, idempotencyKey: string, queueName: string): Promise<void> {
+  await pool.query(
+    `INSERT INTO public.outbox
+      (id, stream_type, stream_id, "offset", event_type, channel, message_type, serialize_type, captured_by, captured_at, payload)
+     VALUES (gen_random_uuid(), 'idempotent', $1, 0, 'idempotent', 'idempotent', 'idempotent', 'json', $2, NOW(), $3)`,
+    [idempotencyKey, queueName, JSON.stringify({ idempotencyKey })],
+  );
 }
 
 /**
@@ -73,10 +98,11 @@ interface JobData {
  * The trigger reads the queues array and inserts one job per queue.
  * Each queue is independent (separate retries, dead letter).
  *
- * Idempotency: each slice's command handler is responsible for its own
- * idempotency via GWT predicates that check the stream's event history
- * (e.g., isAlreadyProcessed). This keeps idempotency logic co-located
- * with the business rules rather than in generic infrastructure.
+ * Idempotency: the factory gates every job with an outbox-based check.
+ * Before calling the handler, it queries the outbox table for a row with
+ * channel = 'idempotent' and a composite key of `outboxId:queueName`.
+ * If found, the job is skipped. The consumer is responsible for calling
+ * `context.markProcessed()` to write the idempotency marker to the outbox.
  *
  * On restart: nothing to catch up — jobs already exist in pgboss.job.
  * boss.work() resumes processing any pending/failed jobs automatically.
@@ -95,6 +121,7 @@ export class PgBossEndpointFactory {
   static async startAll(
     boss: PgBoss,
     endpoints: PgBossEndpointConfig<any>[],
+    pool: pg.Pool,
     kafka?: Kafka,
   ): Promise<PgBossEndpointFactory> {
     const factory = new PgBossEndpointFactory();
@@ -107,7 +134,17 @@ export class PgBossEndpointFactory {
       await boss.work(queueName, async ([job]) => {
         const data = job.data as JobData;
         const { outboxId } = data.metadata;
-        await config.handler(data.payload, { outboxId });
+        const idempotencyKey = `${outboxId}:${queueName}`;
+
+        if (await isAlreadyProcessed(pool, idempotencyKey)) {
+          console.log(`[PgBossEndpoint] Duplicate detected for ${idempotencyKey}, skipping`);
+          return;
+        }
+
+        await config.handler(data.payload, {
+          outboxId,
+          markProcessed: () => markProcessed(pool, idempotencyKey, queueName),
+        });
       });
 
       console.log(`[PgBossEndpoint] Registered ${config.handlerName} for ${config.eventType}`);

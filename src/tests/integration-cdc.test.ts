@@ -3,6 +3,7 @@ import * as assert from "node:assert";
 import { randomUUID } from "node:crypto";
 import { Kafka } from "kafkajs";
 import { PgBoss } from "pg-boss";
+import pg from "pg";
 import { TestCDCStack } from "./harness/TestCDCStack.js";
 import { waitFor } from "./harness/helpers.js";
 import { PgBossEndpointFactory } from "../types/PgBossEndpointFactory.js";
@@ -13,6 +14,7 @@ import EvDbPrismaStorageAdapter from "@eventualize/relational-storage-adapter/Ev
 describe("CDC pipeline: outbox → Debezium → Kafka", { timeout: 180_000 }, () => {
   const stack = new TestCDCStack();
   let boss: PgBoss;
+  let pool: pg.Pool;
   let pgBossFactory: PgBossEndpointFactory;
 
   before(async () => {
@@ -25,6 +27,8 @@ describe("CDC pipeline: outbox → Debezium → Kafka", { timeout: 180_000 }, ()
     boss = new PgBoss({ connectionString: connectionUri });
     await boss.start();
 
+    pool = new pg.Pool({ connectionString: connectionUri });
+
     const storeClient = EvDbPostgresPrismaClientFactory.create(connectionUri);
     const storageAdapter = new EvDbPrismaStorageAdapter(storeClient as any);
 
@@ -35,12 +39,13 @@ describe("CDC pipeline: outbox → Debezium → Kafka", { timeout: 180_000 }, ()
 
     pgBossFactory = await PgBossEndpointFactory.startAll(boss, [
       createFundsWithdrawnWorker(storageAdapter),
-    ], kafka);
+    ], pool, kafka);
   });
 
   after(async () => {
     await pgBossFactory?.stop();
     await boss?.stop();
+    await pool?.end();
     await stack.stop();
   });
 

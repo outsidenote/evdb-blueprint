@@ -39,7 +39,7 @@ export function createFundsWithdrawalApprovedWorker(
     handlerName: "CalculateWithdrawCommission",
     source: "event",
 
-    handler: async (payload, { outboxId }) => {
+    handler: async (payload, { outboxId, markProcessed }) => {
       const command = enrich({
         account: payload.account,
         amount: payload.amount,
@@ -53,6 +53,7 @@ export function createFundsWithdrawalApprovedWorker(
       });
 
       const result = await calculateCommission(command);
+      await markProcessed();
 
       console.log(
         `[OutboxWorker] FundsWithdrawalApproved → commission=${command.commission} ` +
