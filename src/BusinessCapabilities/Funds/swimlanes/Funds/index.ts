@@ -13,6 +13,8 @@ import { handlers as sliceStateApproveWithdrawalHandlers } from "./views/SliceSt
 import { handlers as accountBalanceHandlers } from "./views/AccountBalance/handlers.js";
 import { FundsDepositApproved } from "./events/FundsDepositApproved.js";
 import { WithdrawCommissionCalculated } from "./events/WithdrawCommissionCalculated.js";
+import { defaultState as calculateCommissionDefaultState } from "./views/SliceStateCalculateWithdrawCommission/state.js";
+import { handlers as sliceStateCalculateWithdrawCommissionHandlers } from "./views/SliceStateCalculateWithdrawCommission/handlers.js";
 
 const FundsStreamFactory = new StreamFactoryBuilder("WithdrawalApprovalStream")
   .withEventType(FundsWithdrawalApproved, withdrawalApprovedMessages)
@@ -24,6 +26,7 @@ const FundsStreamFactory = new StreamFactoryBuilder("WithdrawalApprovalStream")
   .withView("WithdrawalsInProcess", defaultState, handlers)
   .withView("SliceStateApproveWithdrawal", { balance: 0 }, sliceStateApproveWithdrawalHandlers)
   .withView("AccountBalance", { balance: 0 }, accountBalanceHandlers)
+  .withView("SliceStateCalculateWithdrawCommission", calculateCommissionDefaultState, sliceStateCalculateWithdrawCommissionHandlers)
   .build();
 
 export default FundsStreamFactory;

@@ -80,12 +80,13 @@ describe("E2E: CalculateWithdrawCommission automation slice", () => {
       payload: { account, amount: 0, currency: "EUR" },
     });
 
+    // Wait for the first job to be processed (event appears in stream)
     await waitFor(async () => {
       const { rows } = await db.client.query(
-        "SELECT * FROM public.outbox_idempotency WHERE idempotency_key = $1",
-        [`${outboxId}:${QUEUE_NAME}`],
+        "SELECT count(*)::int AS cnt FROM public.events WHERE stream_id = $1 AND event_type = 'WithdrawCommissionCalculated'",
+        [account],
       );
-      return rows.length > 0;
+      return rows[0].cnt > 0;
     });
 
     // Snapshot: count downstream events scoped to this account
