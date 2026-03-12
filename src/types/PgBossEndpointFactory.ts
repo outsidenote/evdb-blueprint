@@ -113,16 +113,17 @@ export class PgBossEndpointFactory {
       await boss.createQueue(queueName);
 
       await boss.work(queueName, async ([job]) => {
-        const isProcessed = async (outboxId: string) => {
-          const { rows } = await db.executeSql(IDEMPOTENCY_SQL, [outboxId]);
+        const isProcessed = async (idempotencyKey: string) => {
+          const { rows } = await db.executeSql(IDEMPOTENCY_SQL, [idempotencyKey]);
           return rows.length === 0;
         }
 
         const data = job.data as JobData;
         const { outboxId } = data.metadata;
+        const idempotencyKey = `${outboxId}:${queueName}`;
 
-        if (await isProcessed(outboxId)) {
-          console.log(`[PgBossEndpoint] Job already processed (${outboxId}), skipping`);
+        if (await isProcessed(idempotencyKey)) {
+          console.log(`[PgBossEndpoint] Job already processed (${idempotencyKey}), skipping`);
           return;
         }
         await config.handler(data.payload, { outboxId });
