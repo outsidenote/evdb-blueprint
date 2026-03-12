@@ -55,7 +55,7 @@ CREATE TABLE IF NOT EXISTS snapshot (
 CREATE INDEX IF NOT EXISTS ix_snapshot_earlier_stored_at_7ae7ea3b165349e09b3fe6d66a69fd72 ON snapshot (stream_type, stream_id, view_name, stored_at);
 
 -- Idempotency table for pg-boss endpoint workers
-CREATE TABLE IF NOT EXISTS public.processed_jobs (
+CREATE TABLE IF NOT EXISTS public.outbox_idempotency (
   idempotency_key TEXT PRIMARY KEY,
   processed_at    TIMESTAMPTZ DEFAULT NOW()
 );
