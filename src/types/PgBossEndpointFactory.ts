@@ -103,6 +103,12 @@ interface JobData {
  * If found, the job is skipped. After the handler returns successfully,
  * the factory writes the idempotency marker to the outbox automatically.
  *
+ * Note: the handler and the marker write are NOT in the same transaction.
+ * If the process crashes after the handler succeeds but before the marker
+ * is written, the job will be retried and the handler will run again.
+ * Handlers must therefore be idempotent themselves (e.g. via optimistic
+ * concurrency in the event store) to tolerate this edge case.
+ *
  * On restart: nothing to catch up — jobs already exist in pgboss.job.
  * boss.work() resumes processing any pending/failed jobs automatically.
  *
@@ -136,27 +142,42 @@ export class PgBossEndpointFactory {
         const idempotencyKey = `${outboxId}:${queueName}`;
 
         if (config.source === "message") {
-          // Message-sourced endpoints (Kafka) need advisory lock because
+          // Message-sourced endpoints (Kafka) need an advisory lock because
           // Kafka's at-least-once delivery can enqueue duplicate pg-boss jobs
           // with the same outboxId, which may be picked up concurrently.
+          // Uses two-key form: (hash(outboxId), hash(queueName)) to minimize
+          // collision risk vs a single 32-bit hash of the composite key.
           const client = await pool.connect();
           try {
-            await client.query(`SELECT pg_advisory_lock(hashtext($1))`, [idempotencyKey]);
+            const { rows: [{ acquired }] } = await client.query<{ acquired: boolean }>(
+              `SELECT pg_try_advisory_lock(hashtext($1), hashtext($2)) AS acquired`,
+              [outboxId, queueName],
+            );
 
-            if (await isAlreadyProcessed(client, idempotencyKey)) {
-              console.log(`[PgBossEndpoint] Duplicate detected for ${idempotencyKey}, skipping`);
-              return;
+            if (!acquired) {
+              console.log(`[PgBossEndpoint] Lock contention for ${idempotencyKey}, skipping (pg-boss will retry)`);
+              throw new Error(`Lock contention for ${idempotencyKey}`);
             }
 
-            await config.handler(data.payload, { outboxId });
-            await markProcessed(client, idempotencyKey, queueName);
+            try {
+              if (await isAlreadyProcessed(client, idempotencyKey)) {
+                console.log(`[PgBossEndpoint] Duplicate detected for ${idempotencyKey}, skipping`);
+                return;
+              }
+
+              await config.handler(data.payload, { outboxId });
+              await markProcessed(client, idempotencyKey, queueName);
+            } finally {
+              await client.query(`SELECT pg_advisory_unlock(hashtext($1), hashtext($2))`, [outboxId, queueName]);
+            }
           } finally {
-            await client.query(`SELECT pg_advisory_unlock(hashtext($1))`, [idempotencyKey]);
             client.release();
           }
         } else {
-          // Event-sourced endpoints (trigger) guarantee one job per outbox row —
-          // no concurrent duplicates possible, so no lock needed.
+          // Trigger-based endpoints avoid duplicate job creation for the same
+          // outbox row, so concurrent duplication is unlikely. However, retries
+          // after worker failure can still occur, so idempotent handling is
+          // still required — just without the advisory lock.
           if (await isAlreadyProcessed(pool, idempotencyKey)) {
             console.log(`[PgBossEndpoint] Duplicate detected for ${idempotencyKey}, skipping`);
             return;
