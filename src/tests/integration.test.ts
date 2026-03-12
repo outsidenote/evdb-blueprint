@@ -83,7 +83,7 @@ describe("E2E: CalculateWithdrawCommission automation slice", () => {
     await waitFor(async () => {
       const { rows } = await db.client.query(
         "SELECT * FROM public.outbox_idempotency WHERE idempotency_key = $1",
-        [outboxId],
+        [`${outboxId}:${QUEUE_NAME}`],
       );
       return rows.length > 0;
     });
