@@ -120,5 +120,12 @@ describe("E2E: CalculateWithdrawCommission automation slice", () => {
       [account],
     );
     assert.strictEqual(eventsAfter[0].cnt, eventsBefore[0].cnt, "No duplicate events from redelivery");
+
+    // THEN: Idempotency marker exists in outbox
+    const { rows: idempotencyRows } = await db.client.query(
+      "SELECT 1 FROM public.outbox WHERE channel = 'idempotent' AND payload->>'idempotencyKey' = $1",
+      [`${outboxId}:${QUEUE_NAME}`],
+    );
+    assert.strictEqual(idempotencyRows.length, 1, "Idempotency marker exists in outbox");
   });
 });
