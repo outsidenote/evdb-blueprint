@@ -118,16 +118,29 @@ describe("Outbox verification: external events (CDC channel)", () => {
     // THEN: Outbox contains a pg-boss message (NOT external/CDC)
     const { rows } = await db.client.query(
       `SELECT id, channel, event_type, payload
-       FROM public.outbox WHERE stream_id = $1`,
+       FROM public.outbox WHERE stream_id = $1 AND channel = 'pg-boss'`,
       [account],
     );
 
-    assert.strictEqual(rows.length, 1, "Exactly one outbox message for approved withdrawal");
-    assert.strictEqual(rows[0].channel, "pg-boss", "Approved events use pg-boss channel, not CDC");
+    assert.strictEqual(rows.length, 1, "Exactly one pg-boss outbox message for approved withdrawal");
     assert.strictEqual(rows[0].event_type, "FundsWithdrawalApproved");
 
     const payload = typeof rows[0].payload === "string" ? JSON.parse(rows[0].payload) : rows[0].payload;
     assert.ok(Array.isArray(payload.queues), "pg-boss messages should have queues array");
+
+    // Also verify: no CDC message for approved withdrawal
+    const { rows: cdcRows } = await db.client.query(
+      `SELECT id FROM public.outbox WHERE stream_id = $1 AND channel = 'default'`,
+      [account],
+    );
+    assert.strictEqual(cdcRows.length, 0, "Approved events should NOT go to CDC channel");
+
+    // Idempotency marker written atomically by message handler
+    const { rows: idempotencyRows } = await db.client.query(
+      `SELECT id FROM public.outbox WHERE stream_id = $1 AND channel = 'idempotent'`,
+      [account],
+    );
+    assert.strictEqual(idempotencyRows.length, 1, "Idempotency marker exists for approved withdrawal");
   });
 
   // ──────────────────────────────────────────────────────────────────
