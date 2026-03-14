@@ -19,7 +19,7 @@ export const handleWithdrawFunds: CommandHandler<
   FundsStreamType,
   WithdrawFunds
 > = (stream, command) => {
-  const { balance } = stream.views.AccountBalance.state;
+  const { balance } = stream.views.AccountBalance;
   if (hasInsufficientBalance(balance, command)) {
     stream.appendEventFundsWithdrawDeclined(
       new FundsWithdrawDeclined({
