@@ -15,7 +15,6 @@ describe("Withdrawal Approval Slice - Unit Tests", () => {
         amount: 20,
         currency: 'USD',
         payer: 'John Doe',
-        session: '0011',
         source: 'ATM',
         transactionId: '0011'
       })
@@ -57,7 +56,6 @@ describe("Withdrawal Approval Slice - Unit Tests", () => {
         amount: 20,
         currency: 'USD',
         payer: 'John Doe',
-        session: '0011',
         source: 'ATM',
         transactionId: '0011'
       })
