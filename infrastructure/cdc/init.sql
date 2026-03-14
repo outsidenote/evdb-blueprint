@@ -54,11 +54,13 @@ CREATE TABLE IF NOT EXISTS snapshot (
 
 CREATE INDEX IF NOT EXISTS ix_snapshot_earlier_stored_at_7ae7ea3b165349e09b3fe6d66a69fd72 ON snapshot (stream_type, stream_id, view_name, stored_at);
 
--- Idempotency table for pg-boss endpoint workers
-CREATE TABLE IF NOT EXISTS public.processed_jobs (
-  idempotency_key TEXT PRIMARY KEY,
-  processed_at    TIMESTAMPTZ DEFAULT NOW()
-);
+-- Partial index for outbox-based idempotency.
+-- The PgBossEndpointFactory writes rows with channel = 'idempotent' and
+-- the idempotency key in payload->>'idempotencyKey'. This index makes
+-- the gate check fast while only indexing idempotency rows.
+CREATE INDEX IF NOT EXISTS ix_outbox_idempotency_key
+  ON public.outbox (channel, (payload->>'idempotencyKey'))
+  WHERE channel = 'idempotent';
 
 -- =============================================================================
 -- pg-boss schema (v30)

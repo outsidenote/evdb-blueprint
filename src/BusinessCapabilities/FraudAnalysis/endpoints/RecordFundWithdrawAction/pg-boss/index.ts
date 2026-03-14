@@ -2,6 +2,7 @@ import type { IEvDbStorageAdapter } from "@eventualize/core/adapters/IEvDbStorag
 import { PgBossEndpointConfig } from "../../../../../types/PgBossEndpointFactory.js";
 import { createRecordFundWithdrawActionAdapter } from "../../../slices/RecordFundWithdrawAction/adapter.js";
 import { RecordFundWithdrawAction } from "../../../slices/RecordFundWithdrawAction/command.js";
+import { getIdempotencyKey } from "../../../../../types/IdempotencyMessage.js";
 
 export const CHANNEL = "pg-boss" as const;
 export const QUEUE_NAME = "message.FundsWithdrawn.RecordFundWithdrawAction";
@@ -11,6 +12,7 @@ interface FundsWithdrawnPayload {
   readonly amount: number;
   readonly commission: number;
   readonly currency: string;
+  readonly transactionId: string;
 }
 
 /**
@@ -37,12 +39,15 @@ export function createFundsWithdrawnWorker(
     source: "message",
     kafkaTopic: "events.FundsWithdrawn",
 
-    handler: async (payload, { outboxId }) => {
+    getIdempotencyKey: (payload, _context) =>
+      getIdempotencyKey(payload.transactionId, "RecordFundWithdrawAction"),
+
+    handler: async (payload) => {
       const command = new RecordFundWithdrawAction({
         account: payload.account,
         amount: payload.amount + payload.commission,
         currency: payload.currency,
-        session: outboxId,
+        transactionId: payload.transactionId,
       });
 
       const result = await recordFundWithdrawAction(command);

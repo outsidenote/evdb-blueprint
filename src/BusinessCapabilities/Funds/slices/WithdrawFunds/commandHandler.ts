@@ -26,7 +26,7 @@ export const handleWithdrawFunds: CommandHandler<
         account: command.account,
         amount: command.amount,
         currency: command.currency,
-        session: command.session,
+        transactionId: command.transactionId,
         reason: `Insufficient funds: balance ${balance} is less than withdrawal amount ${command.amount}`,
       }),
     );
@@ -37,7 +37,7 @@ export const handleWithdrawFunds: CommandHandler<
         amount: command.amount,
         commission: command.commission,
         currency: command.currency,
-        session: command.session,
+        transactionId: command.transactionId,
       }),
     );
   }

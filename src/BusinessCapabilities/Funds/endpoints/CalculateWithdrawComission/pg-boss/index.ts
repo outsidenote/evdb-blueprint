@@ -1,7 +1,8 @@
 import type { IEvDbStorageAdapter } from "@eventualize/core/adapters/IEvDbStorageAdapter";
 import { PgBossEndpointConfig } from "../../../../../types/PgBossEndpointFactory.js";
-import { createCalculateWithdrawCommissionAdapter } from "../../../slices/CalculateWithdrawCommissionAdapter/adapter.js";
+import { createCalculateWithdrawCommissionAdapter } from "../../../slices/CalculateWithdrawCommission/adapter.js";
 import { enrich } from "../enrichment.js";
+import { getIdempotencyKey } from "../../../../../types/IdempotencyMessage.js";
 
 export const CHANNEL = "pg-boss" as const;
 export const QUEUE_NAME = "event.FundsWithdrawalApproved.CalculateWithdrawCommission";
@@ -10,6 +11,7 @@ interface FundsWithdrawalApprovedPayload {
   readonly account: string;
   readonly amount: number;
   readonly currency: string;
+  readonly transactionId: string;
 }
 
 /**
@@ -39,7 +41,10 @@ export function createFundsWithdrawalApprovedWorker(
     handlerName: "CalculateWithdrawCommission",
     source: "event",
 
-    handler: async (payload, { outboxId }) => {
+    getIdempotencyKey: (payload, _context) =>
+      getIdempotencyKey(payload.transactionId, "CalculateWithdrawCommission"),
+
+    handler: async (payload) => {
       const command = enrich({
         account: payload.account,
         amount: payload.amount,
@@ -48,7 +53,7 @@ export function createFundsWithdrawalApprovedWorker(
         source: "outbox",
         payer: "unknown",
         approvalDate: new Date(),
-        transactionId: outboxId,
+        transactionId: payload.transactionId,
         transactionTime: new Date(),
       });
 
