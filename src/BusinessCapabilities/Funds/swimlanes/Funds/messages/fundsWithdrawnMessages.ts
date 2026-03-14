@@ -16,8 +16,8 @@ export const fundsWithdrawnMessages = (
       amount: payload.amount,
       commission: payload.commission,
       currency: payload.currency,
-      session: payload.session,
+      transactionId: payload.transactionId,
     }),
-    createIdempotencyMessageFromEvent(event, payload.session, "WithdrawFunds"),
+    createIdempotencyMessageFromEvent(event, payload.transactionId, "WithdrawFunds"),
   ];
 };

@@ -12,14 +12,14 @@ describe("Record Fund Withdraw Action Slice - Unit Tests", () => {
       account: "acc-001",
       amount: 100,
       currency: "USD",
-      session: "session-001",
+      transactionId: "session-001",
     });
     const expectedEvents = [
       new FundsWithdrawActionRecorded({
         account: "acc-001",
         amount: 100,
         currency: "USD",
-        session: "session-001",
+        transactionId: "session-001",
       }),
     ];
     return SliceTester.testCommandHandler(

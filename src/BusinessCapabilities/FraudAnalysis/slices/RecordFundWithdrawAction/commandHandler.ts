@@ -18,7 +18,7 @@ export const handleRecordFundWithdrawAction: CommandHandler<
       account: command.account,
       amount: command.amount,
       currency: command.currency,
-      session: command.session,
+      transactionId: command.transactionId,
     }),
   );
 };

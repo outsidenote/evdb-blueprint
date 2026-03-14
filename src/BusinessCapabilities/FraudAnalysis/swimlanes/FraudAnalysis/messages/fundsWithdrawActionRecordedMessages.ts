@@ -6,9 +6,9 @@ export const fundsWithdrawActionRecordedMessages = (
   event: EvDbEvent,
   _viewStates: Readonly<Record<string, unknown>>,
 ) => {
-  const { session } = event.payload as FundsWithdrawActionRecorded;
+  const { transactionId } = event.payload as FundsWithdrawActionRecorded;
 
   return [
-    createIdempotencyMessageFromEvent(event, session, "RecordFundWithdrawAction"),
+    createIdempotencyMessageFromEvent(event, transactionId, "RecordFundWithdrawAction"),
   ];
 };

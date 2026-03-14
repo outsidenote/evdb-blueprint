@@ -3,7 +3,7 @@ export interface WithdrawFundsProps {
   readonly amount: number;
   readonly commission: number;
   readonly currency: string;
-  readonly session: string;
+  readonly transactionId: string;
 }
 
 export class WithdrawFunds {
@@ -13,13 +13,13 @@ export class WithdrawFunds {
   readonly amount: number;
   readonly commission: number;
   readonly currency: string;
-  readonly session: string;
+  readonly transactionId: string;
 
   constructor(props: WithdrawFundsProps) {
     this.account = props.account;
     this.amount = props.amount;
     this.commission = props.commission;
     this.currency = props.currency;
-    this.session = props.session;
+    this.transactionId = props.transactionId;
   }
 }

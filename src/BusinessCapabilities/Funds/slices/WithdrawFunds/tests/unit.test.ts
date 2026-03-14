@@ -15,7 +15,7 @@ describe("Withdraw Funds Slice - Unit Tests", () => {
         amount: 100,
         currency: 'USD',
         payer: 'John Doe',
-        session: '0011',
+        transactionId: '0011',
         source: 'ATM',
         transactionId: '0011'
       })
@@ -25,7 +25,7 @@ describe("Withdraw Funds Slice - Unit Tests", () => {
       amount: 21,
       commission: 0.21,
       currency: "USD",
-      session: "0011",
+      transactionId: "0011",
     });
     const expectedEvents = [
       new FundsWithdrawn({
@@ -33,7 +33,7 @@ describe("Withdraw Funds Slice - Unit Tests", () => {
         amount: 21,
         commission: 0.21,
         currency: 'USD',
-        session: '0011',
+        transactionId: '0011',
       })
     ];
     return SliceTester.testCommandHandler(
@@ -52,7 +52,7 @@ describe("Withdraw Funds Slice - Unit Tests", () => {
         amount: 20,
         currency: 'USD',
         payer: 'John Doe',
-        session: '0011',
+        transactionId: '0011',
         source: 'ATM',
         transactionId: '0011'
       })
@@ -62,14 +62,14 @@ describe("Withdraw Funds Slice - Unit Tests", () => {
       amount: 100,
       commission: 1.00,
       currency: "USD",
-      session: "0011",
+      transactionId: "0011",
     });
     const expectedEvents = [
       new FundsWithdrawDeclined({
         account: '1234',
         amount: 100,
         currency: 'USD',
-        session: '0011',
+        transactionId: '0011',
         reason: 'Insufficient funds: balance 20 is less than withdrawal amount 100'
       })
     ];

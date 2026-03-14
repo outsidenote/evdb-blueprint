@@ -1,6 +1,6 @@
 import type { IEvDbStorageAdapter } from "@eventualize/core/adapters/IEvDbStorageAdapter";
 import { PgBossEndpointConfig } from "../../../../../types/PgBossEndpointFactory.js";
-import { createCalculateWithdrawCommissionAdapter } from "../../../slices/CalculateWithdrawCommissionAdapter/adapter.js";
+import { createCalculateWithdrawCommissionAdapter } from "../../../slices/CalculateWithdrawCommission/adapter.js";
 import { enrich } from "../enrichment.js";
 import { getIdempotencyKey } from "../../../../../types/IdempotencyMessage.js";
 

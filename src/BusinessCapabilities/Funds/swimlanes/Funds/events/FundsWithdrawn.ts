@@ -5,7 +5,7 @@ export interface FundsWithdrawnProps {
   readonly amount: number;
   readonly commission: number;
   readonly currency: string;
-  readonly session: string;
+  readonly transactionId: string;
 }
 
 export class FundsWithdrawn implements IEvDbEventPayload {
@@ -15,13 +15,13 @@ export class FundsWithdrawn implements IEvDbEventPayload {
   readonly amount: number;
   readonly commission: number;
   readonly currency: string;
-  readonly session: string;
+  readonly transactionId: string;
 
   constructor(props: FundsWithdrawnProps) {
     this.account = props.account;
     this.amount = props.amount;
     this.commission = props.commission;
     this.currency = props.currency;
-    this.session = props.session;
+    this.transactionId = props.transactionId;
   }
 }

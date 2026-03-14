@@ -47,7 +47,7 @@ export function createWithdrawCommissionCalculatedWorker(
         amount: payload.amount,
         commission: payload.commission,
         currency: payload.currency,
-        session: payload.transactionId,
+        transactionId: payload.transactionId,
       });
 
       const result = await withdrawFunds(command);

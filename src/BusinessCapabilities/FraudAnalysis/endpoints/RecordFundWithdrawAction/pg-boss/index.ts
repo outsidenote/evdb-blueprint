@@ -12,7 +12,7 @@ interface FundsWithdrawnPayload {
   readonly amount: number;
   readonly commission: number;
   readonly currency: string;
-  readonly session: string;
+  readonly transactionId: string;
 }
 
 /**
@@ -40,14 +40,14 @@ export function createFundsWithdrawnWorker(
     kafkaTopic: "events.FundsWithdrawn",
 
     getIdempotencyKey: (payload, _context) =>
-      getIdempotencyKey(payload.session, "RecordFundWithdrawAction"),
+      getIdempotencyKey(payload.transactionId, "RecordFundWithdrawAction"),
 
     handler: async (payload) => {
       const command = new RecordFundWithdrawAction({
         account: payload.account,
         amount: payload.amount + payload.commission,
         currency: payload.currency,
-        session: payload.session,
+        transactionId: payload.transactionId,
       });
 
       const result = await recordFundWithdrawAction(command);
