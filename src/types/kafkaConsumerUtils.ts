@@ -2,18 +2,11 @@ import { type Kafka, type Consumer } from "kafkajs";
 
 const RETRY_INTERVAL_MS = 5_000;
 
-/**
- * Shared Kafka consumer infrastructure.
- *
- * Handles the connect → subscribe → run → retry lifecycle that is
- * identical across KafkaConsumerEndpointFactory and ProjectionFactory.
- *
- * Callers provide only the `onMessage` logic specific to their pattern.
- */
 export function launchKafkaConsumer(opts: {
   kafka: Kafka;
   groupId: string;
   topics: string[];
+  fromBeginning?: boolean;
   consumers: Consumer[];
   retryTimers: ReturnType<typeof setTimeout>[];
   onMessage: (
@@ -21,36 +14,103 @@ export function launchKafkaConsumer(opts: {
     payload: Record<string, unknown>,
     outboxId: string,
   ) => Promise<void>;
-}): void {
-  const { kafka, groupId, topics, consumers, retryTimers, onMessage } = opts;
+}): { stop: () => Promise<void> } {
+  const {
+    kafka,
+    groupId,
+    topics,
+    fromBeginning = true,
+    consumers,
+    retryTimers,
+    onMessage,
+  } = opts;
 
-  const attempt = async () => {
-    const consumer = kafka.consumer({ groupId });
-    await consumer.connect();
-    await consumer.subscribe({ topics, fromBeginning: true });
+  let stopped = false;
+  let consumer: Consumer | null = null;
 
-    await consumer.run({
-      eachMessage: async ({ topic, message }) => {
-        const outboxId = extractOutboxId(message);
-        const payload = parsePayload(message);
-        await onMessage(topic, payload, outboxId);
-      },
-    });
+  const scheduleRetry = () => {
+    if (stopped) return;
 
-    consumers.push(consumer);
+    const timer = setTimeout(() => {
+      if (!stopped) {
+        void attempt();
+      }
+    }, RETRY_INTERVAL_MS);
+
+    retryTimers.push(timer);
   };
 
-  attempt().catch((err) => {
-    console.error(
-      `[KafkaConsumer] ${groupId} failed to start, retrying in ${RETRY_INTERVAL_MS / 1000}s:`,
-      err.message,
-    );
-    retryTimers.push(setTimeout(() => attempt(), RETRY_INTERVAL_MS));
-  });
+  const attempt = async () => {
+    if (stopped) return;
+
+    consumer = kafka.consumer({ groupId });
+
+    // push BEFORE run so shutdown logic knows about it
+    consumers.push(consumer);
+
+    try {
+      await consumer.connect();
+      await consumer.subscribe({ topics, fromBeginning });
+
+      await consumer.run({
+        autoCommit: false,
+        eachMessage: async ({ topic, partition, message, heartbeat }) => {
+          const outboxId = extractOutboxId(message);
+          const payload = parsePayload(message);
+
+          await onMessage(topic, payload, outboxId);
+
+          await heartbeat();
+
+          await consumer!.commitOffsets([
+            {
+              topic,
+              partition,
+              offset: (BigInt(message.offset) + 1n).toString(),
+            },
+          ]);
+        },
+      });
+
+      console.info("[KafkaConsumer] started", { groupId, topics, fromBeginning });
+    } catch (err) {
+      console.error(
+        `[KafkaConsumer] ${groupId} crashed or failed, retrying in ${RETRY_INTERVAL_MS / 1000}s`,
+        err,
+      );
+
+      try {
+        await consumer.disconnect();
+      } catch {}
+
+      scheduleRetry();
+    }
+  };
+
+  void attempt();
+
+  return {
+    stop: async () => {
+      stopped = true;
+
+      for (const timer of retryTimers) {
+        clearTimeout(timer);
+      }
+      retryTimers.length = 0;
+
+      if (consumer) {
+        try {
+          await consumer.disconnect();
+        } catch (err) {
+          console.warn("[KafkaConsumer] disconnect failed", err);
+        }
+      }
+    },
+  };
 }
 
-/** Extracts the outbox ID from a Debezium CDC message.
- *  The Outbox Event Router places the outbox row `id` as a Kafka header.
+/**
+ * Extracts outbox ID from Debezium header or payload.
  */
 export function extractOutboxId(message: {
   key: Buffer | null;
@@ -63,39 +123,59 @@ export function extractOutboxId(message: {
       return Buffer.isBuffer(idHeader) ? idHeader.toString() : String(idHeader);
     }
   }
+
   if (message.value) {
     try {
       const parsed = JSON.parse(message.value.toString());
       const value = parsed.payload ?? parsed;
-      if (value.outboxId) return value.outboxId;
-    } catch { /* fallback below */ }
+
+      if (value && typeof value === "object" && "outboxId" in value) {
+        return String((value as Record<string, unknown>).outboxId);
+      }
+    } catch {}
   }
-  if (message.key) {
-    try {
-      const parsed = JSON.parse(message.key.toString());
-      return `${parsed.payload ?? parsed}-${Date.now()}`;
-    } catch {
-      return `${message.key.toString()}-${Date.now()}`;
-    }
-  }
-  return `unknown-${Date.now()}`;
+
+  throw new Error(
+    "[KafkaConsumer] Cannot extract outboxId — Debezium header 'id' missing and payload has no outboxId.",
+  );
 }
 
-/** Parses the Kafka message value, unwrapping Debezium schema envelopes.
- *  Debezium JsonConverter wraps the outbox payload in a schema envelope:
- *    { "schema": {...}, "payload": "{\"account\":...}" }
- *  The inner payload is a JSON string that needs a second parse.
+/**
+ * Parses Debezium JSON payload safely.
  */
-export function parsePayload(message: { value: Buffer | null }): Record<string, unknown> {
-  if (!message.value) return {};
+export function parsePayload(message: {
+  value: Buffer | null;
+}): Record<string, unknown> {
+  if (!message.value) {
+    throw new Error("[KafkaConsumer] message value is null");
+  }
+
   try {
     const parsed = JSON.parse(message.value.toString());
     const inner = parsed.payload ?? parsed;
+
     if (typeof inner === "string") {
-      return JSON.parse(inner);
+      const obj = JSON.parse(inner);
+      if (!isRecord(obj)) {
+        throw new Error("payload is not an object");
+      }
+      return obj;
     }
+
+    if (!isRecord(inner)) {
+      throw new Error("payload is not an object");
+    }
+
     return inner;
-  } catch {
-    return { raw: message.value.toString() };
+  } catch (err) {
+    throw new Error(
+      `[KafkaConsumer] payload parse failed: ${
+        err instanceof Error ? err.message : String(err)
+      }`,
+    );
   }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

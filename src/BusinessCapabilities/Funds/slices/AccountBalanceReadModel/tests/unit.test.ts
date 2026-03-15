@@ -4,27 +4,41 @@ import { accountBalanceReadModelSlice } from "../index.js";
 
 describe("AccountBalanceReadModel projection slice - unit", () => {
 
-  test("FundsWithdrawn: UPSERT with projection name, account key, and balance payload", () => {
+  test("FundsDepositApproved: increases balance by amount", () => {
+    ProjectionTester.test(
+      accountBalanceReadModelSlice,
+      "FundsDepositApproved",
+      { account: "acc-1", amount: 500, currency: "USD", transactionId: "txn-001" },
+      {
+        sqlContains: "projection_idempotency",
+        params: [
+          "AccountBalanceReadModel",
+          "txn-001",
+          "AccountBalanceReadModel",
+          "acc-1",
+          { account: "acc-1", balance: 500, currency: "USD" },
+          500,
+          "USD",
+        ],
+      },
+    );
+  });
+
+  test("FundsWithdrawn: decreases balance by (amount + commission)", () => {
     ProjectionTester.test(
       accountBalanceReadModelSlice,
       "FundsWithdrawn",
+      { account: "acc-1", amount: 100, commission: 1, currency: "USD", transactionId: "txn-002" },
       {
-        account: "acc-1",
-        amount: 189,
-        currency: "USD",
-        capturedAt: "2025-01-01T10:00:00.000Z",
-      },
-      {
-        sqlContains: "INSERT INTO projections",
+        sqlContains: "projection_idempotency",
         params: [
           "AccountBalanceReadModel",
+          "txn-002",
+          "AccountBalanceReadModel",
           "acc-1",
-          {
-            funds: 189,
-            account: "acc-1",
-            processedAt: "2025-01-01T10:00:00.000Z",
-            currency: "USD",
-          },
+          { account: "acc-1", balance: -101, currency: "USD" },
+          -101,
+          "USD",
         ],
       },
     );

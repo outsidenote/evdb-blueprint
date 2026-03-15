@@ -30,7 +30,7 @@ describe("Projection integration: PendingWithdrawalLookup", () => {
       outboxId: randomUUID(),
       projectionName: pendingWithdrawalLookupSlice.projectionName,
     });
-    if (!query) return;
+    if (!query || !("sql" in query)) return;
     await pool.query(query.sql, query.params);
   }
 
@@ -52,7 +52,7 @@ describe("Projection integration: PendingWithdrawalLookup", () => {
       account,
       currency: "USD",
       amount: 100,
-      session: "sess-1",
+      transactionId: "txn-1",
     });
 
     const row = await getRow(account);
@@ -61,7 +61,7 @@ describe("Projection integration: PendingWithdrawalLookup", () => {
     assert.strictEqual(row.payload.account, account);
     assert.strictEqual(row.payload.currency, "USD");
     assert.strictEqual(row.payload.amount, 100);
-    assert.strictEqual(row.payload.session, "sess-1");
+    assert.strictEqual(row.payload.transactionId, "txn-1");
   });
 
   // ── UPSERT idempotency ─────────────────────────────────────────
@@ -69,10 +69,10 @@ describe("Projection integration: PendingWithdrawalLookup", () => {
   test("FundsWithdrawalApproved (second time): updates existing row without creating a duplicate", async () => {
     const account = `proj-upsert-${randomUUID()}`;
 
-    await runHandler("FundsWithdrawalApproved", { account, currency: "USD", amount: 100, session: "sess-1" });
+    await runHandler("FundsWithdrawalApproved", { account, currency: "USD", amount: 100, transactionId: "txn-1" });
     const rowAfterFirst = await getRow(account);
 
-    await runHandler("FundsWithdrawalApproved", { account, currency: "EUR", amount: 200, session: "sess-2" });
+    await runHandler("FundsWithdrawalApproved", { account, currency: "EUR", amount: 200, transactionId: "txn-2" });
     const rowAfterSecond = await getRow(account);
 
     // Still one row
@@ -99,7 +99,7 @@ describe("Projection integration: PendingWithdrawalLookup", () => {
   test("FundsWithdrawn: removes the projection row", async () => {
     const account = `proj-withdrawn-${randomUUID()}`;
 
-    await runHandler("FundsWithdrawalApproved", { account, currency: "USD", amount: 100, session: "sess-1" });
+    await runHandler("FundsWithdrawalApproved", { account, currency: "USD", amount: 100, transactionId: "txn-1" });
     assert.ok(await getRow(account), "Row should exist after approval");
 
     await runHandler("FundsWithdrawn", { account });
@@ -127,7 +127,7 @@ describe("Projection integration: PendingWithdrawalLookup", () => {
       ["OtherProjection", account, JSON.stringify({ note: "should survive" })],
     );
 
-    await runHandler("FundsWithdrawalApproved", { account, currency: "USD", amount: 50, session: "s" });
+    await runHandler("FundsWithdrawalApproved", { account, currency: "USD", amount: 50, transactionId: "txn-s" });
     await runHandler("FundsWithdrawn", { account });
 
     // PendingWithdrawalLookup row gone

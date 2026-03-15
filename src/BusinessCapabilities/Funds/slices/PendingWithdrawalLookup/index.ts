@@ -4,7 +4,7 @@ type FundsWithdrawalApprovedPayload = {
   account: string;
   currency: string;
   amount: number;
-  session: string;
+  transactionId: string;
 };
 
 type WithAccountPayload = {
@@ -39,7 +39,7 @@ export const pendingWithdrawalLookupSlice: ProjectionConfig = {
 
   handlers: {
     FundsWithdrawalApproved: (payload, { projectionName }) => {
-      const { account, currency, amount, session } = payload as FundsWithdrawalApprovedPayload;
+      const { account, currency, amount, transactionId } = payload as FundsWithdrawalApprovedPayload;
       return {
         sql: `
           INSERT INTO projections (name, key, payload)
@@ -51,7 +51,7 @@ export const pendingWithdrawalLookupSlice: ProjectionConfig = {
         params: [
           projectionName,
           account,
-          JSON.stringify({ account, currency, amount, session }),
+          JSON.stringify({ account, currency, amount, transactionId }),
         ],
       };
     },

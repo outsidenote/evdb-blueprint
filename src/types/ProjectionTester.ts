@@ -1,5 +1,9 @@
 import * as assert from "node:assert";
-import type { ProjectionConfig } from "./ProjectionFactory.js";
+import type { ProjectionConfig, SqlQuery, SqlTransaction } from "./ProjectionFactory.js";
+
+function isSqlQuery(result: SqlQuery | SqlTransaction): result is SqlQuery {
+  return "sql" in result;
+}
 
 /**
  * Expected shape of a SQL query in a projection slice test.
@@ -14,6 +18,10 @@ export type ExpectedSqlQuery = {
   readonly params: unknown[];
 };
 
+export type ExpectedSqlTransaction = {
+  readonly statements: ExpectedSqlQuery[];
+};
+
 /**
  * Generic tester for projections.
  *
@@ -23,24 +31,13 @@ export type ExpectedSqlQuery = {
  *
  * No database or Kafka required — handlers are pure functions.
  *
- * Usage:
- *   ProjectionTester.test(
- *     mySlice,
- *     "FundsWithdrawn",
- *     { account: "acc-1", currency: "USD", amount: 100, session: "s1" },
- *     {
- *       sqlContains: "INSERT INTO projections",
- *       params: ["MyProjection", "acc-1", { account: "acc-1", currency: "USD", amount: 100, session: "s1" }],
- *     },
- *   );
+ * Usage (SqlQuery):
+ *   ProjectionTester.test(mySlice, "FundsWithdrawn", payload, { sqlContains, params });
+ *
+ * Usage (SqlTransaction):
+ *   ProjectionTester.testTransaction(mySlice, "FundsWithdrawn", payload, { statements: [...] });
  */
 export class ProjectionTester {
-  /**
-   * @param projection  The projection config under test.
-   * @param messageType The Kafka message type (key in `projection.handlers`).
-   * @param payload     The message payload (GIVEN).
-   * @param expected    The expected SQL query (THEN), or null if the handler should ignore the message.
-   */
   static test(
     projection: ProjectionConfig,
     messageType: string,
@@ -59,47 +56,74 @@ export class ProjectionTester {
     });
 
     if (expected === null) {
-      assert.strictEqual(
-        result,
-        null,
-        `Expected handler for '${messageType}' to return null (ignore message)`,
-      );
+      assert.strictEqual(result, null, `Expected handler for '${messageType}' to return null`);
       return;
     }
 
+    assert.ok(result, `Handler for '${messageType}' returned null, expected a SqlQuery`);
+    assert.ok(isSqlQuery(result), `Handler for '${messageType}' returned a SqlTransaction — use testTransaction instead`);
+
+    assertSqlQuery(result, expected, messageType);
+  }
+
+  static testTransaction(
+    projection: ProjectionConfig,
+    messageType: string,
+    payload: Record<string, unknown>,
+    expected: ExpectedSqlTransaction | null,
+  ): void {
+    const handler = projection.handlers[messageType];
     assert.ok(
-      result,
-      `Handler for '${messageType}' returned null, expected a SqlQuery`,
+      handler,
+      `No handler registered for messageType '${messageType}' in projection '${projection.projectionName}'`,
     );
 
-    // SQL: case-insensitive substring match (tolerant of whitespace/formatting)
-    assert.ok(
-      result.sql.toLowerCase().includes(expected.sqlContains.toLowerCase()),
-      `SQL should contain "${expected.sqlContains}"\nActual SQL: ${result.sql}`,
-    );
+    const result = handler(payload, {
+      outboxId: "test-outbox-id",
+      projectionName: projection.projectionName,
+    });
 
-    // Params: length check first, then element-by-element
+    if (expected === null) {
+      assert.strictEqual(result, null, `Expected handler for '${messageType}' to return null`);
+      return;
+    }
+
+    assert.ok(result, `Handler for '${messageType}' returned null, expected a SqlTransaction`);
+    assert.ok(!isSqlQuery(result), `Handler for '${messageType}' returned a SqlQuery — use test instead`);
+
     assert.strictEqual(
-      result.params.length,
-      expected.params.length,
-      `Param count mismatch for '${messageType}': expected ${expected.params.length}, got ${result.params.length}`,
+      result.statements.length,
+      expected.statements.length,
+      `Statement count mismatch for '${messageType}': expected ${expected.statements.length}, got ${result.statements.length}`,
     );
 
-    for (let i = 0; i < expected.params.length; i++) {
-      const actual: unknown = result.params[i];
-      const exp = expected.params[i];
+    for (let i = 0; i < expected.statements.length; i++) {
+      assertSqlQuery(result.statements[i], expected.statements[i], `${messageType}[${i}]`);
+    }
+  }
+}
 
-      if (typeof exp === "object" && exp !== null) {
-        // Object expected → actual param is a JSONB string, parse it first
-        const actualParsed = typeof actual === "string" ? JSON.parse(actual) : actual;
-        assert.deepStrictEqual(
-          actualParsed,
-          exp,
-          `Param[${i}] (JSONB) mismatch for '${messageType}'`,
-        );
-      } else {
-        assert.strictEqual(actual, exp, `Param[${i}] mismatch for '${messageType}'`);
-      }
+function assertSqlQuery(actual: SqlQuery, expected: ExpectedSqlQuery, label: string): void {
+  assert.ok(
+    actual.sql.toLowerCase().includes(expected.sqlContains.toLowerCase()),
+    `SQL should contain "${expected.sqlContains}"\nActual SQL: ${actual.sql}`,
+  );
+
+  assert.strictEqual(
+    actual.params.length,
+    expected.params.length,
+    `Param count mismatch for '${label}': expected ${expected.params.length}, got ${actual.params.length}`,
+  );
+
+  for (let i = 0; i < expected.params.length; i++) {
+    const actualParam: unknown = actual.params[i];
+    const exp: unknown = expected.params[i];
+
+    if (typeof exp === "object" && exp !== null) {
+      const actualParsed = typeof actualParam === "string" ? JSON.parse(actualParam) : actualParam;
+      assert.deepStrictEqual(actualParsed, exp, `Param[${i}] (JSONB) mismatch for '${label}'`);
+    } else {
+      assert.strictEqual(actualParam, exp, `Param[${i}] mismatch for '${label}'`);
     }
   }
 }

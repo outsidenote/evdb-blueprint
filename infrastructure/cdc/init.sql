@@ -64,12 +64,23 @@ CREATE TABLE IF NOT EXISTS public.projections (
   PRIMARY KEY (name, key)
 );
 
-
--- Idempotency table for pg-boss endpoint workers
-CREATE TABLE IF NOT EXISTS public.outbox_idempotency (
-  idempotency_key TEXT PRIMARY KEY,
-  processed_at    TIMESTAMPTZ DEFAULT NOW()
+-- Idempotency table for accumulating projections.
+-- Tracks which outbox events have already been applied to prevent double-counting on Kafka replay.
+-- Separate from projections table — projection rows contain only read model data.
+CREATE TABLE IF NOT EXISTS public.projection_idempotency (
+  projection_name VARCHAR(150)  NOT NULL,
+  business_key    VARCHAR(255)  NOT NULL,
+  PRIMARY KEY (projection_name, business_key)
 );
+
+
+-- Partial index for outbox-based idempotency.
+-- The PgBossEndpointFactory writes rows with channel = 'idempotent' and
+-- the idempotency key in payload->>'idempotencyKey'. This index makes
+-- the gate check fast while only indexing idempotency rows.
+CREATE INDEX IF NOT EXISTS ix_outbox_idempotency_key
+  ON public.outbox (channel, (payload->>'idempotencyKey'))
+  WHERE channel = 'idempotent';
 
 -- =============================================================================
 -- pg-boss schema (v30)

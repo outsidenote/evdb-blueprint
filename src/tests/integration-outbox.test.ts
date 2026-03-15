@@ -36,7 +36,6 @@ async function seedDeposit(storageAdapter: IEvDbStorageAdapter, account: string,
       account,
       amount,
       currency: "USD",
-      session: "seed-session",
       source: "seed-source",
       payer: "seed-payer",
       transactionId: randomUUID(),
@@ -88,7 +87,7 @@ describe("Outbox verification: external events (CDC channel)", () => {
     assert.strictEqual(rows[0].channel, "default", "Channel should be 'default' for external/CDC events");
     assert.strictEqual(rows[0].stream_type, "WithdrawalApprovalStream");
     assert.strictEqual(rows[0].event_type, "FundsWithdrawalDeclined");
-    assert.strictEqual(rows[0].message_type, "Withdrawal Declined Notification");
+    assert.strictEqual(rows[0].message_type, "WithdrawalDeclinedNotification");
 
     const payload = typeof rows[0].payload === "string" ? JSON.parse(rows[0].payload) : rows[0].payload;
     assert.strictEqual(payload.account, account);
@@ -118,30 +117,30 @@ describe("Outbox verification: external events (CDC channel)", () => {
 
     // THEN: Two outbox rows — one per message producer in withdrawalApprovedMessages
     const { rows } = await db.client.query(
-      `SELECT id, channel, event_type, message_type, payload
-       FROM public.outbox WHERE stream_id = $1 ORDER BY channel`,
+      `SELECT id, channel, event_type, payload
+       FROM public.outbox WHERE stream_id = $1 AND channel = 'pg-boss'`,
       [account],
     );
 
-    assert.strictEqual(rows.length, 2, "FundsWithdrawalApproved should produce two outbox rows");
+    assert.strictEqual(rows.length, 1, "Exactly one pg-boss outbox message for approved withdrawal");
+    assert.strictEqual(rows[0].event_type, "FundsWithdrawalApproved");
 
-    const pgBossRow = rows.find((r: { channel: string }) => r.channel === "pg-boss");
-    const defaultRow = rows.find((r: { channel: string }) => r.channel === "default");
+    const payload = typeof rows[0].payload === "string" ? JSON.parse(rows[0].payload) : rows[0].payload;
+    assert.ok(Array.isArray(payload.queues), "pg-boss messages should have queues array");
 
-    assert.ok(pgBossRow, "One row must have channel='pg-boss' for CalculateWithdrawCommission");
-    assert.ok(defaultRow, "One row must have channel='default' for CDC → projection slice");
+    // Also verify: CDC message for approved withdrawal (consumed by PendingWithdrawalLookup projection)
+    const { rows: cdcRows } = await db.client.query(
+      `SELECT id FROM public.outbox WHERE stream_id = $1 AND channel = 'default'`,
+      [account],
+    );
+    assert.strictEqual(cdcRows.length, 1, "Approved withdrawal should emit one CDC message for projection");
 
-    // pg-boss row drives the CalculateWithdrawCommission worker
-    const pgBossPayload = typeof pgBossRow.payload === "string"
-      ? JSON.parse(pgBossRow.payload) : pgBossRow.payload;
-    assert.ok(Array.isArray(pgBossPayload.queues), "pg-boss message must have queues array");
-
-    // default row drives the PendingWithdrawalLookup projection via Kafka
-    assert.strictEqual(defaultRow.event_type, "FundsWithdrawalApproved");
-    assert.strictEqual(defaultRow.message_type, "FundsWithdrawalApproved");
-    const defaultPayload = typeof defaultRow.payload === "string"
-      ? JSON.parse(defaultRow.payload) : defaultRow.payload;
-    assert.strictEqual(defaultPayload.account, account);
+    // Idempotency marker written atomically by message handler
+    const { rows: idempotencyRows } = await db.client.query(
+      `SELECT id FROM public.outbox WHERE stream_id = $1 AND channel = 'idempotent'`,
+      [account],
+    );
+    assert.strictEqual(idempotencyRows.length, 1, "Idempotency marker exists for approved withdrawal");
   });
 
   // ──────────────────────────────────────────────────────────────────

@@ -4,11 +4,10 @@ import type { FundsStreamType } from "../../swimlanes/Funds/index.js";
 import { WithdrawCommissionCalculated } from "../../swimlanes/Funds/events/WithdrawCommissionCalculated.js";
 
 /**
- * Pure command handler for the ApproveWithdrawal command.
+ * Pure command handler for the CalculateWithdrawCommission command.
  *
- * Decision logic driven by named spec predicates from the event model:
- * - hasInsufficientEffectiveFunds → appendEvent FundsWithdrawalDeclined
- * - otherwise                     → appendEvent FundsWithdrawalApproved
+ * Idempotency is handled at the PgBossEndpointFactory level via
+ * outbox-based deduplication (channel = 'idempotent', key = outboxId:queueName).
  *
  * This function only appends events to the stream. It does NOT fetch,
  * store, or return anything — orchestration belongs to the CommandAdapter.

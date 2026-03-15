@@ -1,25 +1,79 @@
-import type { ProjectionConfig } from "../../../../types/ProjectionFactory.js";
+import type { ProjectionConfig, SqlQuery } from "../../../../types/ProjectionFactory.js";
 
 type FundsWithdrawnPayload = {
   account: string;
   amount: number;
   commission: number;
   currency: string;
-  capturedAt: string;
+  transactionId: string;
 };
+
+type FundsDepositApprovedPayload = {
+  account: string;
+  amount: number;
+  currency: string;
+  transactionId: string;
+};
+
+/**
+ * Single-statement idempotent balance accumulation using a CTE.
+ *
+ * The CTE atomically:
+ *   1. Inserts an idempotency key (outboxId) — ON CONFLICT DO NOTHING makes replay a no-op.
+ *   2. Upserts the balance snapshot — only executes if the idempotency insert succeeded.
+ *
+ * A single SQL round-trip; no explicit transaction needed — the CTE is atomic at the DB level.
+ */
+function accumulateBalance(
+  projectionName: string,
+  transactionId: string,
+  account: string,
+  currency: string,
+  delta: number,
+): SqlQuery {
+  return {
+    sql: `
+      WITH inserted_idempotency AS (
+        INSERT INTO projection_idempotency (projection_name, business_key)
+        VALUES ($1, $2)
+        ON CONFLICT (projection_name, business_key) DO NOTHING
+        RETURNING 1
+      )
+      INSERT INTO projections (name, key, payload)
+      SELECT $3, $4, $5::jsonb
+      WHERE EXISTS (SELECT 1 FROM inserted_idempotency)
+      ON CONFLICT (name, key) DO UPDATE
+        SET payload = jsonb_build_object(
+          'account',  $4,
+          'balance',  COALESCE((projections.payload->>'balance')::numeric, 0) + $6::numeric,
+          'currency', COALESCE(projections.payload->>'currency', $7)
+        ),
+        updated_at = NOW()
+    `,
+    params: [
+      projectionName,
+      transactionId,
+      projectionName,
+      account,
+      JSON.stringify({ account, balance: delta, currency }),
+      delta,
+      currency,
+    ],
+  };
+}
 
 /**
  * Projection slice: Account Balance Read Model
  *
- * Maintains a running balance per account. Balance decreases with each withdrawal
- * and can go negative.
+ * Maintains a running balance per account.
  * Key: account UUID
  *
- * - FundsWithdrawn → accumulates delta (amount + commission) into running balance
+ * - FundsDepositApproved → increases balance by amount
+ * - FundsWithdrawn       → decreases balance by (amount + commission)
  *
- * Uses SqlTransaction to atomically:
- *   1. Insert an idempotency key (outboxId) — guards against double-counting on replay.
- *   2. Update the snapshot balance — only applied if the idempotency key was new.
+ * Notes:
+ * - Assumes one currency per account. For multi-currency, use `${account}:${currency}` as key.
+ * - For real financial systems, prefer integer minor units or decimal strings over JS number.
  *
  * To generate a new projection slice from this template:
  *   1. Set `projectionName` to the name of the new projection.
@@ -32,55 +86,14 @@ export const accountBalanceReadModelSlice: ProjectionConfig = {
   projectionName: "AccountBalanceReadModel",
 
   handlers: {
-    FundsWithdrawn: (payload, { projectionName, outboxId }) => {
-      const { account, amount, commission, currency } = payload as FundsWithdrawnPayload;
-      const delta = -(amount + commission);
+    FundsDepositApproved: (payload, { projectionName }) => {
+      const { account, amount, currency, transactionId } = payload as FundsDepositApprovedPayload;
+      return accumulateBalance(projectionName, transactionId, account, currency, amount);
+    },
 
-      return {
-        statements: [
-          // 1. Idempotency key — one row per processed event, keyed by outboxId.
-          //    ON CONFLICT DO NOTHING makes replay a no-op.
-          {
-            sql: `
-              INSERT INTO projections (name, key, payload)
-              VALUES ($1, $2, $3::jsonb)
-              ON CONFLICT (name, key) DO NOTHING
-            `,
-            params: [
-              `${projectionName}:idempotency`,
-              outboxId,
-              JSON.stringify({ account, outboxId }),
-            ],
-          },
-          // 2. Snapshot — accumulate delta into running balance.
-          //    Only updates if the idempotency key above was freshly inserted.
-          {
-            sql: `
-              INSERT INTO projections (name, key, payload)
-              VALUES ($1, $2, $3::jsonb)
-              ON CONFLICT (name, key) DO UPDATE
-                SET payload = jsonb_set(
-                  projections.payload,
-                  '{balance}',
-                  to_jsonb((projections.payload->>'balance')::numeric + $4::numeric)
-                ),
-                updated_at = NOW()
-              WHERE NOT EXISTS (
-                SELECT 1 FROM projections
-                WHERE name = $5 AND key = $6
-              )
-            `,
-            params: [
-              projectionName,
-              account,
-              JSON.stringify({ account, balance: delta, currency }),
-              delta,
-              `${projectionName}:idempotency`,
-              outboxId,
-            ],
-          },
-        ],
-      };
+    FundsWithdrawn: (payload, { projectionName }) => {
+      const { account, amount, commission, currency, transactionId } = payload as FundsWithdrawnPayload;
+      return accumulateBalance(projectionName, transactionId, account, currency, -(amount + commission));
     },
   },
 };

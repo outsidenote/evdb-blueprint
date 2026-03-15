@@ -10,7 +10,7 @@ export const withdrawalDeclinedMessages = (
 
   return [
     EvDbMessage.createFromEvent(event, {
-      payloadType: "Withdrawal Declined Notification",
+      payloadType: "WithdrawalDeclinedNotification",
       account: payload.account,
       amount: payload.amount,
       reason: payload.reason,

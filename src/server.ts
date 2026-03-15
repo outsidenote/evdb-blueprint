@@ -2,7 +2,7 @@ import express from "express";
 import swaggerUi from "swagger-ui-express";
 import { Kafka } from "kafkajs";
 import { PgBoss } from "pg-boss";
-import { Pool } from "pg";
+import pg from "pg";
 import { createServer, type Server } from "node:http";
 
 import { createWithdrawalRouter } from "./routes/withdrawal.js";
@@ -53,7 +53,7 @@ async function main() {
     brokers: [config.kafkaBootstrap],
   });
 
-  const pool = new Pool({ connectionString: config.postgresConnection });
+  const pool = new pg.Pool({ connectionString: config.postgresConnection });
 
   const boss = new PgBoss(config.postgresConnection);
   await boss.start();
@@ -63,7 +63,7 @@ async function main() {
     createFundsWithdrawalApprovedWorker(storageAdapter),
     createWithdrawCommissionCalculatedWorker(storageAdapter),
     createFundsWithdrawnWorker(storageAdapter),
-  ], kafka);
+  ], pool, kafka);
   console.log("[Startup] pg-boss workers registered");
 
   const projectionFactory = await ProjectionFactory.startAll(kafka, pool, [
@@ -104,9 +104,9 @@ async function main() {
     const results = await Promise.allSettled([
       pgBossFactory.stop(),
       projectionFactory.stop(),
-      pool.end(),
       stopServer(httpServer),
       boss.stop(),
+      pool.end(),
     ]);
 
     for (const result of results) {

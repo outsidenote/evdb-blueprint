@@ -8,13 +8,13 @@ describe("PendingWithdrawalLookup projection slice - unit", () => {
     ProjectionTester.test(
       pendingWithdrawalLookupSlice,
       "FundsWithdrawalApproved",
-      { account: "acc-1", currency: "USD", amount: 150.5, session: "sess-abc" },
+      { account: "acc-1", currency: "USD", amount: 150.5, transactionId: "txn-abc" },
       {
         sqlContains: "INSERT INTO projections",
         params: [
           "PendingWithdrawalLookup",
           "acc-1",
-          { account: "acc-1", currency: "USD", amount: 150.5, session: "sess-abc" },
+          { account: "acc-1", currency: "USD", amount: 150.5, transactionId: "txn-abc" },
         ],
       },
     );

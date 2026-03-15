@@ -3,20 +3,21 @@ import * as assert from "node:assert";
 import { randomUUID } from "node:crypto";
 import { Kafka } from "kafkajs";
 import { PgBoss } from "pg-boss";
-import { Pool } from "pg";
+import pg from "pg";
 import { TestCDCStack } from "./harness/TestCDCStack.js";
 import { waitFor } from "./harness/helpers.js";
 import { PgBossEndpointFactory } from "../types/PgBossEndpointFactory.js";
 import { ProjectionFactory } from "../types/ProjectionFactory.js";
 import { createFundsWithdrawnWorker } from "../BusinessCapabilities/FraudAnalysis/endpoints/RecordFundWithdrawAction/pg-boss/index.js";
 import { pendingWithdrawalLookupSlice } from "../BusinessCapabilities/Funds/slices/PendingWithdrawalLookup/index.js";
+import { accountBalanceReadModelSlice } from "../BusinessCapabilities/Funds/slices/AccountBalanceReadModel/index.js";
 import EvDbPostgresPrismaClientFactory from "@eventualize/postgres-storage-adapter/EvDbPostgresPrismaClientFactory";
 import EvDbPrismaStorageAdapter from "@eventualize/relational-storage-adapter/EvDbPrismaStorageAdapter";
 
 describe("CDC pipeline: outbox → Debezium → Kafka", { timeout: 180_000 }, () => {
   const stack = new TestCDCStack();
   let boss: PgBoss;
-  let pool: Pool;
+  let pool: pg.Pool;
   let pgBossFactory: PgBossEndpointFactory;
   let projectionFactory: ProjectionFactory;
 
@@ -29,7 +30,7 @@ describe("CDC pipeline: outbox → Debezium → Kafka", { timeout: 180_000 }, ()
     boss = new PgBoss({ connectionString: connectionUri });
     await boss.start();
 
-    pool = new Pool({ connectionString: connectionUri });
+    pool = new pg.Pool({ connectionString: connectionUri });
 
     const storeClient = EvDbPostgresPrismaClientFactory.create(connectionUri);
     const storageAdapter = new EvDbPrismaStorageAdapter(storeClient as any);
@@ -41,18 +42,19 @@ describe("CDC pipeline: outbox → Debezium → Kafka", { timeout: 180_000 }, ()
 
     pgBossFactory = await PgBossEndpointFactory.startAll(boss, [
       createFundsWithdrawnWorker(storageAdapter),
-    ], kafka);
+    ], pool, kafka);
 
     projectionFactory = await ProjectionFactory.startAll(kafka, pool, [
       pendingWithdrawalLookupSlice,
+      accountBalanceReadModelSlice,
     ]);
   });
 
   after(async () => {
     await projectionFactory?.stop();
     await pgBossFactory?.stop();
-    await pool?.end();
     await boss?.stop();
+    await pool?.end();
     await stack.stop();
   });
 
@@ -219,7 +221,7 @@ describe("CDC pipeline: outbox → Debezium → Kafka", { timeout: 180_000 }, ()
         amount: 200,
         commission: 2,
         currency: "GBP",
-        session: "sess-cdc-001",
+        transactionId: "txn-cdc-001",
       },
     });
 
@@ -262,7 +264,7 @@ describe("CDC pipeline: outbox → Debezium → Kafka", { timeout: 180_000 }, ()
         account,
         amount: 300,
         currency: "USD",
-        session: "sess-proj-001",
+        transactionId: "txn-proj-001",
       },
     });
 
@@ -284,7 +286,7 @@ describe("CDC pipeline: outbox → Debezium → Kafka", { timeout: 180_000 }, ()
     assert.strictEqual(rows[0].payload.account, account);
     assert.strictEqual(rows[0].payload.amount, 300);
     assert.strictEqual(rows[0].payload.currency, "USD");
-    assert.strictEqual(rows[0].payload.session, "sess-proj-001");
+    assert.strictEqual(rows[0].payload.transactionId, "txn-proj-001");
   });
 
   test("FundsWithdrawn CDC message removes the PendingWithdrawalLookup projection row", async () => {
@@ -296,7 +298,7 @@ describe("CDC pipeline: outbox → Debezium → Kafka", { timeout: 180_000 }, ()
       streamId: account,
       eventType: "FundsWithdrawalApproved",
       messageType: "FundsWithdrawalApproved",
-      payload: { payloadType: "FundsWithdrawalApproved", account, amount: 100, currency: "USD", session: "s1" },
+      payload: { payloadType: "FundsWithdrawalApproved", account, amount: 100, currency: "USD", transactionId: "txn-s1" },
     });
 
     await waitFor(async () => {
@@ -314,7 +316,7 @@ describe("CDC pipeline: outbox → Debezium → Kafka", { timeout: 180_000 }, ()
       eventType: "FundsWithdrawn",
       messageType: "FundsWithdrawn",
       offset: 1,
-      payload: { payloadType: "FundsWithdrawn", account, amount: 100, commission: 1, currency: "USD", session: "s1", capturedAt: new Date().toISOString() },
+      payload: { payloadType: "FundsWithdrawn", account, amount: 100, commission: 1, currency: "USD", transactionId: "txn-s1" },
     });
 
     await waitFor(async () => {
