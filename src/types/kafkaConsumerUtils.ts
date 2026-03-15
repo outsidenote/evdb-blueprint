@@ -7,8 +7,6 @@ export function launchKafkaConsumer(opts: {
   groupId: string;
   topics: string[];
   fromBeginning?: boolean;
-  consumers: Consumer[];
-  retryTimers: ReturnType<typeof setTimeout>[];
   onMessage: (
     topic: string,
     payload: Record<string, unknown>,
@@ -20,13 +18,12 @@ export function launchKafkaConsumer(opts: {
     groupId,
     topics,
     fromBeginning = true,
-    consumers,
-    retryTimers,
     onMessage,
   } = opts;
 
   let stopped = false;
   let consumer: Consumer | null = null;
+  const retryTimers: ReturnType<typeof setTimeout>[] = [];
 
   const scheduleRetry = () => {
     if (stopped) return;
@@ -45,12 +42,10 @@ export function launchKafkaConsumer(opts: {
 
     consumer = kafka.consumer({ groupId });
 
-    // push BEFORE run so shutdown logic knows about it
-    consumers.push(consumer);
-
     try {
       await consumer.connect();
       await consumer.subscribe({ topics, fromBeginning });
+      console.info("[KafkaConsumer] started", { groupId, topics, fromBeginning });
 
       await consumer.run({
         autoCommit: false,
@@ -72,7 +67,6 @@ export function launchKafkaConsumer(opts: {
         },
       });
 
-      console.info("[KafkaConsumer] started", { groupId, topics, fromBeginning });
     } catch (err) {
       console.error(
         `[KafkaConsumer] ${groupId} crashed or failed, retrying in ${RETRY_INTERVAL_MS / 1000}s`,
@@ -83,6 +77,7 @@ export function launchKafkaConsumer(opts: {
         await consumer.disconnect();
       } catch {}
 
+      consumer = null;
       scheduleRetry();
     }
   };
@@ -103,6 +98,9 @@ export function launchKafkaConsumer(opts: {
           await consumer.disconnect();
         } catch (err) {
           console.warn("[KafkaConsumer] disconnect failed", err);
+        }
+        finally {
+          consumer = null;
         }
       }
     },

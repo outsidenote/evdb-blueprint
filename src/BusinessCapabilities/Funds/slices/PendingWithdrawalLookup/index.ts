@@ -41,6 +41,7 @@ export const pendingWithdrawalLookupSlice: ProjectionConfig = {
     FundsWithdrawalApproved: (payload, { projectionName }) => {
       const { account, currency, amount, transactionId } = payload as FundsWithdrawalApprovedPayload;
       return {
+        type: "query",
         sql: `
           INSERT INTO projections (name, key, payload)
           VALUES ($1, $2, $3::jsonb)
@@ -57,6 +58,7 @@ export const pendingWithdrawalLookupSlice: ProjectionConfig = {
     },
 
     FundsWithdrawn: (payload, { projectionName }) => ({
+      type: "query" as const,
       sql: `DELETE FROM projections WHERE name = $1 AND key = $2`,
       params: [projectionName, (payload as WithAccountPayload).account],
     }),

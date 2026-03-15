@@ -1,8 +1,12 @@
 import * as assert from "node:assert";
-import type { ProjectionConfig, SqlQuery, SqlTransaction } from "./ProjectionFactory.js";
+import type { ProjectionConfig, SqlStatement, SqlQuery, SqlTransaction, IdempotentSqlQuery } from "./ProjectionFactory.js";
 
-function isSqlQuery(result: SqlQuery | SqlTransaction): result is SqlQuery {
-  return "sql" in result;
+function isSqlQuery(result: SqlQuery | SqlTransaction | IdempotentSqlQuery): result is SqlQuery {
+  return result.type === "query";
+}
+
+function isIdempotentSqlQuery(result: SqlQuery | SqlTransaction | IdempotentSqlQuery): result is IdempotentSqlQuery {
+  return result.type === "idempotent";
 }
 
 /**
@@ -22,6 +26,12 @@ export type ExpectedSqlTransaction = {
   readonly statements: ExpectedSqlQuery[];
 };
 
+export type ExpectedIdempotentSqlQuery = {
+  readonly idempotencyKey: string;
+  readonly sqlContains: string;
+  readonly params: unknown[];
+};
+
 /**
  * Generic tester for projections.
  *
@@ -33,6 +43,9 @@ export type ExpectedSqlTransaction = {
  *
  * Usage (SqlQuery):
  *   ProjectionTester.test(mySlice, "FundsWithdrawn", payload, { sqlContains, params });
+ *
+ * Usage (IdempotentSqlQuery):
+ *   ProjectionTester.testIdempotent(mySlice, "FundsWithdrawn", payload, { idempotencyKey, sqlContains, params });
  *
  * Usage (SqlTransaction):
  *   ProjectionTester.testTransaction(mySlice, "FundsWithdrawn", payload, { statements: [...] });
@@ -61,9 +74,38 @@ export class ProjectionTester {
     }
 
     assert.ok(result, `Handler for '${messageType}' returned null, expected a SqlQuery`);
-    assert.ok(isSqlQuery(result), `Handler for '${messageType}' returned a SqlTransaction — use testTransaction instead`);
+    assert.ok(isSqlQuery(result), `Handler for '${messageType}' returned a SqlTransaction or IdempotentSqlQuery — use testTransaction or testIdempotent instead`);
 
     assertSqlQuery(result, expected, messageType);
+  }
+
+  static testIdempotent(
+    projection: ProjectionConfig,
+    messageType: string,
+    payload: Record<string, unknown>,
+    expected: ExpectedIdempotentSqlQuery | null,
+  ): void {
+    const handler = projection.handlers[messageType];
+    assert.ok(
+      handler,
+      `No handler registered for messageType '${messageType}' in projection '${projection.projectionName}'`,
+    );
+
+    const result = handler(payload, {
+      outboxId: "test-outbox-id",
+      projectionName: projection.projectionName,
+    });
+
+    if (expected === null) {
+      assert.strictEqual(result, null, `Expected handler for '${messageType}' to return null`);
+      return;
+    }
+
+    assert.ok(result, `Handler for '${messageType}' returned null, expected an IdempotentSqlQuery`);
+    assert.ok(isIdempotentSqlQuery(result), `Handler for '${messageType}' did not return an IdempotentSqlQuery — use test or testTransaction instead`);
+
+    assert.strictEqual(result.idempotencyKey, expected.idempotencyKey, `idempotencyKey mismatch for '${messageType}'`);
+    assertSqlQuery({ sql: result.sql, params: result.params }, expected, messageType);
   }
 
   static testTransaction(
@@ -89,7 +131,7 @@ export class ProjectionTester {
     }
 
     assert.ok(result, `Handler for '${messageType}' returned null, expected a SqlTransaction`);
-    assert.ok(!isSqlQuery(result), `Handler for '${messageType}' returned a SqlQuery — use test instead`);
+    assert.ok(result.type === "transaction", `Handler for '${messageType}' did not return a SqlTransaction — use test or testIdempotent instead`);
 
     assert.strictEqual(
       result.statements.length,
@@ -103,7 +145,7 @@ export class ProjectionTester {
   }
 }
 
-function assertSqlQuery(actual: SqlQuery, expected: ExpectedSqlQuery, label: string): void {
+function assertSqlQuery(actual: SqlStatement, expected: ExpectedSqlQuery, label: string): void {
   assert.ok(
     actual.sql.toLowerCase().includes(expected.sqlContains.toLowerCase()),
     `SQL should contain "${expected.sqlContains}"\nActual SQL: ${actual.sql}`,

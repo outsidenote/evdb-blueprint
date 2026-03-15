@@ -1,4 +1,4 @@
-import { Kafka, type Consumer } from "kafkajs";
+import { Kafka } from "kafkajs";
 import { PgBoss } from "pg-boss";
 import { PgBossEndpointConfig } from "./PgBossEndpointFactory.js";
 import { launchKafkaConsumer } from "./kafkaConsumerUtils.js";
@@ -33,8 +33,7 @@ export interface KafkaConsumerEndpointConfig {
  * The outbox ID from the Debezium message is forwarded as metadata for idempotency.
  */
 export class KafkaConsumerEndpointFactory {
-  private consumers: Consumer[] = [];
-  private retryTimers: ReturnType<typeof setTimeout>[] = [];
+  private handles: { stop: () => Promise<void> }[] = [];
 
   static async startAll(
     kafka: Kafka,
@@ -47,26 +46,22 @@ export class KafkaConsumerEndpointFactory {
       const queueName = config.pgBossEndpoint.queueName;
       const groupId = config.groupId ?? queueName;
 
-      launchKafkaConsumer({
+      const handle = launchKafkaConsumer({
         kafka,
         groupId,
         topics: [config.topic],
-        consumers: factory.consumers,
-        retryTimers: factory.retryTimers,
         onMessage: async (_topic, payload, outboxId) => {
           await boss.send(queueName, { metadata: { outboxId }, payload });
           console.log(`[KafkaConsumer] ${config.topic} → ${queueName} outboxId=${outboxId}`);
         },
       });
+      factory.handles.push(handle);
     }
 
     return factory;
   }
 
   async stop(): Promise<void> {
-    for (const timer of this.retryTimers) clearTimeout(timer);
-    for (const consumer of this.consumers) {
-      await consumer.disconnect().catch(() => {});
-    }
+    await Promise.allSettled(this.handles.map((h) => h.stop()));
   }
 }
