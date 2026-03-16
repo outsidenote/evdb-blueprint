@@ -12,7 +12,7 @@ ProjectionSliceTester.run(pendingWithdrawalLookupSlice, [
         given: [
           { messageType: "FundsWithdrawalApproved", payload: { account, currency: "USD", amount: 75, transactionId } },
         ],
-        then: { key: account, expectedState: { account, currency: "USD", amount: 75, transactionId } },
+        then: [{ key: account, expectedState: { account, currency: "USD", amount: 75, transactionId } }],
       };
     },
   },
@@ -26,7 +26,7 @@ ProjectionSliceTester.run(pendingWithdrawalLookupSlice, [
           { messageType: "FundsWithdrawalApproved", payload: { account, currency: "USD", amount: 100, transactionId: randomUUID() } },
           { messageType: "FundsWithdrawalApproved", payload: { account, currency: "EUR", amount: 200, transactionId: secondTransactionId } },
         ],
-        then: { key: account, expectedState: { account, currency: "EUR", amount: 200, transactionId: secondTransactionId } },
+        then: [{ key: account, expectedState: { account, currency: "EUR", amount: 200, transactionId: secondTransactionId } }],
       };
     },
   },
@@ -39,7 +39,7 @@ ProjectionSliceTester.run(pendingWithdrawalLookupSlice, [
           { messageType: "FundsWithdrawalApproved", payload: { account, currency: "USD", amount: 75, transactionId: randomUUID() } },
           { messageType: "FundsWithdrawn", payload: { account } },
         ],
-        then: { key: account, expectedState: null },
+        then: [{ key: account, expectedState: null }],
       };
     },
   },

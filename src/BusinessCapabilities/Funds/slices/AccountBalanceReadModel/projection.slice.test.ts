@@ -12,7 +12,7 @@ ProjectionSliceTester.run(accountBalanceReadModelSlice, [
         given: [
           { messageType: "FundsDepositApproved", payload: { account, amount: 100, currency: "USD", transactionId } },
         ],
-        then: { key: account, expectedState: { account, balance: 100, currency: "USD" } },
+        then: [{ key: account, expectedState: { account, balance: 100, currency: "USD" } }],
       };
     },
   },
@@ -25,7 +25,7 @@ ProjectionSliceTester.run(accountBalanceReadModelSlice, [
           { messageType: "FundsDepositApproved", payload: { account, amount: 100, currency: "USD", transactionId: randomUUID() } },
           { messageType: "FundsDepositApproved", payload: { account, amount: 50, currency: "USD", transactionId: randomUUID() } },
         ],
-        then: { key: account, expectedState: { account, balance: 150, currency: "USD" } },
+        then: [{ key: account, expectedState: { account, balance: 150, currency: "USD" } }],
       };
     },
   },
@@ -38,7 +38,7 @@ ProjectionSliceTester.run(accountBalanceReadModelSlice, [
           { messageType: "FundsDepositApproved", payload: { account, amount: 200, currency: "USD", transactionId: randomUUID() } },
           { messageType: "FundsWithdrawn", payload: { account, amount: 50, commission: 5, currency: "USD", transactionId: randomUUID() } },
         ],
-        then: { key: account, expectedState: { account, balance: 145, currency: "USD" } },
+        then: [{ key: account, expectedState: { account, balance: 145, currency: "USD" } }],
       };
     },
   },
@@ -53,7 +53,7 @@ ProjectionSliceTester.run(accountBalanceReadModelSlice, [
           { messageType: "FundsDepositApproved", payload },
           { messageType: "FundsDepositApproved", payload }, // replay
         ],
-        then: { key: account, expectedState: { account, balance: 100, currency: "USD" } },
+        then: [{ key: account, expectedState: { account, balance: 100, currency: "USD" } }],
       };
     },
   },

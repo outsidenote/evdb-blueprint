@@ -16,7 +16,7 @@ export type ProjectionSliceTestCase = {
    */
   run: () => {
     given: Array<{ messageType: string; payload: Record<string, unknown>; meta?: Partial<EventMeta> }>;
-    then: { key: string; expectedState: Record<string, unknown> | null };
+    then: Array<{ key: string; expectedState: Record<string, unknown> | null }>;
   };
 };
 
@@ -51,12 +51,14 @@ export class ProjectionSliceTester {
             });
           }
 
-          const { rows } = await pool.query(
-            `SELECT payload FROM projections WHERE name = $1 AND key = $2`,
-            [slice.projectionName, then.key],
-          );
-          const state = rows.length > 0 ? (rows[0].payload as Record<string, unknown>) : null;
-          assert.deepStrictEqual(state, then.expectedState);
+          for (const { key, expectedState } of then) {
+            const { rows } = await pool.query(
+              `SELECT payload FROM projections WHERE name = $1 AND key = $2`,
+              [slice.projectionName, key],
+            );
+            const state = rows.length > 0 ? (rows[0].payload as Record<string, unknown>) : null;
+            assert.deepStrictEqual(state, expectedState, `key: ${key}`);
+          }
         });
       }
     });
