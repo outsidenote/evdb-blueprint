@@ -25,10 +25,6 @@ type FundsDepositApprovedPayload = {
  * - FundsDepositApproved → increases balance by amount
  * - FundsWithdrawn       → decreases balance by (amount + commission)
  *
- * Notes:
- * - Assumes one currency per account. For multi-currency, use `${account}:${currency}` as key.
- * - For real financial systems, prefer integer minor units or decimal strings over JS number.
- *
  * To generate a new projection slice from this template:
  *   1. Set `projectionName` to the name of the new projection.
  *   2. Set `mode` to `idempotent` with a `getIdempotencyKey` that extracts a unique
@@ -91,7 +87,11 @@ export const accountBalanceReadModelSlice: ProjectionConfig = {
           params: [
             projectionName,
             p.account,
-            JSON.stringify({ account: p.account, balance: -(p.amount + p.commission), currency: p.currency }),
+            JSON.stringify({
+              account: p.account,
+              balance: -(p.amount + p.commission),
+              currency: p.currency,
+            }),
             -(p.amount + p.commission),
             p.currency,
           ],
