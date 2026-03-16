@@ -64,6 +64,22 @@ CREATE TABLE IF NOT EXISTS public.projections (
   PRIMARY KEY (name, key)
 );
 
+CREATE OR REPLACE FUNCTION public.update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE 'plpgsql';
+
+
+DROP TRIGGER IF EXISTS set_updated_at ON public.projections;
+
+CREATE TRIGGER set_updated_at
+BEFORE UPDATE ON public.projections
+FOR EACH ROW
+EXECUTE FUNCTION public.update_updated_at_column();
+
 -- Idempotency table for accumulating projections.
 -- Tracks which outbox events have already been applied to prevent double-counting on Kafka replay.
 -- Separate from projections table — projection rows contain only read model data.

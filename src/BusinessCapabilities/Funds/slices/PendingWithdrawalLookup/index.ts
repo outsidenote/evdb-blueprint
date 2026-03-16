@@ -50,9 +50,7 @@ export const pendingWithdrawalLookupSlice: ProjectionConfig = {
             INSERT INTO projections (name, key, payload)
             VALUES ($1, $2, $3::jsonb)
             ON CONFLICT (name, key) DO UPDATE
-              SET payload    = EXCLUDED.payload,
-                  updated_at = NOW()
-          `,
+              SET payload    = EXCLUDED.payload`,
           params: [
             projectionName,
             account,

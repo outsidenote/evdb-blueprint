@@ -59,8 +59,7 @@ export const accountBalanceReadModelSlice: ProjectionConfig = {
                 'account',  $4::text,
                 'balance',  COALESCE((projections.payload->>'balance')::numeric, 0) + $5::numeric,
                 'currency', $6::text
-              ),
-              updated_at = NOW()
+              )
           `,
           params: [
             projectionName,
@@ -87,8 +86,7 @@ export const accountBalanceReadModelSlice: ProjectionConfig = {
                 'account',  $4::text,
                 'balance',  COALESCE((projections.payload->>'balance')::numeric, 0) + $5::numeric,
                 'currency', $6::text
-              ),
-              updated_at = NOW()
+              )
           `,
           params: [
             projectionName,
