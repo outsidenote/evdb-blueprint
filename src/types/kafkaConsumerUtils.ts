@@ -7,19 +7,9 @@ export function launchKafkaConsumer(opts: {
   groupId: string;
   topics: string[];
   fromBeginning?: boolean;
-  onMessage: (
-    topic: string,
-    payload: Record<string, unknown>,
-    outboxId: string,
-  ) => Promise<void>;
+  onMessage: (topic: string, payload: Record<string, unknown>, outboxId: string) => Promise<void>;
 }): { stop: () => Promise<void> } {
-  const {
-    kafka,
-    groupId,
-    topics,
-    fromBeginning = true,
-    onMessage,
-  } = opts;
+  const { kafka, groupId, topics, fromBeginning = true, onMessage } = opts;
 
   let stopped = false;
   let consumer: Consumer | null = null;
@@ -50,12 +40,12 @@ export function launchKafkaConsumer(opts: {
       await consumer.run({
         autoCommit: false,
         eachMessage: async ({ topic, partition, message, heartbeat }) => {
+          void heartbeat();
+
           const outboxId = extractOutboxId(message);
           const payload = parsePayload(message);
 
           await onMessage(topic, payload, outboxId);
-
-          await heartbeat();
 
           await consumer!.commitOffsets([
             {
@@ -66,7 +56,6 @@ export function launchKafkaConsumer(opts: {
           ]);
         },
       });
-
     } catch (err) {
       console.error(
         `[KafkaConsumer] ${groupId} crashed or failed, retrying in ${RETRY_INTERVAL_MS / 1000}s`,
@@ -75,7 +64,9 @@ export function launchKafkaConsumer(opts: {
 
       try {
         await consumer.disconnect();
-      } catch {}
+      } catch {
+        /* best-effort disconnect before retry */
+      }
 
       consumer = null;
       scheduleRetry();
@@ -98,8 +89,7 @@ export function launchKafkaConsumer(opts: {
           await consumer.disconnect();
         } catch (err) {
           console.warn("[KafkaConsumer] disconnect failed", err);
-        }
-        finally {
+        } finally {
           consumer = null;
         }
       }
@@ -130,7 +120,9 @@ export function extractOutboxId(message: {
       if (value && typeof value === "object" && "outboxId" in value) {
         return String((value as Record<string, unknown>).outboxId);
       }
-    } catch {}
+    } catch {
+      /* best-effort disconnect before retry */
+    }
   }
 
   throw new Error(
@@ -141,9 +133,7 @@ export function extractOutboxId(message: {
 /**
  * Parses Debezium JSON payload safely.
  */
-export function parsePayload(message: {
-  value: Buffer | null;
-}): Record<string, unknown> {
+export function parsePayload(message: { value: Buffer | null }): Record<string, unknown> {
   if (!message.value) {
     throw new Error("[KafkaConsumer] message value is null");
   }
@@ -166,10 +156,9 @@ export function parsePayload(message: {
 
     return inner;
   } catch (err) {
+    // eslint-disable-next-line preserve-caught-error
     throw new Error(
-      `[KafkaConsumer] payload parse failed: ${
-        err instanceof Error ? err.message : String(err)
-      }`,
+      `[KafkaConsumer] payload parse failed: ${err instanceof Error ? err.message : String(err)}`,
     );
   }
 }
