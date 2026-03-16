@@ -26,12 +26,14 @@ describe("Projection integration: PendingWithdrawalLookup", () => {
     payload: Record<string, unknown>,
   ): Promise<void> {
     const handler = pendingWithdrawalLookupSlice.handlers[messageType];
-    const query = handler(payload, {
+    const statements = handler(payload, {
       outboxId: randomUUID(),
       projectionName: pendingWithdrawalLookupSlice.projectionName,
     });
-    if (!query || !("sql" in query)) return;
-    await pool.query(query.sql, query.params);
+    if (!statements) return;
+    for (const stmt of statements) {
+      await pool.query(stmt.sql, stmt.params);
+    }
   }
 
   async function getRow(account: string) {

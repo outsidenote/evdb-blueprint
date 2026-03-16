@@ -1,49 +1,19 @@
 import { type Kafka } from "kafkajs";
-import { Pool, type PoolClient } from "pg";
+import { Pool } from "pg";
 import { launchKafkaConsumer } from "./kafkaConsumerUtils.js";
 
 /**
- * Base shape shared by all SQL-bearing result types.
- * Use this when you need a plain `{ sql, params }` without a `type` discriminant.
+ * Base shape for a parameterized SQL statement.
  */
 export type SqlStatement = {
   readonly sql: string;
   readonly params: unknown[];
 };
 
-/**
- * Plain SQL statement.
- * Use when the SQL itself is safe to execute multiple times
- * (e.g. UPSERT, DELETE, MAX updates).
- */
-export type SqlQuery = SqlStatement & {
-  readonly type: "query";
-};
-
-/**
- * Multiple SQL statements executed atomically.
- * Use when the projection cannot be expressed as a single idempotent statement.
- */
-export type SqlTransaction = {
-  readonly type: "transaction";
-  readonly statements: SqlStatement[];
-};
-
-/**
- * An idempotent projection result for accumulating projections (e.g. running balance).
- *
- * Produced by `idempotentProjection()` — do not construct manually.
- * The factory handles the idempotency check and business SQL atomically.
- */
-export type IdempotentSqlQuery = SqlStatement & {
-  readonly type: "idempotent";
-  readonly idempotencyKey: string;
-};
-
 type HandlerMeta = { outboxId: string; projectionName: string };
 
 /**
- * Generates a SQL result to apply to the projections table.
+ * Returns the SQL statements to apply for this message.
  * Return null to ignore the message.
  *
  * `meta.projectionName` is the same value as `ProjectionConfig.projectionName` —
@@ -52,11 +22,29 @@ type HandlerMeta = { outboxId: string; projectionName: string };
 export type ProjectionHandler<T = unknown> = (
   payload: T,
   meta: HandlerMeta,
-) => SqlQuery | SqlTransaction | IdempotentSqlQuery | null;
+) => SqlStatement[] | null;
+
+export enum ProjectionModeType {
+  /** Run each statement directly — use for naturally idempotent SQL (UPSERT, DELETE). */
+  Query = "query",
+  /** Run all statements atomically — use when multiple statements must succeed together. */
+  Transaction = "transaction",
+  /** Run statements only once per idempotency key — use for accumulating projections
+   *  (running totals, counters) where replaying would double-count. */
+  Idempotent = "idempotent",
+}
+
+export type ProjectionMode =
+  | { readonly type: ProjectionModeType.Query }
+  | { readonly type: ProjectionModeType.Transaction }
+  | {
+      readonly type: ProjectionModeType.Idempotent;
+      readonly getIdempotencyKey: (payload: unknown, meta: HandlerMeta) => string;
+    };
 
 /**
- * `any` is used here because the handlers map can contain handlers with
- *  different payload types. Each handler still defines its own payload type.
+ * `any` is used in THandlers because the map can contain handlers with
+ * different payload types. Each handler still defines its own payload type.
  */
 export interface ProjectionConfig<
   THandlers extends Record<string, ProjectionHandler<any>> = Record<string, ProjectionHandler<any>>
@@ -69,6 +57,11 @@ export interface ProjectionConfig<
    */
   readonly projectionName: string;
   /**
+   * Execution strategy — constant for the projection's lifetime.
+   * All handlers in this projection run under the same mode.
+   */
+  readonly mode: ProjectionMode;
+  /**
    * Map of messageType → SQL generator.
    * Topics are derived as `events.{messageType}`.
    * Messages with no matching handler are ignored.
@@ -76,40 +69,26 @@ export interface ProjectionConfig<
   readonly handlers: THandlers;
 }
 
+
+const IDEMPOTENCY_INSERT_SQL = `
+  INSERT INTO projection_idempotency (projection_name, idempotency_key)
+  VALUES ($1, $2)
+  ON CONFLICT (projection_name, idempotency_key) DO NOTHING
+  RETURNING 1`;
+
 /**
- * Creates an idempotent projection handler.
- *
- * Both `getIdempotencyKey` and `buildQuery` receive the full `meta` object,
- * so you can key on `outboxId`, `projectionName`, or payload fields.
- *
- * Usage:
- *   FundsWithdrawn: idempotentProjection(
- *     (p: FundsWithdrawnPayload, _meta) => p.transactionId,
- *     (p, { projectionName }) => ({ sql: `INSERT INTO projections ...`, params: [...] })
- *   )
+ * the execution strategy for "transaction" mode — runs all statements inside a transaction,
+ * rolling back if any statement fails. Use for consistency when multiple statements must succeed together.
+ * @param pool 
+ * @param statements 
  */
-export function idempotentProjection<T>(
-  getIdempotencyKey: (payload: T, meta: HandlerMeta) => string,
-  buildQuery: (payload: T, meta: HandlerMeta) => SqlStatement,
-): ProjectionHandler<T> {
-  return (payload, meta) => {
-    const { sql, params } = buildQuery(payload, meta);
-    return {
-      type: "idempotent",
-      idempotencyKey: getIdempotencyKey(payload, meta),
-      sql,
-      params,
-    };
-  };
-}
-
-// ─── internal helpers ────────────────────────────────────────────────────────
-
-async function withTransaction(pool: Pool, fn: (client: PoolClient) => Promise<void>): Promise<void> {
+  async function withTransaction(pool: Pool, statements: SqlStatement[]): Promise<void> {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
-    await fn(client);
+    for (const stmt of statements) {
+      await client.query(stmt.sql, stmt.params);
+    }
     await client.query("COMMIT");
   } catch (e) {
     try {
@@ -121,7 +100,45 @@ async function withTransaction(pool: Pool, fn: (client: PoolClient) => Promise<v
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+/**
+ * cases where we want to ensure that a given message only applies once,
+ * even if it is replayed (e.g. due to a crash after processing but before offset commit).
+ *
+ * This function attempts to insert a record into the `projection_idempotency` table
+ * with the given `projectionName` and `idempotencyKey`. If the insert succeeds, it runs
+ * the statements inside a transaction. If the insert fails due to a conflict, it means
+ * these statements have already been applied for this key, so it skips them.
+ * @param pool 
+ * @param projectionName 
+ * @param idempotencyKey 
+ * @param statements 
+ */
+async function withIdempotentTransaction(
+  pool: Pool,
+  projectionName: string,
+  idempotencyKey: string,
+  statements: SqlStatement[],
+): Promise<void> {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const { rows } = await client.query(IDEMPOTENCY_INSERT_SQL, [projectionName, idempotencyKey]);
+    if (rows.length > 0) {
+      for (const stmt of statements) {
+        await client.query(stmt.sql, stmt.params);
+      }
+    }
+    await client.query("COMMIT");
+  } catch (e) {
+    try {
+      await client.query("ROLLBACK");
+    } catch {}
+    throw e;
+  } finally {
+    client.release();
+  }
+}
+
 
 /**
  * Projection factory.
@@ -158,30 +175,22 @@ export class ProjectionFactory {
           if (!handler) return;
 
           const meta: HandlerMeta = { outboxId, projectionName: projection.projectionName };
-          const result = handler(payload, meta);
-          if (!result) return;
+          // Invoke the handler to get the SQL statements to run for this message.
+          //  The handler can return null to skip messages it doesn't care about.
+          const statements = handler(payload, meta);
+          if (!statements) return;
 
-          if (result.type === "transaction") {
-            await withTransaction(pool, async (client) => {
-              for (const stmt of result.statements) {
-                await client.query(stmt.sql, stmt.params);
-              }
-            });
-          } else if (result.type === "idempotent") {
-            await withTransaction(pool, async (client) => {
-              const { rows } = await client.query(
-                `INSERT INTO projection_idempotency (projection_name, business_key)
-                 VALUES ($1, $2)
-                 ON CONFLICT (projection_name, business_key) DO NOTHING
-                 RETURNING 1`,
-                [projection.projectionName, result.idempotencyKey],
-              );
-              if (rows.length > 0) {
-                await client.query(result.sql, result.params);
-              }
-            });
+          const { mode } = projection;
+
+          if (mode.type === ProjectionModeType.Transaction) {
+            await withTransaction(pool, statements);
+          } else if (mode.type === ProjectionModeType.Idempotent) {
+            const key = mode.getIdempotencyKey(payload, meta);
+            await withIdempotentTransaction(pool, projection.projectionName, key, statements);
           } else {
-            await pool.query(result.sql, result.params);
+            for (const stmt of statements) {
+              await pool.query(stmt.sql, stmt.params);
+            }
           }
 
           console.log(`[Projection] ${topic} → ${groupId} outboxId=${outboxId}`);

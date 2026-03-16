@@ -1,4 +1,5 @@
 import type { ProjectionConfig } from "../../../../types/ProjectionFactory.js";
+import { ProjectionModeType } from "../../../../types/ProjectionFactory.js";
 
 type FundsWithdrawalApprovedPayload = {
   account: string;
@@ -29,38 +30,43 @@ type WithAccountPayload = {
  * ── Blueprint note ────────────────────────────────────────────────────────────
  * To generate a new projection slice from this template:
  *   1. Set `projectionName` to the name of the new projection.
- *   2. Define one handler per message type that should update the read model.
- *   3. Use `meta.projectionName` in SQL params — never hardcode the name.
- *   4. Return null from a handler to ignore a message type.
+ *   2. Set `mode` to the appropriate execution strategy.
+ *   3. Define one handler per message type that should update the read model.
+ *   4. Use `meta.projectionName` in SQL params — never hardcode the name.
+ *   5. Return null from a handler to ignore a message type.
  * ─────────────────────────────────────────────────────────────────────────────
  */
 export const pendingWithdrawalLookupSlice: ProjectionConfig = {
   projectionName: "PendingWithdrawalLookup",
 
+  mode: { type: ProjectionModeType.Query },
+
   handlers: {
     FundsWithdrawalApproved: (payload, { projectionName }) => {
       const { account, currency, amount, transactionId } = payload as FundsWithdrawalApprovedPayload;
-      return {
-        type: "query",
-        sql: `
-          INSERT INTO projections (name, key, payload)
-          VALUES ($1, $2, $3::jsonb)
-          ON CONFLICT (name, key) DO UPDATE
-            SET payload    = EXCLUDED.payload,
-                updated_at = NOW()
-        `,
-        params: [
-          projectionName,
-          account,
-          JSON.stringify({ account, currency, amount, transactionId }),
-        ],
-      };
+      return [
+        {
+          sql: `
+            INSERT INTO projections (name, key, payload)
+            VALUES ($1, $2, $3::jsonb)
+            ON CONFLICT (name, key) DO UPDATE
+              SET payload    = EXCLUDED.payload,
+                  updated_at = NOW()
+          `,
+          params: [
+            projectionName,
+            account,
+            JSON.stringify({ account, currency, amount, transactionId }),
+          ],
+        },
+      ];
     },
 
-    FundsWithdrawn: (payload, { projectionName }) => ({
-      type: "query" as const,
-      sql: `DELETE FROM projections WHERE name = $1 AND key = $2`,
-      params: [projectionName, (payload as WithAccountPayload).account],
-    }),
+    FundsWithdrawn: (payload, { projectionName }) => [
+      {
+        sql: `DELETE FROM projections WHERE name = $1 AND key = $2`,
+        params: [projectionName, (payload as WithAccountPayload).account],
+      },
+    ],
   },
 };

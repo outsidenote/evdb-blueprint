@@ -69,8 +69,8 @@ CREATE TABLE IF NOT EXISTS public.projections (
 -- Separate from projections table — projection rows contain only read model data.
 CREATE TABLE IF NOT EXISTS public.projection_idempotency (
   projection_name VARCHAR(150)  NOT NULL,
-  business_key    VARCHAR(255)  NOT NULL,
-  PRIMARY KEY (projection_name, business_key)
+  idempotency_key VARCHAR(255)  NOT NULL,
+  PRIMARY KEY (projection_name, idempotency_key)
 );
 
 

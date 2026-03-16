@@ -1,6 +1,5 @@
 import type { ProjectionConfig } from "../../../../types/ProjectionFactory.js";
-import { idempotentProjection } from "../../../../types/ProjectionFactory.js";
-
+import { ProjectionModeType } from "../../../../types/ProjectionFactory.js";
 
 type FundsWithdrawnPayload = {
   account: string;
@@ -32,63 +31,72 @@ type FundsDepositApprovedPayload = {
  *
  * To generate a new projection slice from this template:
  *   1. Set `projectionName` to the name of the new projection.
- *   2. Define one handler per message type that should update the read model.
- *   3. Use `meta.projectionName` in SQL params — never hardcode the name.
- *   4. Return null from a handler to ignore a message type.
- *   5. Use idempotentProjection() for accumulating projections (running totals, counters).
- *      Use a plain SqlQuery for naturally idempotent operations (UPSERT / DELETE).
+ *   2. Set `mode` to `idempotent` with a `getIdempotencyKey` that extracts a unique
+ *      business key from the payload (e.g. transactionId).
+ *   3. Define one handler per message type that should update the read model.
+ *   4. Use `meta.projectionName` in SQL params — never hardcode the name.
+ *   5. Return null from a handler to ignore a message type.
  * ─────────────────────────────────────────────────────────────────────────────
  */
 export const accountBalanceReadModelSlice: ProjectionConfig = {
   projectionName: "AccountBalanceReadModel",
 
-  handlers: {
-    FundsDepositApproved: idempotentProjection(
-      (p: FundsDepositApprovedPayload, _meta) => p.transactionId,
-      (p, { projectionName }) => ({
-        sql: `
-          INSERT INTO projections (name, key, payload)
-          VALUES ($1, $2, $3::jsonb)
-          ON CONFLICT (name, key) DO UPDATE
-            SET payload = jsonb_build_object(
-              'account',  $2,
-              'balance',  COALESCE((projections.payload->>'balance')::numeric, 0) + $4::numeric,
-              'currency', COALESCE(projections.payload->>'currency', $5)
-            ),
-            updated_at = NOW()
-        `,
-        params: [
-          projectionName,
-          p.account,
-          JSON.stringify({ account: p.account, balance: p.amount, currency: p.currency }),
-          p.amount,
-          p.currency,
-        ],
-      }),
-    ),
+  mode: {
+    type: ProjectionModeType.Idempotent,
+    getIdempotencyKey: (payload) => (payload as { transactionId: string }).transactionId,
+  },
 
-    FundsWithdrawn: idempotentProjection(
-      (p: FundsWithdrawnPayload, _meta) => p.transactionId,
-      (p, { projectionName }) => ({
-        sql: `
-          INSERT INTO projections (name, key, payload)
-          VALUES ($1, $2, $3::jsonb)
-          ON CONFLICT (name, key) DO UPDATE
-            SET payload = jsonb_build_object(
-              'account',  $2,
-              'balance',  COALESCE((projections.payload->>'balance')::numeric, 0) + $4::numeric,
-              'currency', COALESCE(projections.payload->>'currency', $5)
-            ),
-            updated_at = NOW()
-        `,
-        params: [
-          projectionName,
-          p.account,
-          JSON.stringify({ account: p.account, balance: -(p.amount + p.commission), currency: p.currency }),
-          -(p.amount + p.commission),
-          p.currency,
-        ],
-      }),
-    ),
+  handlers: {
+    FundsDepositApproved: (payload, { projectionName }) => {
+      const p = payload as FundsDepositApprovedPayload;
+      return [
+        {
+          sql: `
+            INSERT INTO projections (name, key, payload)
+            VALUES ($1, $2, $3::jsonb)
+            ON CONFLICT (name, key) DO UPDATE
+              SET payload = jsonb_build_object(
+                'account',  $2,
+                'balance',  COALESCE((projections.payload->>'balance')::numeric, 0) + $4::numeric,
+                'currency', COALESCE(projections.payload->>'currency', $5)
+              ),
+              updated_at = NOW()
+          `,
+          params: [
+            projectionName,
+            p.account,
+            JSON.stringify({ account: p.account, balance: p.amount, currency: p.currency }),
+            p.amount,
+            p.currency,
+          ],
+        },
+      ];
+    },
+
+    FundsWithdrawn: (payload, { projectionName }) => {
+      const p = payload as FundsWithdrawnPayload;
+      return [
+        {
+          sql: `
+            INSERT INTO projections (name, key, payload)
+            VALUES ($1, $2, $3::jsonb)
+            ON CONFLICT (name, key) DO UPDATE
+              SET payload = jsonb_build_object(
+                'account',  $2,
+                'balance',  COALESCE((projections.payload->>'balance')::numeric, 0) + $4::numeric,
+                'currency', COALESCE(projections.payload->>'currency', $5)
+              ),
+              updated_at = NOW()
+          `,
+          params: [
+            projectionName,
+            p.account,
+            JSON.stringify({ account: p.account, balance: -(p.amount + p.commission), currency: p.currency }),
+            -(p.amount + p.commission),
+            p.currency,
+          ],
+        },
+      ];
+    },
   },
 };

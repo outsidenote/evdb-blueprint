@@ -1,16 +1,9 @@
 import * as assert from "node:assert";
-import type { ProjectionConfig, SqlStatement, SqlQuery, SqlTransaction, IdempotentSqlQuery } from "./ProjectionFactory.js";
-
-function isSqlQuery(result: SqlQuery | SqlTransaction | IdempotentSqlQuery): result is SqlQuery {
-  return result.type === "query";
-}
-
-function isIdempotentSqlQuery(result: SqlQuery | SqlTransaction | IdempotentSqlQuery): result is IdempotentSqlQuery {
-  return result.type === "idempotent";
-}
+import type { ProjectionConfig, SqlStatement } from "./ProjectionFactory.js";
+import { ProjectionModeType } from "./ProjectionFactory.js";
 
 /**
- * Expected shape of a SQL query in a projection slice test.
+ * Expected shape of a SQL statement in a projection slice test.
  *
  * - `sqlContains`: case-insensitive substring — avoids brittle whitespace/newline matching
  * - `params`: scalar values compared with strictEqual;
@@ -20,10 +13,6 @@ function isIdempotentSqlQuery(result: SqlQuery | SqlTransaction | IdempotentSqlQ
 export type ExpectedSqlQuery = {
   readonly sqlContains: string;
   readonly params: unknown[];
-};
-
-export type ExpectedSqlTransaction = {
-  readonly statements: ExpectedSqlQuery[];
 };
 
 export type ExpectedIdempotentSqlQuery = {
@@ -37,25 +26,22 @@ export type ExpectedIdempotentSqlQuery = {
  *
  * Mirrors SliceTester for command handler slices:
  *   SliceTester:      given events  + when command  → then emitted events
- *   ProjectionTester: given payload + when message  → then SQL query
+ *   ProjectionTester: given payload + when message  → then SQL statements
  *
  * No database or Kafka required — handlers are pure functions.
  *
- * Usage (SqlQuery):
- *   ProjectionTester.test(mySlice, "FundsWithdrawn", payload, { sqlContains, params });
+ * Usage (query / transaction mode):
+ *   ProjectionTester.test(mySlice, "FundsWithdrawn", payload, [{ sqlContains, params }]);
  *
- * Usage (IdempotentSqlQuery):
+ * Usage (idempotent mode — also verifies the key extractor on the config):
  *   ProjectionTester.testIdempotent(mySlice, "FundsWithdrawn", payload, { idempotencyKey, sqlContains, params });
- *
- * Usage (SqlTransaction):
- *   ProjectionTester.testTransaction(mySlice, "FundsWithdrawn", payload, { statements: [...] });
  */
 export class ProjectionTester {
   static test(
     projection: ProjectionConfig,
     messageType: string,
     payload: Record<string, unknown>,
-    expected: ExpectedSqlQuery | null,
+    expected: ExpectedSqlQuery[] | null,
   ): void {
     const handler = projection.handlers[messageType];
     assert.ok(
@@ -73,10 +59,16 @@ export class ProjectionTester {
       return;
     }
 
-    assert.ok(result, `Handler for '${messageType}' returned null, expected a SqlQuery`);
-    assert.ok(isSqlQuery(result), `Handler for '${messageType}' returned a SqlTransaction or IdempotentSqlQuery — use testTransaction or testIdempotent instead`);
+    assert.ok(result, `Handler for '${messageType}' returned null, expected SQL statements`);
+    assert.strictEqual(
+      result.length,
+      expected.length,
+      `Statement count mismatch for '${messageType}': expected ${expected.length}, got ${result.length}`,
+    );
 
-    assertSqlQuery(result, expected, messageType);
+    for (let i = 0; i < expected.length; i++) {
+      assertSqlQuery(result[i], expected[i], `${messageType}[${i}]`);
+    }
   }
 
   static testIdempotent(
@@ -85,63 +77,36 @@ export class ProjectionTester {
     payload: Record<string, unknown>,
     expected: ExpectedIdempotentSqlQuery | null,
   ): void {
+    const { mode } = projection;
+    assert.ok(
+      mode.type === ProjectionModeType.Idempotent,
+      `Projection '${projection.projectionName}' is not in idempotent mode`,
+    );
+
     const handler = projection.handlers[messageType];
     assert.ok(
       handler,
       `No handler registered for messageType '${messageType}' in projection '${projection.projectionName}'`,
     );
 
-    const result = handler(payload, {
-      outboxId: "test-outbox-id",
-      projectionName: projection.projectionName,
-    });
+    const meta = { outboxId: "test-outbox-id", projectionName: projection.projectionName };
+    const result = handler(payload, meta);
 
     if (expected === null) {
       assert.strictEqual(result, null, `Expected handler for '${messageType}' to return null`);
       return;
     }
 
-    assert.ok(result, `Handler for '${messageType}' returned null, expected an IdempotentSqlQuery`);
-    assert.ok(isIdempotentSqlQuery(result), `Handler for '${messageType}' did not return an IdempotentSqlQuery — use test or testTransaction instead`);
-
-    assert.strictEqual(result.idempotencyKey, expected.idempotencyKey, `idempotencyKey mismatch for '${messageType}'`);
-    assertSqlQuery({ sql: result.sql, params: result.params }, expected, messageType);
-  }
-
-  static testTransaction(
-    projection: ProjectionConfig,
-    messageType: string,
-    payload: Record<string, unknown>,
-    expected: ExpectedSqlTransaction | null,
-  ): void {
-    const handler = projection.handlers[messageType];
-    assert.ok(
-      handler,
-      `No handler registered for messageType '${messageType}' in projection '${projection.projectionName}'`,
-    );
-
-    const result = handler(payload, {
-      outboxId: "test-outbox-id",
-      projectionName: projection.projectionName,
-    });
-
-    if (expected === null) {
-      assert.strictEqual(result, null, `Expected handler for '${messageType}' to return null`);
-      return;
-    }
-
-    assert.ok(result, `Handler for '${messageType}' returned null, expected a SqlTransaction`);
-    assert.ok(result.type === "transaction", `Handler for '${messageType}' did not return a SqlTransaction — use test or testIdempotent instead`);
+    assert.ok(result, `Handler for '${messageType}' returned null, expected SQL statements`);
 
     assert.strictEqual(
-      result.statements.length,
-      expected.statements.length,
-      `Statement count mismatch for '${messageType}': expected ${expected.statements.length}, got ${result.statements.length}`,
+      mode.getIdempotencyKey(payload, meta),
+      expected.idempotencyKey,
+      `idempotencyKey mismatch for '${messageType}'`,
     );
 
-    for (let i = 0; i < expected.statements.length; i++) {
-      assertSqlQuery(result.statements[i], expected.statements[i], `${messageType}[${i}]`);
-    }
+    assert.strictEqual(result.length, 1, `Expected 1 statement from idempotent handler '${messageType}', got ${result.length}`);
+    assertSqlQuery(result[0], expected, messageType);
   }
 }
 
