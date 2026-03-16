@@ -19,8 +19,8 @@ type FundsDepositApprovedPayload = {
 /**
  * Projection slice: Account Balance Read Model
  *
- * Maintains a running balance per account.
- * Key: account UUID
+ * Maintains a running balance per account per currency.
+ * Key: `{account}:{currency}` — one row per account/currency pair.
  *
  * - FundsDepositApproved → increases balance by amount
  * - FundsWithdrawn       → decreases balance by (amount + commission)
@@ -39,12 +39,16 @@ export const accountBalanceReadModelSlice: ProjectionConfig = {
 
   mode: {
     type: ProjectionModeType.Idempotent,
-    getIdempotencyKey: (payload) => (payload as { transactionId: string }).transactionId,
+    getIdempotencyKey: (payload) => {
+      const p = payload as { transactionId: string; currency: string };
+      return `${p.transactionId}:${p.currency}`;
+    },
   },
 
   handlers: {
     FundsDepositApproved: (payload, { projectionName }) => {
       const p = payload as FundsDepositApprovedPayload;
+      const key = `${p.account}:${p.currency}`;
       return [
         {
           sql: `
@@ -52,16 +56,17 @@ export const accountBalanceReadModelSlice: ProjectionConfig = {
             VALUES ($1, $2, $3::jsonb)
             ON CONFLICT (name, key) DO UPDATE
               SET payload = jsonb_build_object(
-                'account',  $2,
-                'balance',  COALESCE((projections.payload->>'balance')::numeric, 0) + $4::numeric,
-                'currency', COALESCE(projections.payload->>'currency', $5)
+                'account',  $4::text,
+                'balance',  COALESCE((projections.payload->>'balance')::numeric, 0) + $5::numeric,
+                'currency', $6::text
               ),
               updated_at = NOW()
           `,
           params: [
             projectionName,
-            p.account,
+            key,
             JSON.stringify({ account: p.account, balance: p.amount, currency: p.currency }),
+            p.account,
             p.amount,
             p.currency,
           ],
@@ -71,6 +76,7 @@ export const accountBalanceReadModelSlice: ProjectionConfig = {
 
     FundsWithdrawn: (payload, { projectionName }) => {
       const p = payload as FundsWithdrawnPayload;
+      const key = `${p.account}:${p.currency}`;
       return [
         {
           sql: `
@@ -78,20 +84,21 @@ export const accountBalanceReadModelSlice: ProjectionConfig = {
             VALUES ($1, $2, $3::jsonb)
             ON CONFLICT (name, key) DO UPDATE
               SET payload = jsonb_build_object(
-                'account',  $2,
-                'balance',  COALESCE((projections.payload->>'balance')::numeric, 0) + $4::numeric,
-                'currency', COALESCE(projections.payload->>'currency', $5)
+                'account',  $4::text,
+                'balance',  COALESCE((projections.payload->>'balance')::numeric, 0) + $5::numeric,
+                'currency', $6::text
               ),
               updated_at = NOW()
           `,
           params: [
             projectionName,
-            p.account,
+            key,
             JSON.stringify({
               account: p.account,
               balance: -(p.amount + p.commission),
               currency: p.currency,
             }),
+            p.account,
             -(p.amount + p.commission),
             p.currency,
           ],
