@@ -1,20 +1,21 @@
-import { test, describe, before, after } from "node:test";
+import { test, describe, before, after, beforeEach } from "node:test";
 import * as assert from "node:assert";
 import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
 import { TestDatabase } from "../tests/harness/index.js";
 import { type ProjectionConfig } from "./ProjectionFactory.js";
 import { applyProjectionEvent } from "./projectionUtils.js";
+import { type EventMeta } from "./kafkaConsumerUtils.js";
 
 export type ProjectionSliceTestCase = {
   description: string;
   /**
-   * Returns fresh random data on each call so tests are isolated.
-   * `given` is the sequence of events to apply.
-   * `then` is the expected projection state for the given key (null = row deleted).
+   * Returns fresh data on each call.
+   * `meta` is optional and defaults to a random outboxId and current timestamp
+   * when not relevant to the test.
    */
   run: () => {
-    given: Array<{ messageType: string; payload: Record<string, unknown> }>;
+    given: Array<{ messageType: string; payload: Record<string, unknown>; meta?: Partial<EventMeta> }>;
     then: { key: string; expectedState: Record<string, unknown> | null };
   };
 };
@@ -35,12 +36,19 @@ export class ProjectionSliceTester {
     });
 
     describe(`Projection: ${slice.projectionName}`, () => {
+      beforeEach(async () => {
+        await pool.query("TRUNCATE projections, projection_idempotency");
+      });
+
       for (const { description, run } of cases) {
         test(description, async () => {
           const { given, then } = run();
 
-          for (const { messageType, payload } of given) {
-            await applyProjectionEvent(pool, slice, messageType, payload, { outboxId: randomUUID(), storedAt: new Date() });
+          for (const { messageType, payload, meta } of given) {
+            await applyProjectionEvent(pool, slice, messageType, payload, {
+              outboxId: meta?.outboxId ?? randomUUID(),
+              storedAt: meta?.storedAt ?? new Date(),
+            });
           }
 
           const { rows } = await pool.query(
