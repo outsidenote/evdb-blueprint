@@ -3,7 +3,7 @@ import { PgBoss } from "pg-boss";
 import { PgBossEndpointConfig } from "./PgBossEndpointFactory.js";
 import { launchKafkaConsumer } from "./kafkaConsumerUtils.js";
 
-export interface KafkaConsumerEndpointConfig {
+export interface AutomationEndpointConfig {
   /** The Kafka topic to consume from (e.g. "events.FundsWithdrawn"). */
   readonly topic: string;
   /** The pg-boss endpoint config that will process the message. */
@@ -32,15 +32,15 @@ export interface KafkaConsumerEndpointConfig {
  * Each consumer uses its own consumer group for independent offset tracking.
  * The outbox ID from the Debezium message is forwarded as metadata for idempotency.
  */
-export class KafkaConsumerEndpointFactory {
+export class AutomationEndpointFactory {
   private handles: { stop: () => Promise<void> }[] = [];
 
   static async startAll(
     kafka: Kafka,
     boss: PgBoss,
-    endpoints: KafkaConsumerEndpointConfig[],
-  ): Promise<KafkaConsumerEndpointFactory> {
-    const factory = new KafkaConsumerEndpointFactory();
+    endpoints: AutomationEndpointConfig[],
+  ): Promise<AutomationEndpointFactory> {
+    const factory = new AutomationEndpointFactory();
 
     for (const config of endpoints) {
       const queueName = config.pgBossEndpoint.queueName;
@@ -50,9 +50,9 @@ export class KafkaConsumerEndpointFactory {
         kafka,
         groupId,
         topics: [config.topic],
-        onMessage: async (_topic, payload, outboxId) => {
-          await boss.send(queueName, { metadata: { outboxId }, payload });
-          console.log(`[KafkaConsumer] ${config.topic} → ${queueName} outboxId=${outboxId}`);
+        onMessage: async (_topic, payload, meta) => {
+          await boss.send(queueName, { metadata: { outboxId: meta.outboxId }, payload });
+          console.log(`[KafkaConsumer] ${config.topic} → ${queueName} outboxId=${meta.outboxId}`);
         },
       });
       factory.handles.push(handle);

@@ -2,12 +2,15 @@ import { type Kafka, type Consumer } from "kafkajs";
 
 const RETRY_INTERVAL_MS = 5_000;
 
+/** Metadata extracted from a Kafka message (originates from the outbox). */
+export type EventMeta = { outboxId: string; storedAt: Date };
+
 export function launchKafkaConsumer(opts: {
   kafka: Kafka;
   groupId: string;
   topics: string[];
   fromBeginning?: boolean;
-  onMessage: (topic: string, payload: Record<string, unknown>, outboxId: string) => Promise<void>;
+  onMessage: (topic: string, payload: Record<string, unknown>, meta: EventMeta) => Promise<void>;
 }): { stop: () => Promise<void> } {
   const { kafka, groupId, topics, fromBeginning = true, onMessage } = opts;
 
@@ -46,7 +49,7 @@ export function launchKafkaConsumer(opts: {
           const outboxId = extractOutboxId(message);
           const payload = parsePayload(message);
 
-          await onMessage(topic, payload, outboxId);
+          await onMessage(topic, payload, { outboxId, storedAt: new Date(Number(message.timestamp)) });
 
           await c.commitOffsets([
             {
@@ -58,10 +61,16 @@ export function launchKafkaConsumer(opts: {
         },
       });
     } catch (err) {
-      console.error(
-        `[KafkaConsumer] ${groupId} crashed or failed, retrying in ${RETRY_INTERVAL_MS / 1000}s`,
-        err,
-      );
+      const isTopicMissing = err instanceof Error && (err as Error & { type?: string }).type === "UNKNOWN_TOPIC_OR_PARTITION";
+
+      if (isTopicMissing) {
+        console.info(`[KafkaConsumer] ${groupId} topic not yet available (waiting for CDC), retrying in ${RETRY_INTERVAL_MS / 1000}s`);
+      } else {
+        console.error(
+          `[KafkaConsumer] ${groupId} crashed or failed, retrying in ${RETRY_INTERVAL_MS / 1000}s`,
+          err,
+        );
+      }
 
       try {
         await c.disconnect();
@@ -122,7 +131,7 @@ export function extractOutboxId(message: {
         return String((value as Record<string, unknown>).outboxId);
       }
     } catch {
-      /* best-effort disconnect before retry */
+      /* best-effort parse before throwing */
     }
   }
 

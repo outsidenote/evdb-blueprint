@@ -45,33 +45,22 @@ describe("extractOutboxId", () => {
     assert.strictEqual(id, "envelope-id");
   });
 
-  test("fallback 2: derives id from JSON message key when value has no outboxId", () => {
-    const id = extractOutboxId({
-      key: buf(JSON.stringify({ payload: "stream-abc" })),
-      value: buf(JSON.stringify({ account: "x" })),
-    });
-    assert.match(id, /^stream-abc-\d+$/);
-  });
-
-  test("fallback 2: derives id from raw string key", () => {
-    const id = extractOutboxId({
-      key: buf("raw-key"),
-      value: null,
-    });
-    assert.match(id, /^raw-key-\d+$/);
-  });
-
-  test("last resort: returns unknown-<timestamp> when everything is null", () => {
-    const id = extractOutboxId({ key: null, value: null });
-    assert.match(id, /^unknown-\d+$/);
+  test("throws when header and outboxId are both missing", () => {
+    assert.throws(
+      () => extractOutboxId({ key: null, value: null }),
+      /Cannot extract outboxId/,
+    );
   });
 });
 
 // ── parsePayload ───────────────────────────────────────────────────────────
 
 describe("parsePayload", () => {
-  test("returns empty object when value is null", () => {
-    assert.deepStrictEqual(parsePayload({ value: null }), {});
+  test("throws when value is null", () => {
+    assert.throws(
+      () => parsePayload({ value: null }),
+      /message value is null/,
+    );
   });
 
   test("parses plain JSON object", () => {
@@ -97,8 +86,10 @@ describe("parsePayload", () => {
     assert.deepStrictEqual(result, inner);
   });
 
-  test("returns { raw } when value is not valid JSON", () => {
-    const result = parsePayload({ value: buf("not-json") });
-    assert.deepStrictEqual(result, { raw: "not-json" });
+  test("throws when value is not valid JSON", () => {
+    assert.throws(
+      () => parsePayload({ value: buf("not-json") }),
+      /payload parse failed/,
+    );
   });
 });

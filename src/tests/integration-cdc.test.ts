@@ -40,9 +40,12 @@ describe("CDC pipeline: outbox → Debezium → Kafka", { timeout: 180_000 }, ()
       brokers: [stack.kafkaBootstrap],
     });
 
-    pgBossFactory = await PgBossEndpointFactory.startAll(boss, [
-      createFundsWithdrawnWorker(storageAdapter),
-    ], pool, kafka);
+    pgBossFactory = await PgBossEndpointFactory.startAll(
+      boss,
+      [createFundsWithdrawnWorker(storageAdapter)],
+      pool,
+      kafka,
+    );
 
     projectionFactory = await ProjectionFactory.startAll(kafka, pool, [
       pendingWithdrawalLookupSlice,
@@ -89,8 +92,16 @@ describe("CDC pipeline: outbox → Debezium → Kafka", { timeout: 180_000 }, ()
 
     // Verify Debezium header placement from connector config
     assert.strictEqual(msg.headers.channel, "default", "Header 'channel' should be 'default'");
-    assert.strictEqual(msg.headers.message_type, "WithdrawalDeclinedNotification", "Header 'message_type' should match");
-    assert.strictEqual(msg.headers.stream_type, "WithdrawalApprovalStream", "Header 'stream_type' should match");
+    assert.strictEqual(
+      msg.headers.message_type,
+      "WithdrawalDeclinedNotification",
+      "Header 'message_type' should match",
+    );
+    assert.strictEqual(
+      msg.headers.stream_type,
+      "WithdrawalApprovalStream",
+      "Header 'stream_type' should match",
+    );
   });
 
   test("messages are routed to topics by message_type", async () => {
@@ -196,7 +207,11 @@ describe("CDC pipeline: outbox → Debezium → Kafka", { timeout: 180_000 }, ()
 
     const msg = messages.find((m) => m.key === streamId);
     assert.ok(msg, "Message should be received");
-    assert.strictEqual(msg.key, streamId, "Message key must equal stream_id for partition ordering");
+    assert.strictEqual(
+      msg.key,
+      streamId,
+      "Message key must equal stream_id for partition ordering",
+    );
 
     const payload = typeof msg.value === "string" ? JSON.parse(msg.value) : msg.value;
     assert.strictEqual(payload.outboxId, outboxId, "Payload should contain the original outboxId");
@@ -204,7 +219,7 @@ describe("CDC pipeline: outbox → Debezium → Kafka", { timeout: 180_000 }, ()
 
   // ──────────────────────────────────────────────────────────────────
   // Cross-boundary consumer: outbox → Debezium → Kafka
-  //   → KafkaConsumerEndpointFactory → pg-boss → worker → event
+  //   → AutomationEndpointFactory → pg-boss → worker → event
   // ──────────────────────────────────────────────────────────────────
   test("Kafka consumer bridges CDC message to pg-boss worker and produces downstream event", async () => {
     const account = `cdc-consumer-${randomUUID()}`;
@@ -240,7 +255,11 @@ describe("CDC pipeline: outbox → Debezium → Kafka", { timeout: 180_000 }, ()
     );
     const recorded = rows[0].payload;
 
-    assert.strictEqual(recorded.amount, 202, "Recorded amount should be amount + commission (200 + 2)");
+    assert.strictEqual(
+      recorded.amount,
+      202,
+      "Recorded amount should be amount + commission (200 + 2)",
+    );
     assert.strictEqual(recorded.account, account);
     assert.strictEqual(recorded.currency, "GBP");
   });
@@ -298,7 +317,13 @@ describe("CDC pipeline: outbox → Debezium → Kafka", { timeout: 180_000 }, ()
       streamId: account,
       eventType: "FundsWithdrawalApproved",
       messageType: "FundsWithdrawalApproved",
-      payload: { payloadType: "FundsWithdrawalApproved", account, amount: 100, currency: "USD", transactionId: "txn-s1" },
+      payload: {
+        payloadType: "FundsWithdrawalApproved",
+        account,
+        amount: 100,
+        currency: "USD",
+        transactionId: "txn-s1",
+      },
     });
 
     await waitFor(async () => {
@@ -316,7 +341,14 @@ describe("CDC pipeline: outbox → Debezium → Kafka", { timeout: 180_000 }, ()
       eventType: "FundsWithdrawn",
       messageType: "FundsWithdrawn",
       offset: 1,
-      payload: { payloadType: "FundsWithdrawn", account, amount: 100, commission: 1, currency: "USD", transactionId: "txn-s1" },
+      payload: {
+        payloadType: "FundsWithdrawn",
+        account,
+        amount: 100,
+        commission: 1,
+        currency: "USD",
+        transactionId: "txn-s1",
+      },
     });
 
     await waitFor(async () => {
