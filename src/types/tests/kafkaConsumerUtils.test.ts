@@ -4,12 +4,13 @@ import { extractOutboxId, parsePayload } from "../kafkaConsumerUtils.js";
 
 // ── helpers ────────────────────────────────────────────────────────────────
 
-function buf(s: string): Buffer { return Buffer.from(s); }
+function buf(s: string): Buffer {
+  return Buffer.from(s);
+}
 
 // ── extractOutboxId ────────────────────────────────────────────────────────
 
 describe("extractOutboxId", () => {
-
   test("primary: reads 'id' header as Buffer", () => {
     const id = extractOutboxId({
       key: null,
@@ -64,13 +65,11 @@ describe("extractOutboxId", () => {
     const id = extractOutboxId({ key: null, value: null });
     assert.match(id, /^unknown-\d+$/);
   });
-
 });
 
 // ── parsePayload ───────────────────────────────────────────────────────────
 
 describe("parsePayload", () => {
-
   test("returns empty object when value is null", () => {
     assert.deepStrictEqual(parsePayload({ value: null }), {});
   });
@@ -102,5 +101,4 @@ describe("parsePayload", () => {
     const result = parsePayload({ value: buf("not-json") });
     assert.deepStrictEqual(result, { raw: "not-json" });
   });
-
 });

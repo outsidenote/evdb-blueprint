@@ -30,14 +30,15 @@ export function launchKafkaConsumer(opts: {
   const attempt = async () => {
     if (stopped) return;
 
-    consumer = kafka.consumer({ groupId });
+    const c = kafka.consumer({ groupId });
+    consumer = c;
 
     try {
-      await consumer.connect();
-      await consumer.subscribe({ topics, fromBeginning });
+      await c.connect();
+      await c.subscribe({ topics, fromBeginning });
       console.info("[KafkaConsumer] started", { groupId, topics, fromBeginning });
 
-      await consumer.run({
+      await c.run({
         autoCommit: false,
         eachMessage: async ({ topic, partition, message, heartbeat }) => {
           void heartbeat();
@@ -47,7 +48,7 @@ export function launchKafkaConsumer(opts: {
 
           await onMessage(topic, payload, outboxId);
 
-          await consumer!.commitOffsets([
+          await c.commitOffsets([
             {
               topic,
               partition,
@@ -63,7 +64,7 @@ export function launchKafkaConsumer(opts: {
       );
 
       try {
-        await consumer.disconnect();
+        await c.disconnect();
       } catch {
         /* best-effort disconnect before retry */
       }
