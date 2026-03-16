@@ -43,6 +43,23 @@ ProjectionSliceTester.run(accountBalanceReadModelSlice, [
     },
   },
   {
+    description: "multiple accounts: each withdrawal is tracked independently",
+    run: () => {
+      const account1 = randomUUID();
+      const account2 = randomUUID();
+      return {
+        given: [
+          { messageType: "FundsWithdrawn", payload: { account: account1, amount: 100, commission: 10, currency: "USD", transactionId: randomUUID() } },
+          { messageType: "FundsWithdrawn", payload: { account: account2, amount: 50, commission: 5, currency: "USD", transactionId: randomUUID() } },
+        ],
+        then: [
+          { key: account1, expectedState: { account: account1, balance: -110, currency: "USD" } },
+          { key: account2, expectedState: { account: account2, balance: -55, currency: "USD" } },
+        ],
+      };
+    },
+  },
+  {
     description: "idempotency: replaying same transactionId does not double-count",
     run: () => {
       const account = randomUUID();

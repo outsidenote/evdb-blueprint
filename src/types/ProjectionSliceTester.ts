@@ -51,12 +51,16 @@ export class ProjectionSliceTester {
             });
           }
 
+          const keys = then.map((t) => t.key);
+          assert.strictEqual(keys.length, new Set(keys).size, `duplicate keys in then: ${keys.join(", ")}`);
+          const { rows } = await pool.query(
+            `SELECT key, payload FROM projections WHERE name = $1 AND key = ANY($2)`,
+            [slice.projectionName, keys],
+          );
+          const resultMap = new Map(rows.map((r) => [r.key as string, r.payload as Record<string, unknown>]));
+
           for (const { key, expectedState } of then) {
-            const { rows } = await pool.query(
-              `SELECT payload FROM projections WHERE name = $1 AND key = $2`,
-              [slice.projectionName, key],
-            );
-            const state = rows.length > 0 ? (rows[0].payload as Record<string, unknown>) : null;
+            const state = resultMap.get(key) ?? null;
             assert.deepStrictEqual(state, expectedState, `key: ${key}`);
           }
         });
