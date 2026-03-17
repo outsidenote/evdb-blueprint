@@ -35,8 +35,8 @@ export class ViewSliceTester {
             if (!handler) continue;
             const metadata: IEvDbEventMetadata = {
               ...defaultMetadata,
-              eventType: payload.payloadType,
               ...meta,
+              eventType: payload.payloadType,
             };
             state = handler(state, payload, metadata);
           }
