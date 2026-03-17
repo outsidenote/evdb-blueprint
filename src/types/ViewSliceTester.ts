@@ -1,6 +1,7 @@
 import { test, describe } from "node:test";
 import * as assert from "node:assert";
 import type IEvDbEventMetadata from "@eventualize/types/events/IEvDbEventMetadata";
+import type IEvDbEventPayload from "@eventualize/types/events/IEvDbEventPayload";
 import EvDbStreamCursor from "@eventualize/types/stream/EvDbStreamCursor";
 
 export type ViewConfig<TState> = {
@@ -11,7 +12,7 @@ export type ViewConfig<TState> = {
 
 export type ViewSliceTestCase<TState> = {
   description: string;
-  given: Array<{ messageType: string; payload: Record<string, unknown>; meta?: Partial<IEvDbEventMetadata> }>;
+  given: Array<{ payload: IEvDbEventPayload; meta?: Partial<IEvDbEventMetadata> }>;
   then: TState;
 };
 
@@ -29,12 +30,12 @@ export class ViewSliceTester {
         test(description, () => {
 
           let state = view.defaultState;
-          for (const { messageType, payload, meta } of given) {
-            const handler = view.handlers[messageType];
+          for (const { payload, meta } of given) {
+            const handler = view.handlers[payload.payloadType];
             if (!handler) continue;
             const metadata: IEvDbEventMetadata = {
               ...defaultMetadata,
-              eventType: messageType,
+              eventType: payload.payloadType,
               ...meta,
             };
             state = handler(state, payload, metadata);

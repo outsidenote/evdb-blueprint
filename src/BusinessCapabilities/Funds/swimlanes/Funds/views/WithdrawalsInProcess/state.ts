@@ -9,4 +9,5 @@ export interface WithdrawalsInProcessViewStateItem {
 
 export type WithdrawalsInProcessViewState = ReadonlyArray<WithdrawalsInProcessViewStateItem>;
 
+export const viewName = "WithdrawalsInProcess" as const;
 export const defaultState: WithdrawalsInProcessViewState = [];

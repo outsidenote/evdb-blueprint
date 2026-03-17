@@ -1,10 +1,10 @@
 import { ViewSliceTester, type ViewConfig } from "../../../../../../types/ViewSliceTester.js";
 import { handlers } from "./handlers.js";
-import type { SliceStateApprovalWithdrawalViewState } from "./state.js";
+import { type SliceStateApprovalWithdrawalViewState, viewName, defaultState } from "./state.js";
 
 const sliceStateView: ViewConfig<SliceStateApprovalWithdrawalViewState> = {
-  name: "SliceStateApproveWithdrawal",
-  defaultState: { balance: 0 },
+  name: viewName,
+  defaultState,
   handlers,
 };
 
@@ -12,16 +12,16 @@ ViewSliceTester.run(sliceStateView, [
   {
     description: "deposits increase balance, withdrawals decrease",
     given: [
-      { messageType: "FundsDepositApproved", payload: { amount: 500 } },
-      { messageType: "FundsWithdrawalApproved", payload: { amount: 200 } },
+      { payload: { payloadType: "FundsDepositApproved", amount: 500 } },
+      { payload: { payloadType: "FundsWithdrawalApproved", amount: 200 } },
     ],
     then: { balance: 300 },
   },
   {
     description: "declined withdrawal does not change balance",
     given: [
-      { messageType: "FundsDepositApproved", payload: { amount: 100 } },
-      { messageType: "FundsWithdrawalDeclined", payload: {} },
+      { payload: { payloadType: "FundsDepositApproved", amount: 100 } },
+      { payload: { payloadType: "FundsWithdrawalDeclined" } },
     ],
     then: { balance: 100 },
   },
