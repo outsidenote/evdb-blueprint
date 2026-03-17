@@ -11,33 +11,27 @@ const accountBalanceView: ViewConfig<AccountBalanceViewState> = {
 ViewSliceTester.run(accountBalanceView, [
   {
     description: "FundsDepositApproved increases balance",
-    run: () => ({
-      given: [
-        { messageType: "FundsDepositApproved", payload: { amount: 100 } },
-      ],
-      then: { balance: 100 },
-    }),
+    given: [
+      { messageType: "FundsDepositApproved", payload: { amount: 100 } },
+    ],
+    then: { balance: 100 },
   },
   {
     description: "FundsWithdrawalApproved decreases balance",
-    run: () => ({
-      given: [
-        { messageType: "FundsDepositApproved", payload: { amount: 200 } },
-        { messageType: "FundsWithdrawalApproved", payload: { amount: 75 } },
-      ],
-      then: { balance: 125 },
-    }),
+    given: [
+      { messageType: "FundsDepositApproved", payload: { amount: 200 } },
+      { messageType: "FundsWithdrawalApproved", payload: { amount: 75 } },
+    ],
+    then: { balance: 125 },
   },
   {
     description: "no-op events do not change balance",
-    run: () => ({
-      given: [
-        { messageType: "FundsDepositApproved", payload: { amount: 100 } },
-        { messageType: "FundsWithdrawalDeclined", payload: {} },
-        { messageType: "WithdrawCommissionCalculated", payload: {} },
-        { messageType: "FundsWithdrawn", payload: {} },
-      ],
-      then: { balance: 100 },
-    }),
+    given: [
+      { messageType: "FundsDepositApproved", payload: { amount: 100 } },
+      { messageType: "FundsWithdrawalDeclined", payload: {} },
+      { messageType: "WithdrawCommissionCalculated", payload: {} },
+      { messageType: "FundsWithdrawn", payload: {} },
+    ],
+    then: { balance: 100 },
   },
 ]);

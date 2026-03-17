@@ -11,10 +11,8 @@ export type ViewConfig<TState> = {
 
 export type ViewSliceTestCase<TState> = {
   description: string;
-  run: () => {
-    given: Array<{ messageType: string; payload: Record<string, unknown>; meta?: Partial<IEvDbEventMetadata> }>;
-    then: TState;
-  };
+  given: Array<{ messageType: string; payload: Record<string, unknown>; meta?: Partial<IEvDbEventMetadata> }>;
+  then: TState;
 };
 
 const defaultMetadata: IEvDbEventMetadata = {
@@ -27,9 +25,8 @@ const defaultMetadata: IEvDbEventMetadata = {
 export class ViewSliceTester {
   static run<TState>(view: ViewConfig<TState>, cases: ViewSliceTestCase<TState>[]): void {
     describe(`View: ${view.name}`, () => {
-      for (const { description, run } of cases) {
+      for (const { description, given, then } of cases) {
         test(description, () => {
-          const { given, then } = run();
 
           let state = view.defaultState;
           for (const { messageType, payload, meta } of given) {
