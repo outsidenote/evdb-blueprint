@@ -11,12 +11,12 @@
     "rebuild": "npm run clean && npm run build",
     "start": "node dist/server.js",
     "dev": "node --import tsx src/server.ts",
-    "test:unit": "node --import tsx --test 'src/BusinessCapabilities/Funds/slices/*/tests/unit.test.ts'",
+    "test:slices": "node --import tsx --test 'src/BusinessCapabilities/**/*.slice.test.ts'",
     "test:behaviour": "node --import tsx --test 'src/tests/behaviour.test.ts'",
     "test:integration": "node --import tsx --test src/tests/integration.test.ts",
     "test:integration-outbox": "node --import tsx --test src/tests/integration-outbox.test.ts",
     "test:integration-cdc": "node --import tsx --test src/tests/integration-cdc.test.ts",
-    "test": "node --import tsx --test 'src/tests/**/*.test.ts'"
+    "test": "node --import tsx --test 'src/**/*.test.ts'"
   },
   "dependencies": {
     "@eventualize/core": "^4.1.0",

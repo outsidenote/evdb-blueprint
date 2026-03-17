@@ -1,7 +1,7 @@
 import { PgBoss } from "pg-boss";
 import { Kafka } from "kafkajs";
 import pg from "pg";
-import { KafkaConsumerEndpointFactory } from "./KafkaConsumerEndpointFactory.js";
+import { AutomationEndpointFactory } from "./AutomationEndpointFactory.js";
 
 export interface PgBossEndpointContext {
   readonly outboxId: string;
@@ -29,7 +29,7 @@ async function isAlreadyProcessed(pool: pg.Pool, idempotencyKey: string): Promis
  *   Used for same-context event reactions (e.g., FundsWithdrawalApproved → CalculateWithdrawCommission).
  *
  * - "message": cross-boundary automation — CDC/Debezium publishes to Kafka,
- *   then KafkaConsumerEndpointFactory bridges messages into pg-boss via boss.send().
+ *   then AutomationEndpointFactory bridges messages into pg-boss via boss.send().
  *   Used for cross-context event consumption (e.g., FundsWithdrawn → RecordFundWithdrawAction).
  *
  * The source is encoded in the queue name to prevent collisions when the same
@@ -106,7 +106,7 @@ interface JobData {
  * See: infrastructure/outbox-trigger.sql for the trigger definition.
  */
 export class PgBossEndpointFactory {
-  private kafkaConsumers?: KafkaConsumerEndpointFactory;
+  private kafkaConsumers?: AutomationEndpointFactory;
 
   /**
    * Registers all pg-boss workers and, for any config with a `kafkaTopic`,
@@ -145,18 +145,22 @@ export class PgBossEndpointFactory {
     }
 
     // Auto-wire Kafka consumers for endpoints that declare a kafkaTopic
-    const kafkaEndpoints = endpoints.filter(e => e.kafkaTopic);
+    const kafkaEndpoints = endpoints.filter((e) => e.kafkaTopic);
     if (kafkaEndpoints.length > 0) {
       if (!kafka) {
         throw new Error(
           `[PgBossEndpointFactory] ${kafkaEndpoints.length} endpoint(s) declare a kafkaTopic ` +
-          `but no Kafka instance was provided to startAll()`,
+            `but no Kafka instance was provided to startAll()`,
         );
       }
 
-      console.log(`[PgBossEndpointFactory] Starting Kafka consumers for ${kafkaEndpoints.length} endpoint(s)`);
-      factory.kafkaConsumers = await KafkaConsumerEndpointFactory.startAll(kafka, boss,
-        kafkaEndpoints.map(e => ({
+      console.log(
+        `[PgBossEndpointFactory] Starting Kafka consumers for ${kafkaEndpoints.length} endpoint(s)`,
+      );
+      factory.kafkaConsumers = await AutomationEndpointFactory.startAll(
+        kafka,
+        boss,
+        kafkaEndpoints.map((e) => ({
           topic: e.kafkaTopic!,
           pgBossEndpoint: e,
         })),

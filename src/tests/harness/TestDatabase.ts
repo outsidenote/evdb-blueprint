@@ -8,9 +8,7 @@ import { PgBoss } from "pg-boss";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = path.resolve(__dirname, "../../..");
 
-const MIGRATIONS = [
-  "infrastructure/cdc/init.sql",
-] as const;
+const MIGRATIONS = ["infrastructure/cdc/init.sql"] as const;
 
 function readSql(relativePath: string): string {
   return fs.readFileSync(path.join(PROJECT_ROOT, relativePath), "utf-8");

@@ -53,10 +53,7 @@ export class TestCDCStack {
   connectUrl!: string;
 
   async start(): Promise<void> {
-    this.env = await new DockerComposeEnvironment(
-      COMPOSE_DIR,
-      "docker-compose.test.yml",
-    )
+    this.env = await new DockerComposeEnvironment(COMPOSE_DIR, "docker-compose.test.yml")
       .withEnvironment({ KAFKA_HOST_PORT: String(KAFKA_HOST_PORT) })
       .withStartupTimeout(120_000)
       .up();
@@ -142,19 +139,31 @@ export class TestCDCStack {
     timeoutMs = 60_000,
   ): Promise<ParsedMessage[]> {
     // Wait for topic to exist (fetchTopicOffsets is more reliable than listTopics)
-    await waitFor(async () => {
-      try { await this.admin.fetchTopicOffsets(topic); return true; }
-      catch { return false; }
-    }, timeoutMs, 1000);
+    await waitFor(
+      async () => {
+        try {
+          await this.admin.fetchTopicOffsets(topic);
+          return true;
+        } catch {
+          return false;
+        }
+      },
+      timeoutMs,
+      1000,
+    );
 
     // Wait for new messages beyond our snapshot
-    await waitFor(async () => {
-      const offsets = await this.admin.fetchTopicOffsets(topic);
-      return offsets.some((p) => {
-        const start = startOffsets[p.partition] ?? "0";
-        return Number(p.high) > Number(start);
-      });
-    }, timeoutMs, 500);
+    await waitFor(
+      async () => {
+        const offsets = await this.admin.fetchTopicOffsets(topic);
+        return offsets.some((p) => {
+          const start = startOffsets[p.partition] ?? "0";
+          return Number(p.high) > Number(start);
+        });
+      },
+      timeoutMs,
+      500,
+    );
 
     const messages: ParsedMessage[] = [];
     const remaining = new Set(expectedKeys);
@@ -167,7 +176,9 @@ export class TestCDCStack {
     await consumer.subscribe({ topic, fromBeginning: true });
 
     let resolveWait: () => void;
-    const waitPromise = new Promise<void>((resolve) => { resolveWait = resolve; });
+    const waitPromise = new Promise<void>((resolve) => {
+      resolveWait = resolve;
+    });
 
     const maxTimer = setTimeout(() => resolveWait(), 30_000);
 
@@ -223,9 +234,21 @@ export class TestCDCStack {
   }
 
   async stop(): Promise<void> {
-    try { await this.admin?.disconnect(); } catch { /* ignore */ }
-    try { await this.client?.end(); } catch { /* ignore */ }
-    try { await this.env?.down(); } catch { /* ignore */ }
+    try {
+      await this.admin?.disconnect();
+    } catch {
+      /* ignore */
+    }
+    try {
+      await this.client?.end();
+    } catch {
+      /* ignore */
+    }
+    try {
+      await this.env?.down();
+    } catch {
+      /* ignore */
+    }
   }
 
   // ── Private ────────────────────────────────────────────────────
@@ -274,21 +297,29 @@ export class TestCDCStack {
 }
 
 /** Parses a raw Kafka message, unwrapping JsonConverter schema envelopes. */
-function parseMessage(message: { key: Buffer | null; value: Buffer | null; headers?: Record<string, unknown> }): ParsedMessage {
+function parseMessage(message: {
+  key: Buffer | null;
+  value: Buffer | null;
+  headers?: Record<string, unknown>;
+}): ParsedMessage {
   let key = message.key?.toString() ?? null;
   if (key) {
     try {
       const parsed = JSON.parse(key);
       const unwrapped = parsed.payload ?? parsed;
       key = typeof unwrapped === "string" ? unwrapped : JSON.stringify(unwrapped);
-    } catch { /* raw string key */ }
+    } catch {
+      /* raw string key */
+    }
   }
   let value: Record<string, unknown> | null = null;
   if (message.value) {
     try {
       const parsed = JSON.parse(message.value.toString());
       value = parsed.payload ?? parsed;
-    } catch { value = { raw: message.value.toString() }; }
+    } catch {
+      value = { raw: message.value.toString() };
+    }
   }
   const headers: Record<string, string> = {};
   if (message.headers) {

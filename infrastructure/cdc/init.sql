@@ -54,6 +54,42 @@ CREATE TABLE IF NOT EXISTS snapshot (
 
 CREATE INDEX IF NOT EXISTS ix_snapshot_earlier_stored_at_7ae7ea3b165349e09b3fe6d66a69fd72 ON snapshot (stream_type, stream_id, view_name, stored_at);
 
+-- Projections table for key/value read models
+CREATE TABLE IF NOT EXISTS public.projections (
+  name       VARCHAR(150)             NOT NULL,
+  key        VARCHAR(150)             NOT NULL,
+  payload    JSONB                    NOT NULL,
+  created_at TIMESTAMPTZ              NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ              NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (name, key)
+);
+
+CREATE OR REPLACE FUNCTION public.update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE 'plpgsql';
+
+
+DROP TRIGGER IF EXISTS set_updated_at ON public.projections;
+
+CREATE TRIGGER set_updated_at
+BEFORE UPDATE ON public.projections
+FOR EACH ROW
+EXECUTE FUNCTION public.update_updated_at_column();
+
+-- Idempotency table for accumulating projections.
+-- Tracks which outbox events have already been applied to prevent double-counting on Kafka replay.
+-- Separate from projections table — projection rows contain only read model data.
+CREATE TABLE IF NOT EXISTS public.projection_idempotency (
+  projection_name VARCHAR(150)  NOT NULL,
+  idempotency_key VARCHAR(255)  NOT NULL,
+  PRIMARY KEY (projection_name, idempotency_key)
+);
+
+
 -- Partial index for outbox-based idempotency.
 -- The PgBossEndpointFactory writes rows with channel = 'idempotent' and
 -- the idempotency key in payload->>'idempotencyKey'. This index makes

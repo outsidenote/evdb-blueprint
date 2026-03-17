@@ -97,10 +97,11 @@ describe("Outbox verification: external events (CDC channel)", () => {
   });
 
   // ──────────────────────────────────────────────────────────────────
-  // Approved withdrawal → outbox message with channel='pg-boss' (internal queue)
-  // This confirms channel separation: approved events do NOT go to CDC
+  // Approved withdrawal → two outbox messages:
+  //   1. channel='pg-boss'  → outbox trigger → CalculateWithdrawCommission worker
+  //   2. channel='default'  → CDC → Kafka → PendingWithdrawalLookup projection
   // ──────────────────────────────────────────────────────────────────
-  test("approved withdrawal creates outbox message with channel='pg-boss' (not external)", async () => {
+  test("approved withdrawal creates two outbox messages: pg-boss (internal) + default (CDC)", async () => {
     const account = `approved-${randomUUID()}`;
     const adapter = createApproveWithdrawalAdapter(storageAdapter);
 
@@ -114,7 +115,7 @@ describe("Outbox verification: external events (CDC channel)", () => {
     assert.strictEqual(result.events.length, 1);
     assert.strictEqual(result.events[0].payload.payloadType, "FundsWithdrawalApproved");
 
-    // THEN: Outbox contains a pg-boss message (NOT external/CDC)
+    // THEN: Two outbox rows — one per message producer in withdrawalApprovedMessages
     const { rows } = await db.client.query(
       `SELECT id, channel, event_type, payload
        FROM public.outbox WHERE stream_id = $1 AND channel = 'pg-boss'`,
@@ -127,12 +128,12 @@ describe("Outbox verification: external events (CDC channel)", () => {
     const payload = typeof rows[0].payload === "string" ? JSON.parse(rows[0].payload) : rows[0].payload;
     assert.ok(Array.isArray(payload.queues), "pg-boss messages should have queues array");
 
-    // Also verify: no CDC message for approved withdrawal
+    // Also verify: CDC message for approved withdrawal (consumed by PendingWithdrawalLookup projection)
     const { rows: cdcRows } = await db.client.query(
       `SELECT id FROM public.outbox WHERE stream_id = $1 AND channel = 'default'`,
       [account],
     );
-    assert.strictEqual(cdcRows.length, 0, "Approved events should NOT go to CDC channel");
+    assert.strictEqual(cdcRows.length, 1, "Approved withdrawal should emit one CDC message for projection");
 
     // Idempotency marker written atomically by message handler
     const { rows: idempotencyRows } = await db.client.query(

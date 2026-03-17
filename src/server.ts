@@ -8,9 +8,12 @@ import { createServer, type Server } from "node:http";
 import { createWithdrawalRouter } from "./routes/withdrawal.js";
 import { swaggerDocument } from "./swagger.js";
 import { PgBossEndpointFactory } from "./types/PgBossEndpointFactory.js";
+import { ProjectionFactory } from "./types/ProjectionFactory.js";
 import { createFundsWithdrawalApprovedWorker } from "./BusinessCapabilities/Funds/endpoints/CalculateWithdrawComission/pg-boss/index.js";
 import { createWithdrawCommissionCalculatedWorker } from "./BusinessCapabilities/Funds/endpoints/WithdrawFunds/pg-boss/index.js";
 import { createFundsWithdrawnWorker } from "./BusinessCapabilities/FraudAnalysis/endpoints/RecordFundWithdrawAction/pg-boss/index.js";
+import { pendingWithdrawalLookupSlice } from "./BusinessCapabilities/Funds/slices/PendingWithdrawalLookup/index.js";
+import { accountBalanceReadModelSlice } from "./BusinessCapabilities/Funds/slices/AccountBalanceReadModel/index.js";
 import EvDbPostgresPrismaClientFactory from "@eventualize/postgres-storage-adapter/EvDbPostgresPrismaClientFactory";
 import EvDbPrismaStorageAdapter from "@eventualize/relational-storage-adapter/EvDbPrismaStorageAdapter";
 
@@ -63,6 +66,12 @@ async function main() {
   ], pool, kafka);
   console.log("[Startup] pg-boss workers registered");
 
+  const projectionFactory = await ProjectionFactory.startAll(kafka, pool, [
+    pendingWithdrawalLookupSlice,
+    accountBalanceReadModelSlice,
+  ]);
+  console.log("[Startup] projections registered");
+
   const app = express();
   app.use(express.json());
 
@@ -94,6 +103,7 @@ async function main() {
 
     const results = await Promise.allSettled([
       pgBossFactory.stop(),
+      projectionFactory.stop(),
       stopServer(httpServer),
       boss.stop(),
       pool.end(),
