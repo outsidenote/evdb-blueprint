@@ -1,9 +1,6 @@
 import IEvDbEventMetadata from "@eventualize/types/events/IEvDbEventMetadata";
-import type { FundsWithdrawalApproved } from "../../events/FundsWithdrawalApproved.js";
-import type { FundsWithdrawalDeclined } from "../../events/FundsWithdrawalDeclined.js";
+import type { FundsWithdrawalApproved } from "../../events/FundsWithdrawalApproved/event.js";
 import type { WithdrawalsInProcessViewState } from "./state.js";
-import { FundsDepositApproved } from "../../events/FundsDepositApproved.js";
-import { WithdrawCommissionCalculated } from "../../events/WithdrawCommissionCalculated.js";
 
 export const handlers = {
   FundsWithdrawalApproved: (
@@ -17,25 +14,4 @@ export const handlers = {
     amount: event.amount,
     session: event.session,
   }],
-
-  FundsWithdrawalDeclined: (
-    state: WithdrawalsInProcessViewState,
-    _event: FundsWithdrawalDeclined,
-  ): WithdrawalsInProcessViewState => state,
-
-  FundsDepositApproved: (
-    state: WithdrawalsInProcessViewState,
-  ): WithdrawalsInProcessViewState => state,
-
-  WithdrawCommissionCalculated: (
-    state: WithdrawalsInProcessViewState,
-  ): WithdrawalsInProcessViewState => state,
-
-  FundsWithdrawn: (
-    state: WithdrawalsInProcessViewState,
-  ): WithdrawalsInProcessViewState => state,
-
-  FundsWithdrawDeclined: (
-    state: WithdrawalsInProcessViewState,
-  ): WithdrawalsInProcessViewState => state,
 };

@@ -1,7 +1,7 @@
 import { test, describe } from "node:test";
 import { RecordFundWithdrawAction } from "../command.js";
 import { handleRecordFundWithdrawAction } from "../commandHandler.js";
-import { FundsWithdrawActionRecorded } from "../../../swimlanes/FraudAnalysis/events/FundsWithdrawActionRecorded.js";
+import { FundsWithdrawActionRecorded } from "../../../swimlanes/FraudAnalysis/events/FundsWithdrawActionRecorded/event.js";
 import { SliceTester } from "../../../../../types/SliceTester.js";
 import FraudAnalysisStreamFactory from "../../../swimlanes/FraudAnalysis/index.js";
 

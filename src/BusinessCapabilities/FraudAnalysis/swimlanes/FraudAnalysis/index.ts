@@ -1,9 +1,9 @@
 import { StreamFactoryBuilder } from "@eventualize/core/factories/StreamFactoryBuilder";
-import { FundsWithdrawActionRecorded } from "./events/FundsWithdrawActionRecorded.js";
-import { fundsWithdrawActionRecordedMessages } from "./messages/fundsWithdrawActionRecordedMessages.js";
+import { applyAllEvents } from "./events/_generated.js";
 
-const FraudAnalysisStreamFactory = new StreamFactoryBuilder("FraudAnalysisStream")
-  .withEventType(FundsWithdrawActionRecorded, fundsWithdrawActionRecordedMessages)
+const FraudAnalysisStreamFactory = applyAllEvents(
+  new StreamFactoryBuilder("FraudAnalysisStream"),
+)
   .build();
 
 export default FraudAnalysisStreamFactory;

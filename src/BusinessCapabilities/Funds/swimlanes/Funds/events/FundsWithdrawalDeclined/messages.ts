@@ -1,4 +1,4 @@
-import type { FundsWithdrawalDeclined } from "../events/FundsWithdrawalDeclined.js";
+import type { FundsWithdrawalDeclined } from "./event.js";
 import type EvDbEvent from "@eventualize/types/events/EvDbEvent";
 import EvDbMessage from "@eventualize/types/messages/EvDbMessage";
 

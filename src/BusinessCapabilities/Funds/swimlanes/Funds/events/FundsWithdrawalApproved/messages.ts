@@ -1,9 +1,9 @@
 import type EvDbEvent from "@eventualize/types/events/EvDbEvent";
-import type { FundsWithdrawalApproved } from "../events/FundsWithdrawalApproved.js";
+import type { FundsWithdrawalApproved } from "./event.js";
 import EvDbMessage from "@eventualize/types/messages/EvDbMessage";
-import { QUEUE_NAME as CALCULATE_WITHDRAW_COMMISSION_QUEUE } from "../../../endpoints/CalculateWithdrawComission/pg-boss/index.js";
-import { createPgBossQueueMessageFromEvent } from "../../../../../types/QueueMessage.js";
-import { createIdempotencyMessageFromEvent } from "../../../../../types/IdempotencyMessage.js";
+import { QUEUE_NAME as CALCULATE_WITHDRAW_COMMISSION_QUEUE } from "../../../../endpoints/CalculateWithdrawComission/pg-boss/index.js";
+import { createPgBossQueueMessageFromEvent } from "../../../../../../types/QueueMessage.js";
+import { createIdempotencyMessageFromEvent } from "../../../../../../types/IdempotencyMessage.js";
 
 export const withdrawalApprovedMessages = (
   event: EvDbEvent,

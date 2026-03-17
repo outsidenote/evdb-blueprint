@@ -1,11 +1,11 @@
 import { test, describe } from "node:test";
 import { WithdrawFunds } from "../command.js";
 import { handleWithdrawFunds } from "../commandHandler.js";
-import { FundsWithdrawn } from "../../../swimlanes/Funds/events/FundsWithdrawn.js";
-import { FundsWithdrawDeclined } from "../../../swimlanes/Funds/events/FundsWithdrawDeclined.js";
+import { FundsWithdrawn } from "../../../swimlanes/Funds/events/FundsWithdrawn/event.js";
+import { FundsWithdrawDeclined } from "../../../swimlanes/Funds/events/FundsWithdrawDeclined/event.js";
 import { SliceTester } from "../../../../../types/SliceTester.js";
 import FundsStreamFactory from "../../../swimlanes/Funds/index.js";
-import { FundsDepositApproved } from "../../../swimlanes/Funds/events/FundsDepositApproved.js";
+import { FundsDepositApproved } from "../../../swimlanes/Funds/events/FundsDepositApproved/event.js";
 
 describe("Withdraw Funds Slice - Unit Tests", () => {
   test("main flow - sufficient balance", async () => {

@@ -6,6 +6,8 @@
   "type": "module",
   "private": true,
   "scripts": {
+    "gen:events": "npx tsx scripts/gen-events.ts",
+    "prebuild": "npm run gen:events",
     "build": "tsc --build",
     "clean": "rimraf dist tsconfig.tsbuildinfo",
     "rebuild": "npm run clean && npm run build",

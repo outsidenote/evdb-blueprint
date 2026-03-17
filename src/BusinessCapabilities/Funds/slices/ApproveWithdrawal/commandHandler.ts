@@ -1,7 +1,7 @@
 import type { CommandHandler } from "../../../../types/commandHandler.js";
 import type { ApproveWithdrawal } from "./command.js";
-import { FundsWithdrawalApproved } from "../../swimlanes/Funds/events/FundsWithdrawalApproved.js";
-import { FundsWithdrawalDeclined } from "../../swimlanes/Funds/events/FundsWithdrawalDeclined.js";
+import { FundsWithdrawalApproved } from "../../swimlanes/Funds/events/FundsWithdrawalApproved/event.js";
+import { FundsWithdrawalDeclined } from "../../swimlanes/Funds/events/FundsWithdrawalDeclined/event.js";
 import type { FundsStreamType } from "../../swimlanes/Funds/index.js";
 import { hasInsufficientEffectiveFunds } from "./gwts.js";
 

@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import { TestDatabase } from "./harness/index.js";
 import { createApproveWithdrawalAdapter } from "../BusinessCapabilities/Funds/slices/ApproveWithdrawal/adapter.js";
 import { ApproveWithdrawal } from "../BusinessCapabilities/Funds/slices/ApproveWithdrawal/command.js";
-import { FundsDepositApproved } from "../BusinessCapabilities/Funds/swimlanes/Funds/events/FundsDepositApproved.js";
+import { FundsDepositApproved } from "../BusinessCapabilities/Funds/swimlanes/Funds/events/FundsDepositApproved/event.js";
 import FundsStreamFactory from "../BusinessCapabilities/Funds/swimlanes/Funds/index.js";
 import { QUEUE_NAME } from "../BusinessCapabilities/Funds/endpoints/CalculateWithdrawComission/pg-boss/index.js";
 import EvDbPostgresPrismaClientFactory from "@eventualize/postgres-storage-adapter/EvDbPostgresPrismaClientFactory";
