@@ -1,16 +1,15 @@
 import { test, describe } from "node:test";
 import { CalculateWithdrawCommissionCommand } from "../command.js";
 import { handleCalculateWithdrawCommission } from "../commandHandler.js";
-import { FundsWithdrawalApproved } from "../../../swimlanes/Funds/events/FundsWithdrawalApproved.js";
-import { FundsWithdrawalDeclined } from "../../../swimlanes/Funds/events/FundsWithdrawalDeclined.js";
+import { FundsWithdrawalApproved } from "../../../swimlanes/Funds/events/FundsWithdrawalApproved/event.js";
+import { FundsWithdrawalDeclined } from "../../../swimlanes/Funds/events/FundsWithdrawalDeclined/event.js";
 import { SliceTester } from "../../../../../types/SliceTester.js";
-import FundsStreamFactory from "../../../swimlanes/Funds/index.js";
-import { FundsDepositApproved } from "../../../swimlanes/Funds/events/FundsDepositApproved.js";
-import IEvDbEventPayload from "@eventualize/types/events/IEvDbEventPayload";
-import { WithdrawCommissionCalculated } from "../../../swimlanes/Funds/events/WithdrawCommissionCalculated.js";
+import { FundsDepositApproved } from "../../../swimlanes/Funds/events/FundsDepositApproved/event.js";
+import { WithdrawCommissionCalculated } from "../../../swimlanes/Funds/events/WithdrawCommissionCalculated/event.js";
 
 describe("Withdrawal Approval Slice - Unit Tests", () => {
   test("main flow", async () => {
+    const { FundsStreamFactory } = await import("../../../swimlanes/Funds/index.js");
     const givenEvents: Array<WithdrawCommissionCalculated | FundsWithdrawalApproved | FundsWithdrawalDeclined | FundsDepositApproved> = []
     const command = new CalculateWithdrawCommissionCommand({
       account: "1234",

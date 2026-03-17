@@ -43,7 +43,7 @@ export const createApprovalWithdrawalRestAdapter = (storageAdapter: IEvDbStorage
 
             const command = enrich(lookupRequest);
 
-            const result = await calculateWithdrwawalCommission(command);
+            const result = await (await calculateWithdrwawalCommission)(command);
 
             res.json({
                 streamId: result.streamId,

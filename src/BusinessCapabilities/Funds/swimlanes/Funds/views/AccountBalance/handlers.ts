@@ -1,6 +1,5 @@
-import type { FundsDepositApproved } from "../../events/FundsDepositApproved.js";
-import type { FundsWithdrawalApproved } from "../../events/FundsWithdrawalApproved.js";
-import type { FundsWithdrawn } from "../../events/FundsWithdrawn.js";
+import type { FundsDepositApproved } from "../../events/FundsDepositApproved/event.js";
+import type { FundsWithdrawalApproved } from "../../events/FundsWithdrawalApproved/event.js";
 import type { AccountBalanceViewState } from "./state.js";
 
 export const handlers = {

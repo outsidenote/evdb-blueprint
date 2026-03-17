@@ -57,7 +57,7 @@ export function createFundsWithdrawalApprovedWorker(
         transactionTime: new Date(),
       });
 
-      const result = await calculateCommission(command);
+      const result = await (await calculateCommission)(command);
 
       console.log(
         `[OutboxWorker] FundsWithdrawalApproved → commission=${command.commission} ` +

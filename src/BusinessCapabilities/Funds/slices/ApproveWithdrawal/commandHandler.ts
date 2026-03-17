@@ -1,8 +1,9 @@
 import type { CommandHandler } from "../../../../types/commandHandler.js";
 import type { ApproveWithdrawal } from "./command.js";
-import { FundsWithdrawalApproved } from "../../swimlanes/Funds/events/FundsWithdrawalApproved.js";
-import { FundsWithdrawalDeclined } from "../../swimlanes/Funds/events/FundsWithdrawalDeclined.js";
+import { FundsWithdrawalApproved } from "../../swimlanes/Funds/events/FundsWithdrawalApproved/event.js";
+import { FundsWithdrawalDeclined } from "../../swimlanes/Funds/events/FundsWithdrawalDeclined/event.js";
 import type { FundsStreamType } from "../../swimlanes/Funds/index.js";
+import type { SliceStateApprovalWithdrawalViewState } from "../../swimlanes/Funds/views/SliceStateApproveWithdrawal/state.js";
 import { hasInsufficientEffectiveFunds } from "./gwts.js";
 
 /**
@@ -19,7 +20,8 @@ export const handleApproveWithdrawal: CommandHandler<
   FundsStreamType,
   ApproveWithdrawal
 > = (stream, command) => {
-  const { balance } = stream.views.SliceStateApproveWithdrawal;
+  const { balance } = stream.views
+    .SliceStateApproveWithdrawal as SliceStateApprovalWithdrawalViewState;
   if (hasInsufficientEffectiveFunds(balance, command)) {
     stream.appendEventFundsWithdrawalDeclined(
       new FundsWithdrawalDeclined({

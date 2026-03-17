@@ -50,7 +50,7 @@ export function createWithdrawCommissionCalculatedWorker(
         transactionId: payload.transactionId,
       });
 
-      const result = await withdrawFunds(command);
+      const result = await (await withdrawFunds)(command);
 
       console.log(
         `[OutboxWorker] WithdrawCommissionCalculated → WithdrawFunds ` +

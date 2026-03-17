@@ -1,31 +1,40 @@
 import { StreamFactoryBuilder } from "@eventualize/core/factories/StreamFactoryBuilder";
-import { FundsWithdrawalApproved } from "./events/FundsWithdrawalApproved.js";
-import { FundsWithdrawalDeclined } from "./events/FundsWithdrawalDeclined.js";
-import { FundsWithdrawn } from "./events/FundsWithdrawn.js";
-import { FundsWithdrawDeclined } from "./events/FundsWithdrawDeclined.js";
-import { withdrawalApprovedMessages } from "./messages/approvedMessages.js";
-import { withdrawalDeclinedMessages } from "./messages/declinedMessages.js";
-import { withdrawCommissionCalculatedMessages } from "./messages/withdrawCommissionCalculatedMessages.js";
-import { fundsWithdrawnMessages } from "./messages/fundsWithdrawnMessages.js";
+import { readdirSync } from "fs";
+import { join, dirname } from "path";
+import { fileURLToPath } from "url";
 import { defaultState } from "./views/WithdrawalsInProcess/state.js";
 import { handlers } from "./views/WithdrawalsInProcess/handlers.js";
 import { handlers as sliceStateApproveWithdrawalHandlers } from "./views/SliceStateApproveWithdrawal/handlers.js";
 import { handlers as accountBalanceHandlers } from "./views/AccountBalance/handlers.js";
-import { FundsDepositApproved } from "./events/FundsDepositApproved.js";
-import { WithdrawCommissionCalculated } from "./events/WithdrawCommissionCalculated.js";
 
-const FundsStreamFactory = new StreamFactoryBuilder("WithdrawalApprovalStream")
-  .withEventType(FundsWithdrawalApproved, withdrawalApprovedMessages)
-  .withEventType(FundsWithdrawalDeclined, withdrawalDeclinedMessages)
-  .withEventType(FundsDepositApproved)
-  .withEventType(WithdrawCommissionCalculated, withdrawCommissionCalculatedMessages)
-  .withEventType(FundsWithdrawn, fundsWithdrawnMessages)
-  .withEventType(FundsWithdrawDeclined)
-  .withView("WithdrawalsInProcess", defaultState, handlers)
-  .withView("SliceStateApproveWithdrawal", { balance: 0 }, sliceStateApproveWithdrawalHandlers)
-  .withView("AccountBalance", { balance: 0 }, accountBalanceHandlers)
-  .build();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
-export default FundsStreamFactory;
+async function initializeFundsStreamFactory() {
+  let builder: StreamFactoryBuilder<any, any, any> = new StreamFactoryBuilder("WithdrawalApprovalStream");
+
+  // Dynamically load event config functions
+  const eventDirs = readdirSync(join(__dirname, "events"), { withFileTypes: true })
+    .filter(dirent => dirent.isDirectory())
+    .map(dirent => dirent.name);
+
+  const eventConfigLoaders = await Promise.all(
+    eventDirs.map(dir => import(`./events/${dir}`).then(module => module.default))
+  );
+
+  for (const loadEventConfig of eventConfigLoaders) {
+    builder = loadEventConfig(builder);
+  }
+
+  return builder
+    .withView("WithdrawalsInProcess", defaultState, handlers)
+    .withView("SliceStateApproveWithdrawal", { balance: 0 }, sliceStateApproveWithdrawalHandlers)
+    .withView("AccountBalance", { balance: 0 }, accountBalanceHandlers)
+    .build();
+}
+
+const FundsStreamFactory = await initializeFundsStreamFactory();
+
+export { FundsStreamFactory };
 
 export type FundsStreamType = typeof FundsStreamFactory.StreamType;

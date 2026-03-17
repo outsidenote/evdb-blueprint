@@ -4,8 +4,7 @@ import { randomUUID } from "node:crypto";
 import { TestDatabase } from "./harness/index.js";
 import { createApproveWithdrawalAdapter } from "../BusinessCapabilities/Funds/slices/ApproveWithdrawal/adapter.js";
 import { ApproveWithdrawal } from "../BusinessCapabilities/Funds/slices/ApproveWithdrawal/command.js";
-import { FundsDepositApproved } from "../BusinessCapabilities/Funds/swimlanes/Funds/events/FundsDepositApproved.js";
-import FundsStreamFactory from "../BusinessCapabilities/Funds/swimlanes/Funds/index.js";
+import { FundsDepositApproved } from "../BusinessCapabilities/Funds/swimlanes/Funds/events/FundsDepositApproved/event.js";
 import { QUEUE_NAME } from "../BusinessCapabilities/Funds/endpoints/CalculateWithdrawComission/pg-boss/index.js";
 import EvDbPostgresPrismaClientFactory from "@eventualize/postgres-storage-adapter/EvDbPostgresPrismaClientFactory";
 import EvDbPrismaStorageAdapter from "@eventualize/relational-storage-adapter/EvDbPrismaStorageAdapter";
@@ -30,6 +29,7 @@ function makeCommand(overrides: Partial<ApproveWithdrawal> = {}): ApproveWithdra
  * so the stream's SliceStateApproveWithdrawal view has a positive balance.
  */
 async function seedDeposit(storageAdapter: IEvDbStorageAdapter, account: string, amount: number) {
+  const { FundsStreamFactory } = await import("../BusinessCapabilities/Funds/swimlanes/Funds/index.js");
   const stream = FundsStreamFactory.create(account, storageAdapter);
   (stream as any).appendEventFundsDepositApproved(
     new FundsDepositApproved({
@@ -66,7 +66,7 @@ describe("Outbox verification: external events (CDC channel)", () => {
   // ──────────────────────────────────────────────────────────────────
   test("declined withdrawal creates outbox message with channel='default' for CDC", async () => {
     const account = `declined-${randomUUID()}`;
-    const adapter = createApproveWithdrawalAdapter(storageAdapter);
+    const adapter = await createApproveWithdrawalAdapter(storageAdapter);
 
     // GIVEN: No deposit → balance=0
     // WHEN: Withdraw more than balance
@@ -103,7 +103,7 @@ describe("Outbox verification: external events (CDC channel)", () => {
   // ──────────────────────────────────────────────────────────────────
   test("approved withdrawal creates two outbox messages: pg-boss (internal) + default (CDC)", async () => {
     const account = `approved-${randomUUID()}`;
-    const adapter = createApproveWithdrawalAdapter(storageAdapter);
+    const adapter = await createApproveWithdrawalAdapter(storageAdapter);
 
     // GIVEN: Seed a deposit so balance is sufficient
     await seedDeposit(storageAdapter, account, 500);
@@ -149,7 +149,7 @@ describe("Outbox verification: external events (CDC channel)", () => {
   // ──────────────────────────────────────────────────────────────────
   test("outbox row has all fields required by Debezium Outbox Event Router", async () => {
     const account = `cdc-fields-${randomUUID()}`;
-    const adapter = createApproveWithdrawalAdapter(storageAdapter);
+    const adapter = await createApproveWithdrawalAdapter(storageAdapter);
 
     // Declined → creates external outbox message
     const command = makeCommand({ account, amount: 50 });

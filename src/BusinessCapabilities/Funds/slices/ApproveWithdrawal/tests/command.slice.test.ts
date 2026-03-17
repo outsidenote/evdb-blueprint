@@ -1,14 +1,14 @@
 import { test, describe } from "node:test";
 import { ApproveWithdrawal } from "../command.js";
 import { handleApproveWithdrawal } from "../commandHandler.js";
-import { FundsWithdrawalApproved } from "../../../swimlanes/Funds/events/FundsWithdrawalApproved.js";
-import { FundsWithdrawalDeclined } from "../../../swimlanes/Funds/events/FundsWithdrawalDeclined.js";
+import { FundsWithdrawalApproved } from "../../../swimlanes/Funds/events/FundsWithdrawalApproved/event.js";
+import { FundsWithdrawalDeclined } from "../../../swimlanes/Funds/events/FundsWithdrawalDeclined/event.js";
 import { SliceTester } from "../../../../../types/SliceTester.js";
-import FundsStreamFactory from "../../../swimlanes/Funds/index.js";
-import { FundsDepositApproved } from "../../../swimlanes/Funds/events/FundsDepositApproved.js";
+import { FundsDepositApproved } from "../../../swimlanes/Funds/events/FundsDepositApproved/event.js";
 
 describe("Withdrawal Approval Slice - Unit Tests", () => {
   test("main flow", async () => {
+    const { FundsStreamFactory } = await import("../../../swimlanes/Funds/index.js");
     const givenEvents = [
       new FundsDepositApproved({
         account: '1234',
@@ -50,6 +50,7 @@ describe("Withdrawal Approval Slice - Unit Tests", () => {
     )
   });
   test("Can't withdraw when funds insufficient", async () => {
+    const { FundsStreamFactory } = await import("../../../swimlanes/Funds/index.js");
     const givenEvents = [
       new FundsDepositApproved({
         account: '1234',

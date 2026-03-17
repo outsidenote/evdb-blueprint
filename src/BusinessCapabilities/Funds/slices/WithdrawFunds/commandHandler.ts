@@ -1,8 +1,9 @@
 import type { CommandHandler } from "../../../../types/commandHandler.js";
 import type { WithdrawFunds } from "./command.js";
-import { FundsWithdrawn } from "../../swimlanes/Funds/events/FundsWithdrawn.js";
-import { FundsWithdrawDeclined } from "../../swimlanes/Funds/events/FundsWithdrawDeclined.js";
+import { FundsWithdrawn } from "../../swimlanes/Funds/events/FundsWithdrawn/event.js";
+import { FundsWithdrawDeclined } from "../../swimlanes/Funds/events/FundsWithdrawDeclined/event.js";
 import type { FundsStreamType } from "../../swimlanes/Funds/index.js";
+import type { AccountBalanceViewState } from "../../swimlanes/Funds/views/AccountBalance/state.js";
 import { hasInsufficientBalance } from "./gwts.js";
 
 /**
@@ -19,7 +20,8 @@ export const handleWithdrawFunds: CommandHandler<
   FundsStreamType,
   WithdrawFunds
 > = (stream, command) => {
-  const { balance } = stream.views.AccountBalance;
+  const { balance } = stream.views
+    .AccountBalance as AccountBalanceViewState;
   if (hasInsufficientBalance(balance, command)) {
     stream.appendEventFundsWithdrawDeclined(
       new FundsWithdrawDeclined({
