@@ -6,11 +6,11 @@ import pg from "pg";
 import { createServer, type Server } from "node:http";
 
 import { createWithdrawalRouter } from "./routes/withdrawal.js";
-import { createProjectionRouter } from "./routes/projections.js";
-import { ProjectionRepository } from "./types/ProjectionRepository.js";
+import { createProjectionRouter } from "./types/abstractions/router/projections.js";
+import { ProjectionRepository } from "./types/abstractions/projections/ProjectionRepository.js";
 import { swaggerDocument } from "./swagger.js";
-import { PgBossEndpointFactory } from "./types/PgBossEndpointFactory.js";
-import { ProjectionFactory } from "./types/ProjectionFactory.js";
+import { PgBossEndpointFactory } from "./types/abstractions/endpoints/PgBossEndpointFactory.js";
+import { ProjectionFactory } from "./types/abstractions/projections/ProjectionFactory.js";
 import { createFundsWithdrawalApprovedWorker } from "./BusinessCapabilities/Funds/endpoints/CalculateWithdrawComission/pg-boss/index.js";
 import { createWithdrawCommissionCalculatedWorker } from "./BusinessCapabilities/Funds/endpoints/WithdrawFunds/pg-boss/index.js";
 import { createFundsWithdrawnWorker } from "./BusinessCapabilities/FraudAnalysis/endpoints/RecordFundWithdrawAction/pg-boss/index.js";

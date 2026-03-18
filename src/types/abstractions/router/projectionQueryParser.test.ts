@@ -4,7 +4,7 @@ import {
   parseProjectionQuery,
   nextAfterKey,
   QueryValidationError,
-} from "../projectionQueryParser.js";
+} from "./projectionQueryParser.js";
 
 const P = "TestProjection";
 

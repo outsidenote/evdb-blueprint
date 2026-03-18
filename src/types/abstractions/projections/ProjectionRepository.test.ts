@@ -1,8 +1,8 @@
 import { test, describe, before, after, beforeEach } from "node:test";
 import * as assert from "node:assert";
 import { Pool } from "pg";
-import { TestDatabase } from "../../tests/harness/index.js";
-import { ProjectionRepository, collectByKeys } from "../ProjectionRepository.js";
+import { TestDatabase } from "../../../tests/harness/index.js";
+import { ProjectionRepository, collectByKeys } from "./ProjectionRepository.js";
 
 /**
  * Integration tests for ProjectionRepository.

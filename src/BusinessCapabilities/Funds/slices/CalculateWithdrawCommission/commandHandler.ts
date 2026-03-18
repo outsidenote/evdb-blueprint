@@ -1,4 +1,4 @@
-import type { CommandHandler } from "../../../../types/commandHandler.js";
+import type { CommandHandler } from "../../../../types/abstractions/commands/commandHandler.js";
 import type { CalculateWithdrawCommissionCommand } from "./command.js";
 import type { FundsStreamType } from "../../swimlanes/Funds/index.js";
 import { WithdrawCommissionCalculated } from "../../swimlanes/Funds/events/WithdrawCommissionCalculated.js";

@@ -1,5 +1,5 @@
 import { Router, type Response } from "express";
-import { collectByKeys, type IProjectionRepository, type ProjectionRow } from "../types/ProjectionRepository.js";
+import { collectByKeys, type IProjectionRepository, type ProjectionRow } from "../projections/ProjectionRepository.js";
 import {
   parseProjectionQuery,
   nextAfterKey,

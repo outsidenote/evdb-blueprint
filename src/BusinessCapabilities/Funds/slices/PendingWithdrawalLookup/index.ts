@@ -1,5 +1,5 @@
-import type { ProjectionConfig } from "../../../../types/ProjectionFactory.js";
-import { ProjectionModeType } from "../../../../types/ProjectionFactory.js";
+import type { ProjectionConfig } from "../../../../types/abstractions/projections/ProjectionFactory.js";
+import { ProjectionModeType } from "../../../../types/abstractions/projections/ProjectionFactory.js";
 
 type FundsWithdrawalApprovedPayload = {
   account: string;
