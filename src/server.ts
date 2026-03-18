@@ -6,6 +6,9 @@ import pg from "pg";
 import { createServer, type Server } from "node:http";
 
 import { createWithdrawalRouter } from "./routes/withdrawal.js";
+import { createProjectionRouter } from "./routes/projections.js";
+import { ProjectionRepository } from "./types/ProjectionRepository.js";
+import { DEFAULT_POLICY } from "./routes/projectionQueryParser.js";
 import { swaggerDocument } from "./swagger.js";
 import { PgBossEndpointFactory } from "./types/PgBossEndpointFactory.js";
 import { ProjectionFactory } from "./types/ProjectionFactory.js";
@@ -66,10 +69,12 @@ async function main() {
   ], pool, kafka);
   console.log("[Startup] pg-boss workers registered");
 
-  const projectionFactory = await ProjectionFactory.startAll(kafka, pool, [
+  const projectionSlices = [
     pendingWithdrawalLookupSlice,
     accountBalanceReadModelSlice,
-  ]);
+  ];
+
+  const projectionFactory = await ProjectionFactory.startAll(kafka, pool, projectionSlices);
   console.log("[Startup] projections registered");
 
   const app = express();
@@ -83,7 +88,13 @@ async function main() {
     res.status(200).json({ status: "ready" });
   });
 
+  const projectionRepository = new ProjectionRepository(pool);
+  const projectionPolicies = new Map(
+    projectionSlices.map((s) => [s.projectionName, DEFAULT_POLICY]),
+  );
+
   app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
+  app.use("/api/projections", createProjectionRouter(projectionRepository, projectionPolicies));
   app.use("/api/withdrawals", createWithdrawalRouter(storageAdapter));
 
   const httpServer = await startServer(app, config.port);
@@ -91,6 +102,7 @@ async function main() {
   console.log(`[Startup] Withdrawal API running at http://localhost:${config.port}`);
   console.log(`[Startup] Swagger UI: http://localhost:${config.port}/api-docs`);
   console.log(`[Startup] POST /api/withdrawals/approve`);
+  console.log(`[Startup] GET  /api/projections/:projectionName`);
 
   // Graceful shutdown
   let isShuttingDown = false;
