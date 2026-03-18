@@ -161,7 +161,6 @@ function parseLimit(params: Record<string, unknown>): number {
   return parsed;
 }
 
-// ── Guards ──────────────────────────────────────────────────────────────────
 
 function validateProjectionName(name: string): void {
   if (name.trim().length === 0) {
@@ -195,14 +194,12 @@ function rejectPaginationParams(params: Record<string, unknown>): void {
   }
 }
 
-// ── Response helpers ────────────────────────────────────────────────────────
 
 export function nextAfterKey(items: Array<{ key: string }>): string | undefined {
   if (items.length === 0) return undefined;
   return items[items.length - 1].key;
 }
 
-// ── Utils ───────────────────────────────────────────────────────────────────
 
 function has(params: Record<string, unknown>, key: string): boolean {
   return params[key] != null;
