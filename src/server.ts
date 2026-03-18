@@ -8,7 +8,6 @@ import { createServer, type Server } from "node:http";
 import { createWithdrawalRouter } from "./routes/withdrawal.js";
 import { createProjectionRouter } from "./routes/projections.js";
 import { ProjectionRepository } from "./types/ProjectionRepository.js";
-import { DEFAULT_POLICY } from "./routes/projectionQueryParser.js";
 import { swaggerDocument } from "./swagger.js";
 import { PgBossEndpointFactory } from "./types/PgBossEndpointFactory.js";
 import { ProjectionFactory } from "./types/ProjectionFactory.js";
@@ -89,12 +88,10 @@ async function main() {
   });
 
   const projectionRepository = new ProjectionRepository(pool);
-  const projectionPolicies = new Map(
-    projectionSlices.map((s) => [s.projectionName, DEFAULT_POLICY]),
-  );
+  const allowedProjections = new Set(projectionSlices.map((s) => s.projectionName));
 
   app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
-  app.use("/api/projections", createProjectionRouter(projectionRepository, projectionPolicies));
+  app.use("/api/projections", createProjectionRouter(projectionRepository, allowedProjections));
   app.use("/api/withdrawals", createWithdrawalRouter(storageAdapter));
 
   const httpServer = await startServer(app, config.port);

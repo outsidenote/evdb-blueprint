@@ -6,7 +6,6 @@ import { Pool } from "pg";
 import { TestDatabase } from "../../tests/harness/index.js";
 import { ProjectionRepository } from "../../types/ProjectionRepository.js";
 import { createProjectionRouter } from "../projections.js";
-import { DEFAULT_POLICY, type ProjectionQueryPolicy } from "../projectionQueryParser.js";
 
 /**
  * Behaviour tests for the projection query router.
@@ -30,13 +29,13 @@ describe("Projection Router — Behaviour Tests", () => {
     );
   }
 
-  function createApp(policies?: ReadonlyMap<string, ProjectionQueryPolicy>): express.Express {
+  function createApp(): express.Express {
     const repository = new ProjectionRepository(pool);
-    const policyMap = policies ?? new Map([[PROJECTION, DEFAULT_POLICY]]);
+    const allowed = new Set([PROJECTION]);
     const silentLogger = { error: () => {} };
     const a = express();
     a.use(express.json());
-    a.use("/api/projections", createProjectionRouter(repository, policyMap, silentLogger));
+    a.use("/api/projections", createProjectionRouter(repository, allowed, silentLogger));
     return a;
   }
 
@@ -78,7 +77,6 @@ describe("Projection Router — Behaviour Tests", () => {
     });
   });
 
-  // ── byKeys: { items } envelope ────────────────────────────────────────
 
   describe("GET ?keys= (multiple keys)", () => {
     test("returns { items } envelope ordered by key", async () => {
@@ -106,7 +104,6 @@ describe("Projection Router — Behaviour Tests", () => {
     });
   });
 
-  // ── betweenKeys: { items, nextAfterKey } envelope ─────────────────────
 
   describe("GET ?from=&to= (range search)", () => {
     test("returns items between from and to inclusive", async () => {
@@ -140,7 +137,6 @@ describe("Projection Router — Behaviour Tests", () => {
     });
   });
 
-  // ── Validation errors → 400 ──────────────────────────────────────────
 
   describe("Validation (400 errors)", () => {
     test("no query params → 400", async () => {
@@ -196,27 +192,4 @@ describe("Projection Router — Behaviour Tests", () => {
     });
   });
 
-  // ── Policy enforcement ────────────────────────────────────────────────
-
-  describe("Policy enforcement", () => {
-    test("disallowed range → 400", async () => {
-      const restrictedApp = createApp(
-        new Map([[PROJECTION, { ...DEFAULT_POLICY, allowRange: false }]]),
-      );
-
-      const res = await request(restrictedApp).get(`/api/projections/${PROJECTION}?from=a&to=z`);
-      assert.strictEqual(res.status, 400);
-      assert.ok(res.body.error.includes("not allowed"));
-    });
-
-    test("disallowed byKey → 400", async () => {
-      const restrictedApp = createApp(
-        new Map([[PROJECTION, { ...DEFAULT_POLICY, allowByKey: false }]]),
-      );
-
-      const res = await request(restrictedApp).get(`/api/projections/${PROJECTION}?key=a`);
-      assert.strictEqual(res.status, 400);
-      assert.ok(res.body.error.includes("not allowed"));
-    });
-  });
 });

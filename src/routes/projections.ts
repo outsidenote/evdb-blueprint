@@ -4,10 +4,8 @@ import {
   parseProjectionQuery,
   nextAfterKey,
   QueryValidationError,
-  type ProjectionQueryPolicy,
 } from "./projectionQueryParser.js";
 
-// ── Logger ──────────────────────────────────────────────────────────────────
 
 export interface ProjectionRouterLogger {
   error(message: string, context?: Record<string, unknown>): void;
@@ -17,7 +15,6 @@ const defaultLogger: ProjectionRouterLogger = {
   error: (message, context) => console.error(`[ProjectionRouter] ${message}`, context ?? ""),
 };
 
-// ── Response helpers ────────────────────────────────────────────────────────
 
 function respondItem(res: Response, row: ProjectionRow): void {
   res.json({ item: row });
@@ -42,7 +39,6 @@ function notFound(res: Response, message: string): void {
   res.status(404).json({ error: message });
 }
 
-// ── Router ──────────────────────────────────────────────────────────────────
 
 /**
  * Projection query routes.
@@ -56,7 +52,7 @@ function notFound(res: Response, message: string): void {
  */
 export function createProjectionRouter(
   repository: IProjectionRepository,
-  policies: ReadonlyMap<string, ProjectionQueryPolicy>,
+  allowedProjections: ReadonlySet<string>,
   logger: ProjectionRouterLogger = defaultLogger,
 ): Router {
   const router = Router();
@@ -64,15 +60,14 @@ export function createProjectionRouter(
   router.get("/:projectionName", async (req, res) => {
     const { projectionName } = req.params;
 
-    const policy = policies.get(projectionName);
-    if (!policy) {
+    if (!allowedProjections.has(projectionName)) {
       notFound(res, `Unknown projection: ${projectionName}`);
       return;
     }
 
     let query;
     try {
-      query = parseProjectionQuery(projectionName, req.query as Record<string, unknown>, policy);
+      query = parseProjectionQuery(projectionName, req.query as Record<string, unknown>);
     } catch (err) {
       if (err instanceof QueryValidationError) {
         badRequest(res, err.message);

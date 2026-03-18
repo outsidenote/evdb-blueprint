@@ -4,19 +4,17 @@ import {
   parseProjectionQuery,
   nextAfterKey,
   QueryValidationError,
-  DEFAULT_POLICY,
-  type ProjectionQueryPolicy,
 } from "../projectionQueryParser.js";
 
 const P = "TestProjection";
 
-function parse(params: Record<string, unknown>, policy: ProjectionQueryPolicy = DEFAULT_POLICY) {
-  return parseProjectionQuery(P, params, policy);
+function parse(params: Record<string, unknown>) {
+  return parseProjectionQuery(P, params);
 }
 
-function assertThrows(params: Record<string, unknown>, expectedMessage: string | RegExp, policy?: ProjectionQueryPolicy) {
+function assertThrows(params: Record<string, unknown>, expectedMessage: string | RegExp) {
   assert.throws(
-    () => parse(params, policy),
+    () => parse(params),
     (err: unknown) => {
       assert.ok(err instanceof QueryValidationError, `Expected QueryValidationError, got ${err}`);
       if (typeof expectedMessage === "string") {
@@ -29,7 +27,6 @@ function assertThrows(params: Record<string, unknown>, expectedMessage: string |
   );
 }
 
-// ── Mode detection ──────────────────────────────────────────────────────────
 
 describe("parseProjectionQuery: mode detection", () => {
   test("parses byKey", () => {
@@ -58,7 +55,6 @@ describe("parseProjectionQuery: mode detection", () => {
   });
 });
 
-// ── Mutual exclusivity ──────────────────────────────────────────────────────
 
 describe("parseProjectionQuery: mutual exclusivity", () => {
   test("key + keys → error", () => {
@@ -82,7 +78,6 @@ describe("parseProjectionQuery: mutual exclusivity", () => {
   });
 });
 
-// ── Validation ──────────────────────────────────────────────────────────────
 
 describe("parseProjectionQuery: validation", () => {
   test("empty key → error", () => {
@@ -115,13 +110,12 @@ describe("parseProjectionQuery: validation", () => {
 
   test("empty projectionName → error", () => {
     assert.throws(
-      () => parseProjectionQuery("", { key: "a" }, DEFAULT_POLICY),
+      () => parseProjectionQuery("", { key: "a" }),
       (err: unknown) => err instanceof QueryValidationError && err.message.includes("projectionName"),
     );
   });
 });
 
-// ── Unknown / repeated params ───────────────────────────────────────────────
 
 describe("parseProjectionQuery: unknown and repeated params", () => {
   test("unknown param → error", () => {
@@ -174,33 +168,13 @@ describe("parseProjectionQuery: limit", () => {
     assertThrows({ from: "a", to: "z", limit: "abc" }, "positive integer");
   });
 
-  test("limit exceeds maxLimit → error", () => {
-    const policy: ProjectionQueryPolicy = { ...DEFAULT_POLICY, maxLimit: 10 };
-    assertThrows({ from: "a", to: "z", limit: "50" }, "must not exceed 10", policy);
+  test("limit exceeds MAX_LIMIT → error", () => {
+    assertThrows({ from: "a", to: "z", limit: "9999" }, "must not exceed");
   });
 
   test("default limit when omitted", () => {
     const q = parse({ from: "a", to: "z" });
     if (q.mode === "betweenKeys") assert.strictEqual(q.limit, 100);
-  });
-});
-
-// ── Policy enforcement ──────────────────────────────────────────────────────
-
-describe("parseProjectionQuery: policy", () => {
-  test("disallowed byKey → error", () => {
-    const policy: ProjectionQueryPolicy = { ...DEFAULT_POLICY, allowByKey: false };
-    assertThrows({ key: "a" }, "not allowed", policy);
-  });
-
-  test("disallowed byKeys → error", () => {
-    const policy: ProjectionQueryPolicy = { ...DEFAULT_POLICY, allowByKeys: false };
-    assertThrows({ keys: "a,b" }, "not allowed", policy);
-  });
-
-  test("disallowed range → error", () => {
-    const policy: ProjectionQueryPolicy = { ...DEFAULT_POLICY, allowRange: false };
-    assertThrows({ from: "a", to: "z" }, "not allowed", policy);
   });
 });
 

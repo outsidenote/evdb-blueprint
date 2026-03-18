@@ -5,31 +5,18 @@
  * Returns a discriminated union (`ProjectionQuery`) or throws a `QueryValidationError`.
  */
 
-// ── Policy ──────────────────────────────────────────────────────────────────
-
-export type ProjectionQueryPolicy = {
-  readonly allowByKey: boolean;
-  readonly allowByKeys: boolean;
-  readonly allowRange: boolean;
-  readonly maxLimit: number;
-};
-
-export const DEFAULT_POLICY: ProjectionQueryPolicy = {
-  allowByKey: true,
-  allowByKeys: true,
-  allowRange: true,
-  maxLimit: 100,
-};
-
-// ── Parsed query (discriminated union) ──────────────────────────────────────
-
+/**
+ * Represents a parsed and validated projection query.
+ */
 export type ProjectionQuery =
   | { readonly mode: "byKey"; readonly projectionName: string; readonly key: string }
   | { readonly mode: "byKeys"; readonly projectionName: string; readonly keys: string[] }
   | { readonly mode: "betweenKeys"; readonly projectionName: string; readonly from: string; readonly to: string; readonly limit: number; readonly afterKey?: string };
 
-// ── Validation error ────────────────────────────────────────────────────────
 
+/**
+ * Error type for query validation failures.
+ */
 export class QueryValidationError extends Error {
   constructor(message: string) {
     super(message);
@@ -37,43 +24,43 @@ export class QueryValidationError extends Error {
   }
 }
 
-// ── Constants ───────────────────────────────────────────────────────────────
 
 const QUERY_MODE_PARAMS = ["key", "keys", "from", "to"] as const;
 const PAGINATION_PARAMS = ["afterKey", "limit"] as const;
 const ALL_KNOWN_PARAMS = [...QUERY_MODE_PARAMS, ...PAGINATION_PARAMS] as const;
 const DEFAULT_LIMIT = 100;
+const MAX_LIMIT = 1000;
 
-// ── Parser ──────────────────────────────────────────────────────────────────
-
+/**
+ * 
+ * @param projectionName 
+ * @param rawParams 
+ * @returns 
+ */
 export function parseProjectionQuery(
   projectionName: string,
   rawParams: Record<string, unknown>,
-  policy: ProjectionQueryPolicy,
 ): ProjectionQuery {
   validateProjectionName(projectionName);
   rejectUnknownParams(rawParams);
   rejectArrayParams(rawParams);
 
   const mode = detectMode(rawParams);
-  const limit = parseLimit(rawParams, policy);
+  const limit = parseLimit(rawParams);
   const afterKey = parseOptionalString(rawParams, "afterKey");
 
   switch (mode) {
     case "byKey": {
-      assertAllowed(policy.allowByKey, "byKey");
       rejectPaginationParams(rawParams);
       const key = parseRequiredString(rawParams, "key");
       return { mode: "byKey", projectionName, key };
     }
     case "byKeys": {
-      assertAllowed(policy.allowByKeys, "byKeys");
       rejectPaginationParams(rawParams);
       const keys = parseKeys(rawParams);
       return { mode: "byKeys", projectionName, keys };
     }
     case "betweenKeys": {
-      assertAllowed(policy.allowRange, "betweenKeys");
       const from = parseRequiredString(rawParams, "from");
       const to = parseRequiredString(rawParams, "to");
       return { mode: "betweenKeys", projectionName, from, to, limit, afterKey };
@@ -81,7 +68,6 @@ export function parseProjectionQuery(
   }
 }
 
-// ── Mode detection (mutual exclusivity) ─────────────────────────────────────
 
 type QueryMode = "byKey" | "byKeys" | "betweenKeys";
 
@@ -117,7 +103,6 @@ function detectMode(params: Record<string, unknown>): QueryMode {
   return "betweenKeys";
 }
 
-// ── Param parsers ───────────────────────────────────────────────────────────
 
 function parseRequiredString(params: Record<string, unknown>, name: string): string {
   const value = params[name];
@@ -145,7 +130,7 @@ function parseKeys(params: Record<string, unknown>): string[] {
   return keys;
 }
 
-function parseLimit(params: Record<string, unknown>, policy: ProjectionQueryPolicy): number {
+function parseLimit(params: Record<string, unknown>): number {
   const raw = params["limit"];
   if (raw == null) return DEFAULT_LIMIT;
 
@@ -158,8 +143,8 @@ function parseLimit(params: Record<string, unknown>, policy: ProjectionQueryPoli
     throw new QueryValidationError("'limit' must be a positive integer");
   }
 
-  if (parsed > policy.maxLimit) {
-    throw new QueryValidationError(`'limit' must not exceed ${policy.maxLimit}`);
+  if (parsed > MAX_LIMIT) {
+    throw new QueryValidationError(`'limit' must not exceed ${MAX_LIMIT}`);
   }
 
   return parsed;
@@ -170,12 +155,6 @@ function parseLimit(params: Record<string, unknown>, policy: ProjectionQueryPoli
 function validateProjectionName(name: string): void {
   if (name.trim().length === 0) {
     throw new QueryValidationError("projectionName must not be empty");
-  }
-}
-
-function assertAllowed(allowed: boolean, mode: string): void {
-  if (!allowed) {
-    throw new QueryValidationError(`Query mode '${mode}' is not allowed for this projection`);
   }
 }
 
