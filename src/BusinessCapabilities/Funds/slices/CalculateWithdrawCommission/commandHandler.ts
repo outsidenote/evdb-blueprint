@@ -1,7 +1,6 @@
-import type { CommandHandler } from "../../../../types/commandHandler.js";
 import type { CalculateWithdrawCommissionCommand } from "./command.js";
-import type { FundsStreamType } from "../../swimlanes/Funds/index.js";
-import { WithdrawCommissionCalculated } from "../../swimlanes/Funds/events/WithdrawCommissionCalculated.js";
+import type { CalculateWithdrawCommissionStream } from "./streamContract.js";
+import { WithdrawCommissionCalculated } from "../../swimlanes/Funds/events/WithdrawCommissionCalculated/event.js";
 
 /**
  * Pure command handler for the CalculateWithdrawCommission command.
@@ -12,10 +11,7 @@ import { WithdrawCommissionCalculated } from "../../swimlanes/Funds/events/Withd
  * This function only appends events to the stream. It does NOT fetch,
  * store, or return anything — orchestration belongs to the CommandAdapter.
  */
-export const handleCalculateWithdrawCommission: CommandHandler<
-  FundsStreamType,
-  CalculateWithdrawCommissionCommand
-> = (stream, command) => {
+export const handleCalculateWithdrawCommission = (stream: CalculateWithdrawCommissionStream, command: CalculateWithdrawCommissionCommand) => {
   console.log(`Calculating withdraw commission for account ${command.account} and amount ${command.amount}...`);
   stream.appendEventWithdrawCommissionCalculated(
     new WithdrawCommissionCalculated(command)

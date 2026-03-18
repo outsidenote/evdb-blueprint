@@ -1,11 +1,20 @@
 import { test, describe } from "node:test";
+import { StreamFactoryBuilder } from "@eventualize/core/factories/StreamFactoryBuilder";
 import { WithdrawFunds } from "../command.js";
 import { handleWithdrawFunds } from "../commandHandler.js";
-import { FundsWithdrawn } from "../../../swimlanes/Funds/events/FundsWithdrawn.js";
-import { FundsWithdrawDeclined } from "../../../swimlanes/Funds/events/FundsWithdrawDeclined.js";
+import { FundsWithdrawn } from "../../../swimlanes/Funds/events/FundsWithdrawn/event.js";
+import { FundsWithdrawDeclined } from "../../../swimlanes/Funds/events/FundsWithdrawDeclined/event.js";
+import { FundsDepositApproved } from "../../../swimlanes/Funds/events/FundsDepositApproved/event.js";
 import { SliceTester } from "../../../../../types/SliceTester.js";
-import FundsStreamFactory from "../../../swimlanes/Funds/index.js";
-import { FundsDepositApproved } from "../../../swimlanes/Funds/events/FundsDepositApproved.js";
+import { handlers as accountBalanceHandlers } from "../../../swimlanes/Funds/views/AccountBalance/handlers.js";
+import { defaultState as accountBalanceDefaultState, viewName as accountBalanceViewName } from "../../../swimlanes/Funds/views/AccountBalance/state.js";
+
+const TestStreamFactory = new StreamFactoryBuilder("WithdrawalApprovalStream")
+  .withEventType(FundsDepositApproved)
+  .withEventType(FundsWithdrawn)
+  .withEventType(FundsWithdrawDeclined)
+  .withView(accountBalanceViewName, accountBalanceDefaultState, accountBalanceHandlers)
+  .build();
 
 describe("Withdraw Funds Slice - Unit Tests", () => {
   test("main flow - sufficient balance", async () => {
@@ -37,7 +46,7 @@ describe("Withdraw Funds Slice - Unit Tests", () => {
     ];
     return SliceTester.testCommandHandler(
       handleWithdrawFunds,
-      FundsStreamFactory,
+      TestStreamFactory,
       givenEvents,
       command,
       expectedEvents
@@ -73,7 +82,7 @@ describe("Withdraw Funds Slice - Unit Tests", () => {
     ];
     return SliceTester.testCommandHandler(
       handleWithdrawFunds,
-      FundsStreamFactory,
+      TestStreamFactory,
       givenEvents,
       command,
       expectedEvents

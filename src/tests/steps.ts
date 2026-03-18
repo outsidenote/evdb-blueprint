@@ -5,8 +5,8 @@ import type { FundsStreamType } from "../BusinessCapabilities/Funds/swimlanes/Fu
 import FundsStreamFactory from "../BusinessCapabilities/Funds/swimlanes/Funds/index.js";
 import { ApproveWithdrawal } from "../BusinessCapabilities/Funds/slices/ApproveWithdrawal/command.js";
 import { handleApproveWithdrawal } from "../BusinessCapabilities/Funds/slices/ApproveWithdrawal/commandHandler.js";
-import type { FundsWithdrawalApproved } from "../BusinessCapabilities/Funds/swimlanes/Funds/events/FundsWithdrawalApproved.js";
-import type { FundsWithdrawalDeclined } from "../BusinessCapabilities/Funds/swimlanes/Funds/events/FundsWithdrawalDeclined.js";
+import type { FundsWithdrawalApproved } from "../BusinessCapabilities/Funds/swimlanes/Funds/events/FundsWithdrawalApproved/event.js";
+import type { FundsWithdrawalDeclined } from "../BusinessCapabilities/Funds/swimlanes/Funds/events/FundsWithdrawalDeclined/event.js";
 import { IEvDbStorageAdapter } from "@eventualize/core/adapters/IEvDbStorageAdapter";
 
 export default class Steps {

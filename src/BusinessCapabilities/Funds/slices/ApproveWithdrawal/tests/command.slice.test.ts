@@ -1,11 +1,20 @@
 import { test, describe } from "node:test";
+import { StreamFactoryBuilder } from "@eventualize/core/factories/StreamFactoryBuilder";
 import { ApproveWithdrawal } from "../command.js";
 import { handleApproveWithdrawal } from "../commandHandler.js";
-import { FundsWithdrawalApproved } from "../../../swimlanes/Funds/events/FundsWithdrawalApproved.js";
-import { FundsWithdrawalDeclined } from "../../../swimlanes/Funds/events/FundsWithdrawalDeclined.js";
+import { FundsWithdrawalApproved } from "../../../swimlanes/Funds/events/FundsWithdrawalApproved/event.js";
+import { FundsWithdrawalDeclined } from "../../../swimlanes/Funds/events/FundsWithdrawalDeclined/event.js";
+import { FundsDepositApproved } from "../../../swimlanes/Funds/events/FundsDepositApproved/event.js";
 import { SliceTester } from "../../../../../types/SliceTester.js";
-import FundsStreamFactory from "../../../swimlanes/Funds/index.js";
-import { FundsDepositApproved } from "../../../swimlanes/Funds/events/FundsDepositApproved.js";
+import { handlers as sliceStateHandlers } from "../../../swimlanes/Funds/views/SliceStateApproveWithdrawal/handlers.js";
+import { defaultState as sliceStateDefaultState, viewName as sliceStateViewName } from "../../../swimlanes/Funds/views/SliceStateApproveWithdrawal/state.js";
+
+const TestStreamFactory = new StreamFactoryBuilder("WithdrawalApprovalStream")
+  .withEventType(FundsDepositApproved)
+  .withEventType(FundsWithdrawalApproved)
+  .withEventType(FundsWithdrawalDeclined)
+  .withView(sliceStateViewName, sliceStateDefaultState, sliceStateHandlers)
+  .build();
 
 describe("Withdrawal Approval Slice - Unit Tests", () => {
   test("main flow", async () => {
@@ -43,7 +52,7 @@ describe("Withdrawal Approval Slice - Unit Tests", () => {
     ]
     return SliceTester.testCommandHandler(
       handleApproveWithdrawal,
-      FundsStreamFactory,
+      TestStreamFactory,
       givenEvents,
       command,
       expectedEvents
@@ -60,7 +69,6 @@ describe("Withdrawal Approval Slice - Unit Tests", () => {
         transactionId: '0011'
       })
     ]
-
     const command = new ApproveWithdrawal({
       account: "123",
       amount: 100,
@@ -86,7 +94,7 @@ describe("Withdrawal Approval Slice - Unit Tests", () => {
     ]
     return SliceTester.testCommandHandler(
       handleApproveWithdrawal,
-      FundsStreamFactory,
+      TestStreamFactory,
       givenEvents,
       command,
       expectedEvents

@@ -1,17 +1,17 @@
 import { test, describe } from "node:test";
+import { StreamFactoryBuilder } from "@eventualize/core/factories/StreamFactoryBuilder";
 import { CalculateWithdrawCommissionCommand } from "../command.js";
 import { handleCalculateWithdrawCommission } from "../commandHandler.js";
-import { FundsWithdrawalApproved } from "../../../swimlanes/Funds/events/FundsWithdrawalApproved.js";
-import { FundsWithdrawalDeclined } from "../../../swimlanes/Funds/events/FundsWithdrawalDeclined.js";
+import { WithdrawCommissionCalculated } from "../../../swimlanes/Funds/events/WithdrawCommissionCalculated/event.js";
 import { SliceTester } from "../../../../../types/SliceTester.js";
-import FundsStreamFactory from "../../../swimlanes/Funds/index.js";
-import { FundsDepositApproved } from "../../../swimlanes/Funds/events/FundsDepositApproved.js";
-import IEvDbEventPayload from "@eventualize/types/events/IEvDbEventPayload";
-import { WithdrawCommissionCalculated } from "../../../swimlanes/Funds/events/WithdrawCommissionCalculated.js";
+
+const TestStreamFactory = new StreamFactoryBuilder("WithdrawalApprovalStream")
+  .withEventType(WithdrawCommissionCalculated)
+  .build();
 
 describe("Withdrawal Approval Slice - Unit Tests", () => {
   test("main flow", async () => {
-    const givenEvents: Array<WithdrawCommissionCalculated | FundsWithdrawalApproved | FundsWithdrawalDeclined | FundsDepositApproved> = []
+    const givenEvents: WithdrawCommissionCalculated[] = [];
     const command = new CalculateWithdrawCommissionCommand({
       account: "1234",
       amount: 20,
@@ -36,7 +36,7 @@ describe("Withdrawal Approval Slice - Unit Tests", () => {
     ]
     return SliceTester.testCommandHandler(
       handleCalculateWithdrawCommission,
-      FundsStreamFactory,
+      TestStreamFactory,
       givenEvents,
       command,
       expectedEvents

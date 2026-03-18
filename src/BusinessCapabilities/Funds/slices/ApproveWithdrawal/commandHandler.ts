@@ -1,8 +1,7 @@
-import type { CommandHandler } from "../../../../types/commandHandler.js";
 import type { ApproveWithdrawal } from "./command.js";
-import { FundsWithdrawalApproved } from "../../swimlanes/Funds/events/FundsWithdrawalApproved.js";
-import { FundsWithdrawalDeclined } from "../../swimlanes/Funds/events/FundsWithdrawalDeclined.js";
-import type { FundsStreamType } from "../../swimlanes/Funds/index.js";
+import { FundsWithdrawalApproved } from "../../swimlanes/Funds/events/FundsWithdrawalApproved/event.js";
+import { FundsWithdrawalDeclined } from "../../swimlanes/Funds/events/FundsWithdrawalDeclined/event.js";
+import type { ApproveWithdrawalStream } from "./streamContract.js";
 import { hasInsufficientEffectiveFunds } from "./gwts.js";
 
 /**
@@ -15,10 +14,7 @@ import { hasInsufficientEffectiveFunds } from "./gwts.js";
  * This function only appends events to the stream. It does NOT fetch,
  * store, or return anything — orchestration belongs to the CommandAdapter.
  */
-export const handleApproveWithdrawal: CommandHandler<
-  FundsStreamType,
-  ApproveWithdrawal
-> = (stream, command) => {
+export const handleApproveWithdrawal = (stream: ApproveWithdrawalStream, command: ApproveWithdrawal) => {
   const { balance } = stream.views.SliceStateApproveWithdrawal;
   if (hasInsufficientEffectiveFunds(balance, command)) {
     stream.appendEventFundsWithdrawalDeclined(

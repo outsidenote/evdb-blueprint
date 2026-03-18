@@ -1,6 +1,6 @@
 import type EvDbEvent from "@eventualize/types/events/EvDbEvent";
-import type { FundsWithdrawActionRecorded } from "../events/FundsWithdrawActionRecorded.js";
-import { createIdempotencyMessageFromEvent } from "../../../../../types/IdempotencyMessage.js";
+import type { FundsWithdrawActionRecorded } from "./event.js";
+import { createIdempotencyMessageFromEvent } from "../../../../../../types/IdempotencyMessage.js";
 
 export const fundsWithdrawActionRecordedMessages = (
   event: EvDbEvent,
