@@ -106,19 +106,33 @@ describe("Projection Router — Behaviour Tests", () => {
 
 
   describe("GET ?from=&to= (range search)", () => {
-    test("returns items between from and to inclusive", async () => {
+    test("default bounds [from, to) — inclusive start, exclusive end", async () => {
       await seedRow("a", { v: 1 });
       await seedRow("b", { v: 2 });
       await seedRow("c", { v: 3 });
       await seedRow("d", { v: 4 });
 
-      const res = await request(app).get(`/api/projections/${PROJECTION}?from=b&to=c`);
+      const res = await request(app).get(`/api/projections/${PROJECTION}?from=b&to=d`);
 
       assert.strictEqual(res.status, 200);
       assert.strictEqual(res.body.items.length, 2);
       assert.deepStrictEqual(
         res.body.items.map((r: { key: string }) => r.key),
         ["b", "c"],
+      );
+    });
+
+    test("toInclusive=true makes end inclusive", async () => {
+      await seedRow("a", { v: 1 });
+      await seedRow("b", { v: 2 });
+      await seedRow("c", { v: 3 });
+
+      const res = await request(app).get(`/api/projections/${PROJECTION}?from=a&to=c&toInclusive=true`);
+
+      assert.strictEqual(res.status, 200);
+      assert.deepStrictEqual(
+        res.body.items.map((r: { key: string }) => r.key),
+        ["a", "b", "c"],
       );
     });
 

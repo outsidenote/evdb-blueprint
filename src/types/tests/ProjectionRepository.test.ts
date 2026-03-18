@@ -2,7 +2,7 @@ import { test, describe, before, after, beforeEach } from "node:test";
 import * as assert from "node:assert";
 import { Pool } from "pg";
 import { TestDatabase } from "../../tests/harness/index.js";
-import { ProjectionRepository } from "../ProjectionRepository.js";
+import { ProjectionRepository, collectByKeys } from "../ProjectionRepository.js";
 
 /**
  * Integration tests for ProjectionRepository.
@@ -84,63 +84,133 @@ describe("ProjectionRepository", () => {
   // ── byKeys ──────────────────────────────────────────────────────────────
 
   describe("byKeys", () => {
-    test("returns projections ordered by key", async () => {
+    test("yields batch with results ordered by key", async () => {
       await seedRow(PROJECTION, "acct-3", { balance: 300 });
       await seedRow(PROJECTION, "acct-1", { balance: 100 });
       await seedRow(PROJECTION, "acct-2", { balance: 200 });
 
-      const results = await repository.byKeys(PROJECTION, ["acct-3", "acct-1", "acct-2"]);
+      const all = await collectByKeys(repository, PROJECTION, ["acct-3", "acct-1", "acct-2"]);
 
       assert.deepStrictEqual(
-        results.map((r) => r.key),
+        all.map((r) => r.key),
         ["acct-1", "acct-2", "acct-3"],
       );
     });
 
     test("omits missing keys without error", async () => {
       await seedRow(PROJECTION, "acct-1", { balance: 100 });
-      const results = await repository.byKeys(PROJECTION, ["acct-1", "acct-missing"]);
-      assert.strictEqual(results.length, 1);
-      assert.strictEqual(results[0].key, "acct-1");
+      const all = await collectByKeys(repository, PROJECTION, ["acct-1", "acct-missing"]);
+      assert.strictEqual(all.length, 1);
+      assert.strictEqual(all[0].key, "acct-1");
     });
 
-    test("returns empty array for empty keys input", async () => {
-      const results = await repository.byKeys(PROJECTION, []);
-      assert.deepStrictEqual(results, []);
-    });
-
-    test("throws when keys exceed MAX_KEYS", async () => {
-      const tooManyKeys = Array.from({ length: 101 }, (_, i) => `key-${i}`);
-      await assert.rejects(
-        () => repository.byKeys(PROJECTION, tooManyKeys),
-        { message: `byKeys supports at most ${ProjectionRepository.MAX_KEYS} keys` },
-      );
+    test("yields nothing for empty iterable", async () => {
+      const all = await collectByKeys(repository, PROJECTION, []);
+      assert.deepStrictEqual(all, []);
     });
 
     test("includes updatedAt in results", async () => {
       await seedRow(PROJECTION, "acct-1", { balance: 100 });
-      const results = await repository.byKeys(PROJECTION, ["acct-1"]);
-      assert.ok(results[0].updatedAt instanceof Date);
+      const all = await collectByKeys(repository, PROJECTION, ["acct-1"]);
+      assert.ok(all[0].updatedAt instanceof Date);
+    });
+
+    test("accepts a Set as input", async () => {
+      await seedRow(PROJECTION, "a", { v: 1 });
+      await seedRow(PROJECTION, "b", { v: 2 });
+
+      const all = await collectByKeys(repository, PROJECTION, new Set(["b", "a"]));
+      assert.strictEqual(all.length, 2);
+      assert.deepStrictEqual(all.map((r) => r.key), ["a", "b"]);
+    });
+
+    test("accepts a generator as input", async () => {
+      await seedRow(PROJECTION, "x", { v: 1 });
+      await seedRow(PROJECTION, "y", { v: 2 });
+
+      function* keyGen() {
+        yield "x";
+        yield "y";
+      }
+
+      const all = await collectByKeys(repository, PROJECTION, keyGen());
+      assert.strictEqual(all.length, 2);
+    });
+
+    test("batches large key sets across multiple queries", async () => {
+      // Seed BATCH_SIZE + 1 rows
+      const count = ProjectionRepository.BATCH_SIZE + 1;
+      for (let i = 0; i < count; i++) {
+        await seedRow(PROJECTION, `key-${String(i).padStart(4, "0")}`, { i });
+      }
+
+      const keys = Array.from({ length: count }, (_, i) => `key-${String(i).padStart(4, "0")}`);
+      const batches: number[] = [];
+      for await (const batch of repository.byKeys(PROJECTION, keys)) {
+        batches.push(batch.length);
+      }
+
+      assert.strictEqual(batches.length, 2);
+      assert.strictEqual(batches[0], ProjectionRepository.BATCH_SIZE);
+      assert.strictEqual(batches[1], 1);
     });
   });
 
   // ── betweenKeys ───────────────────────────────────────────────────────
 
   describe("betweenKeys", () => {
-    test("returns keys between from and to inclusive", async () => {
+    test("default bounds [from, to) — inclusive start, exclusive end", async () => {
       await seedRow(PROJECTION, "a", { v: 1 });
       await seedRow(PROJECTION, "b", { v: 2 });
       await seedRow(PROJECTION, "c", { v: 3 });
       await seedRow(PROJECTION, "d", { v: 4 });
 
-      const result = await repository.betweenKeys(PROJECTION, "b", "c");
+      const result = await repository.betweenKeys(PROJECTION, "b", "d");
 
-      assert.strictEqual(result.rows.length, 2);
       assert.deepStrictEqual(
         result.rows.map((r) => r.key),
         ["b", "c"],
       );
-      assert.strictEqual(result.hasMore, false);
+    });
+
+    test("both inclusive [from, to]", async () => {
+      await seedRow(PROJECTION, "a", { v: 1 });
+      await seedRow(PROJECTION, "b", { v: 2 });
+      await seedRow(PROJECTION, "c", { v: 3 });
+
+      const result = await repository.betweenKeys(PROJECTION, "a", "c", { toInclusive: true });
+
+      assert.deepStrictEqual(
+        result.rows.map((r) => r.key),
+        ["a", "b", "c"],
+      );
+    });
+
+    test("both exclusive (from, to)", async () => {
+      await seedRow(PROJECTION, "a", { v: 1 });
+      await seedRow(PROJECTION, "b", { v: 2 });
+      await seedRow(PROJECTION, "c", { v: 3 });
+      await seedRow(PROJECTION, "d", { v: 4 });
+
+      const result = await repository.betweenKeys(PROJECTION, "a", "d", { fromInclusive: false, toInclusive: false });
+
+      assert.deepStrictEqual(
+        result.rows.map((r) => r.key),
+        ["b", "c"],
+      );
+    });
+
+    test("exclusive start, inclusive end (from, to]", async () => {
+      await seedRow(PROJECTION, "a", { v: 1 });
+      await seedRow(PROJECTION, "b", { v: 2 });
+      await seedRow(PROJECTION, "c", { v: 3 });
+
+      const result = await repository.betweenKeys(PROJECTION, "a", "c", { fromInclusive: false, toInclusive: true });
+
+      assert.deepStrictEqual(
+        result.rows.map((r) => r.key),
+        ["b", "c"],
+      );
     });
 
     test("returns results ordered by key", async () => {
@@ -148,7 +218,7 @@ describe("ProjectionRepository", () => {
       await seedRow(PROJECTION, "a", { v: 1 });
       await seedRow(PROJECTION, "m", { v: 2 });
 
-      const result = await repository.betweenKeys(PROJECTION, "a", "z");
+      const result = await repository.betweenKeys(PROJECTION, "a", "z", { toInclusive: true });
 
       assert.deepStrictEqual(
         result.rows.map((r) => r.key),
@@ -176,6 +246,18 @@ describe("ProjectionRepository", () => {
       assert.strictEqual(page2.hasMore, false);
       assert.deepStrictEqual(
         page2.rows.map((r) => r.key),
+        ["b", "c"],
+      );
+    });
+
+    test("afterKey respects toInclusive", async () => {
+      await seedRow(PROJECTION, "a", { v: 1 });
+      await seedRow(PROJECTION, "b", { v: 2 });
+      await seedRow(PROJECTION, "c", { v: 3 });
+
+      const result = await repository.betweenKeys(PROJECTION, "a", "c", { afterKey: "a", toInclusive: true });
+      assert.deepStrictEqual(
+        result.rows.map((r) => r.key),
         ["b", "c"],
       );
     });

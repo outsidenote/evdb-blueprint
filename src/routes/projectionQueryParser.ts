@@ -11,7 +11,7 @@
 export type ProjectionQuery =
   | { readonly mode: "byKey"; readonly projectionName: string; readonly key: string }
   | { readonly mode: "byKeys"; readonly projectionName: string; readonly keys: string[] }
-  | { readonly mode: "betweenKeys"; readonly projectionName: string; readonly from: string; readonly to: string; readonly limit: number; readonly afterKey?: string };
+  | { readonly mode: "betweenKeys"; readonly projectionName: string; readonly from: string; readonly to: string; readonly limit: number; readonly afterKey?: string; readonly fromInclusive: boolean; readonly toInclusive: boolean };
 
 
 /**
@@ -27,7 +27,8 @@ export class QueryValidationError extends Error {
 
 const QUERY_MODE_PARAMS = ["key", "keys", "from", "to"] as const;
 const PAGINATION_PARAMS = ["afterKey", "limit"] as const;
-const ALL_KNOWN_PARAMS = [...QUERY_MODE_PARAMS, ...PAGINATION_PARAMS] as const;
+const RANGE_OPTION_PARAMS = ["fromInclusive", "toInclusive"] as const;
+const ALL_KNOWN_PARAMS = [...QUERY_MODE_PARAMS, ...PAGINATION_PARAMS, ...RANGE_OPTION_PARAMS] as const;
 const DEFAULT_LIMIT = 100;
 const MAX_LIMIT = 1000;
 
@@ -63,7 +64,9 @@ export function parseProjectionQuery(
     case "betweenKeys": {
       const from = parseRequiredString(rawParams, "from");
       const to = parseRequiredString(rawParams, "to");
-      return { mode: "betweenKeys", projectionName, from, to, limit, afterKey };
+      const fromInclusive = parseOptionalBoolean(rawParams, "fromInclusive") ?? true;
+      const toInclusive = parseOptionalBoolean(rawParams, "toInclusive") ?? false;
+      return { mode: "betweenKeys", projectionName, from, to, limit, afterKey, fromInclusive, toInclusive };
     }
   }
 }
@@ -119,6 +122,14 @@ function parseOptionalString(params: Record<string, unknown>, name: string): str
     throw new QueryValidationError(`'${name}' must be a non-empty string when provided`);
   }
   return value.trim();
+}
+
+function parseOptionalBoolean(params: Record<string, unknown>, name: string): boolean | undefined {
+  const value = params[name];
+  if (value == null) return undefined;
+  if (value === "true") return true;
+  if (value === "false") return false;
+  throw new QueryValidationError(`'${name}' must be 'true' or 'false'`);
 }
 
 function parseKeys(params: Record<string, unknown>): string[] {

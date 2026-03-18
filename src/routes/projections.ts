@@ -1,5 +1,5 @@
 import { Router, type Response } from "express";
-import type { IProjectionRepository, ProjectionRow } from "../types/ProjectionRepository.js";
+import { collectByKeys, type IProjectionRepository, type ProjectionRow } from "../types/ProjectionRepository.js";
 import {
   parseProjectionQuery,
   nextAfterKey,
@@ -88,7 +88,7 @@ export function createProjectionRouter(
           return;
         }
         case "byKeys": {
-          const rows = await repository.byKeys(query.projectionName, query.keys);
+          const rows = await collectByKeys(repository, query.projectionName, query.keys);
           respondItems(res, rows);
           return;
         }
@@ -96,6 +96,8 @@ export function createProjectionRouter(
           const page = await repository.betweenKeys(query.projectionName, query.from, query.to, {
             limit: query.limit,
             afterKey: query.afterKey,
+            fromInclusive: query.fromInclusive,
+            toInclusive: query.toInclusive,
           });
           respondPage(res, page.rows, page.hasMore);
           return;
