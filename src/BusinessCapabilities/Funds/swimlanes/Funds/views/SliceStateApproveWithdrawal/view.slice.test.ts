@@ -1,4 +1,4 @@
-import { ViewSliceTester, type ViewConfig } from "../../../../../../types/ViewSliceTester.js";
+import { ViewSliceTester, type ViewConfig } from "../../../../../../types/abstractions/slices/ViewSliceTester.js";
 import { handlers } from "./handlers.js";
 import { type SliceStateApprovalWithdrawalViewState, viewName, defaultState } from "./state.js";
 

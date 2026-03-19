@@ -2,7 +2,7 @@ import { test, describe } from "node:test";
 import { RecordFundWithdrawAction } from "../command.js";
 import { handleRecordFundWithdrawAction } from "../commandHandler.js";
 import { FundsWithdrawActionRecorded } from "../../../swimlanes/FraudAnalysis/events/FundsWithdrawActionRecorded.js";
-import { SliceTester } from "../../../../../types/SliceTester.js";
+import { SliceTester } from "../../../../../types/abstractions/slices/SliceTester.js";
 import FraudAnalysisStreamFactory from "../../../swimlanes/FraudAnalysis/index.js";
 
 describe("Record Fund Withdraw Action Slice - Unit Tests", () => {

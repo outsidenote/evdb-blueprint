@@ -3,7 +3,7 @@ import { WithdrawFunds } from "../command.js";
 import { handleWithdrawFunds } from "../commandHandler.js";
 import { FundsWithdrawn } from "../../../swimlanes/Funds/events/FundsWithdrawn.js";
 import { FundsWithdrawDeclined } from "../../../swimlanes/Funds/events/FundsWithdrawDeclined.js";
-import { SliceTester } from "../../../../../types/SliceTester.js";
+import { SliceTester } from "../../../../../types/abstractions/slices/SliceTester.js";
 import FundsStreamFactory from "../../../swimlanes/Funds/index.js";
 import { FundsDepositApproved } from "../../../swimlanes/Funds/events/FundsDepositApproved.js";
 

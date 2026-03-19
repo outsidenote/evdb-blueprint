@@ -1,10 +1,10 @@
 import * as assert from "node:assert";
-import { CommandHandler } from "./commandHandler.js";
+import { CommandHandler } from "../commands/commandHandler.js";
 import IEvDbEventPayload from "@eventualize/types/events/IEvDbEventPayload";
 import { EvDbView } from "@eventualize/core/view/EvDbView";
 import { StreamWithEventMethods } from "@eventualize/core/factories/EvDbStreamFactory";
 import { EvDbStreamFactory } from "@eventualize/core/factories/EvDbStreamFactory";
-import StorageAdapterStub from "../tests/StorageAdapterStub.js";
+import StorageAdapterStub from "../../../tests/StorageAdapterStub.js";
 import EvDbStream from "@eventualize/core/store/EvDbStream";
 
 export class SliceTester {
