@@ -1,9 +1,9 @@
 import type { Request, Response } from "express";
 import { randomUUID } from "node:crypto";
-import { ApproveWithdrawal } from "../../../slices/ApproveWithdrawal/command.js";
-import { IEvDbStorageAdapter } from "@eventualize/core/adapters/IEvDbStorageAdapter";
+import type { IEvDbStorageAdapter } from "@eventualize/core/adapters/IEvDbStorageAdapter";
 import { createCalculateWithdrawCommissionAdapter } from "../../../slices/CalculateWithdrawCommission/adapter.js";
-import { enrich, EnrichmentRequest } from "../enrichment.js";
+import type { EnrichmentRequest } from "../enrichment.js";
+import { enrich } from "../enrichment.js";
 
 
 

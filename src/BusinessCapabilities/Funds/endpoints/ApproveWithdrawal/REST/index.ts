@@ -2,7 +2,7 @@ import type { Request, Response } from "express";
 import { randomUUID } from "node:crypto";
 import { ApproveWithdrawal } from "../../../slices/ApproveWithdrawal/command.js";
 import { createApproveWithdrawalAdapter } from "../../../slices/ApproveWithdrawal/adapter.js";
-import { IEvDbStorageAdapter } from "@eventualize/core/adapters/IEvDbStorageAdapter";
+import type { IEvDbStorageAdapter } from "@eventualize/core/adapters/IEvDbStorageAdapter";
 
 
 

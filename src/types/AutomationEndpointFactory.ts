@@ -1,6 +1,6 @@
-import { Kafka } from "kafkajs";
-import { PgBoss } from "pg-boss";
-import { PgBossEndpointConfig } from "./PgBossEndpointFactory.js";
+import type { Kafka } from "kafkajs";
+import type { PgBoss } from "pg-boss";
+import type { PgBossEndpointConfig } from "./PgBossEndpointFactory.js";
 import { launchKafkaConsumer } from "./kafkaConsumerUtils.js";
 
 export interface AutomationEndpointConfig {

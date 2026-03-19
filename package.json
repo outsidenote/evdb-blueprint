@@ -17,7 +17,9 @@
     "test:integration-outbox": "node --import tsx --test src/tests/integration-outbox.test.ts",
     "test:integration-cdc": "node --import tsx --test src/tests/integration-cdc.test.ts",
     "test": "node --import tsx --test 'src/**/*.test.ts'",
-    "lint": "eslint src"
+    "lint": "eslint src",
+    "lint:fix": "eslint src --fix",
+    "prebuild": "npm run lint:fix"
   },
   "dependencies": {
     "@eventualize/core": "^4.1.0",

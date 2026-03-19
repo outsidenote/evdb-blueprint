@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { createApprovalWithdrawalRestAdapter } from "../BusinessCapabilities/Funds/endpoints/ApproveWithdrawal/REST/index.js";
-import { IEvDbStorageAdapter } from "@eventualize/core/adapters/IEvDbStorageAdapter";
+import type { IEvDbStorageAdapter } from "@eventualize/core/adapters/IEvDbStorageAdapter";
 
 
 export function createWithdrawalRouter(storageAdapter: IEvDbStorageAdapter): Router {

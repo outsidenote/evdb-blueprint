@@ -1,4 +1,4 @@
-import EvDbEvent from "@eventualize/types/events/EvDbEvent";
+import type EvDbEvent from "@eventualize/types/events/EvDbEvent";
 import EvDbMessage from "@eventualize/types/messages/EvDbMessage";
 
 /**

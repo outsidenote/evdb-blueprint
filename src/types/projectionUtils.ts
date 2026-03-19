@@ -1,4 +1,4 @@
-import { Pool } from "pg";
+import type { Pool } from "pg";
 import { type ProjectionConfig, type SqlStatement, type HandlerMeta, ProjectionModeType } from "./ProjectionFactory.js";
 
 const IDEMPOTENCY_INSERT_SQL = `

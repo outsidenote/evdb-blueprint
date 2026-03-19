@@ -1,6 +1,6 @@
-import { PgBoss } from "pg-boss";
-import { Kafka } from "kafkajs";
-import pg from "pg";
+import type { PgBoss } from "pg-boss";
+import type { Kafka } from "kafkajs";
+import type pg from "pg";
 import { AutomationEndpointFactory } from "./AutomationEndpointFactory.js";
 
 export interface PgBossEndpointContext {

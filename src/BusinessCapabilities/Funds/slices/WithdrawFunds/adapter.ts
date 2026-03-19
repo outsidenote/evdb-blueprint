@@ -3,7 +3,7 @@ import { handleWithdrawFunds } from "./commandHandler.js";
 import { CommandHandlerOrchestratorFactory } from "../../../../types/CommandHandlerOrchestratorFactory.js";
 import type { CommandHandlerOrchestrator } from "../../../../types/commandHandler.js";
 import FundsStreamFactory from "../../swimlanes/Funds/index.js";
-import { IEvDbStorageAdapter } from "@eventualize/core/adapters/IEvDbStorageAdapter";
+import type { IEvDbStorageAdapter } from "@eventualize/core/adapters/IEvDbStorageAdapter";
 
 /**
  * Creates the CommandAdapter for the WithdrawFunds slice.

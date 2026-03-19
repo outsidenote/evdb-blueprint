@@ -1,5 +1,5 @@
 import { type Kafka } from "kafkajs";
-import { Pool } from "pg";
+import type { Pool } from "pg";
 import { launchKafkaConsumer, type EventMeta } from "./kafkaConsumerUtils.js";
 import { applyProjectionEvent } from "./projectionUtils.js";
 
