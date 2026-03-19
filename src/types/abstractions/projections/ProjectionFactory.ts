@@ -1,6 +1,6 @@
 import { type Kafka } from "kafkajs";
-import type { Pool } from "pg";
-import { launchKafkaConsumer, type EventMeta } from "./kafkaConsumerUtils.js";
+import { Pool } from "pg";
+import { launchKafkaConsumer, type EventMeta } from "../endpoints/kafkaConsumerUtils.js";
 import { applyProjectionEvent } from "./projectionUtils.js";
 
 /**

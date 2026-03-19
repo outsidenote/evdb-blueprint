@@ -1,9 +1,9 @@
 import { test, describe } from "node:test";
 import { CalculateWithdrawCommissionCommand } from "../command.js";
 import { handleCalculateWithdrawCommission } from "../commandHandler.js";
-import type { FundsWithdrawalApproved } from "../../../swimlanes/Funds/events/FundsWithdrawalApproved.js";
-import type { FundsWithdrawalDeclined } from "../../../swimlanes/Funds/events/FundsWithdrawalDeclined.js";
-import { SliceTester } from "../../../../../types/SliceTester.js";
+import { FundsWithdrawalApproved } from "../../../swimlanes/Funds/events/FundsWithdrawalApproved.js";
+import { FundsWithdrawalDeclined } from "../../../swimlanes/Funds/events/FundsWithdrawalDeclined.js";
+import { SliceTester } from "../../../../../types/abstractions/slices/SliceTester.js";
 import FundsStreamFactory from "../../../swimlanes/Funds/index.js";
 import type { FundsDepositApproved } from "../../../swimlanes/Funds/events/FundsDepositApproved.js";
 import { WithdrawCommissionCalculated } from "../../../swimlanes/Funds/events/WithdrawCommissionCalculated.js";
