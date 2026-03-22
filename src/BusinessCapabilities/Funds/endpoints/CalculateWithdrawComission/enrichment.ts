@@ -1,4 +1,4 @@
-import { CalculateWithdrawCommissionCommand } from "../../slices/CalculateWithdrawCommission/command.js";
+import type { CalculateWithdrawCommissionCommand } from "../../slices/CalculateWithdrawCommission/command.js";
 
 export interface EnrichmentRequest {
     readonly account: string;
@@ -14,7 +14,9 @@ export interface EnrichmentRequest {
 
 export const enrich = (request: EnrichmentRequest): CalculateWithdrawCommissionCommand => {
     const commission = request.amount * 0.01; // Example commission calculation logic
-    return new CalculateWithdrawCommissionCommand(
-        Object.assign({}, request, { commission })
-    );
+    return {
+        commandType: "CalculateWithdrawCommission",
+        ...request,
+        commission,
+    };
 }

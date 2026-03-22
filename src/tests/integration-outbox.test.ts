@@ -3,7 +3,7 @@ import * as assert from "node:assert";
 import { randomUUID } from "node:crypto";
 import { TestDatabase } from "./harness/index.js";
 import { createApproveWithdrawalAdapter } from "../BusinessCapabilities/Funds/slices/ApproveWithdrawal/adapter.js";
-import { ApproveWithdrawal } from "../BusinessCapabilities/Funds/slices/ApproveWithdrawal/command.js";
+import type { ApproveWithdrawal } from "../BusinessCapabilities/Funds/slices/ApproveWithdrawal/command.js";
 import { FundsDepositApproved } from "../BusinessCapabilities/Funds/swimlanes/Funds/events/FundsDepositApproved.js";
 import FundsStreamFactory from "../BusinessCapabilities/Funds/swimlanes/Funds/index.js";
 import { QUEUE_NAME } from "../BusinessCapabilities/Funds/endpoints/CalculateWithdrawComission/pg-boss/index.js";
@@ -12,7 +12,8 @@ import EvDbPrismaStorageAdapter from "@eventualize/relational-storage-adapter/Ev
 import type { IEvDbStorageAdapter } from "@eventualize/core/adapters/IEvDbStorageAdapter";
 
 function makeCommand(overrides: Partial<ApproveWithdrawal> = {}): ApproveWithdrawal {
-  return new ApproveWithdrawal({
+  return {
+    commandType: "ApproveWithdrawal",
     account: overrides.account ?? `outbox-test-${randomUUID()}`,
     amount: overrides.amount ?? 100,
     currency: overrides.currency ?? "USD",
@@ -22,7 +23,7 @@ function makeCommand(overrides: Partial<ApproveWithdrawal> = {}): ApproveWithdra
     transactionId: overrides.transactionId ?? randomUUID(),
     approvalDate: overrides.approvalDate ?? new Date(),
     transactionTime: overrides.transactionTime ?? new Date(),
-  });
+  };
 }
 
 /**

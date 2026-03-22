@@ -1,5 +1,5 @@
 import { test, describe } from "node:test";
-import { CalculateWithdrawCommissionCommand } from "../command.js";
+import type { CalculateWithdrawCommissionCommand } from "../command.js";
 import { handleCalculateWithdrawCommission } from "../commandHandler.js";
 import type { FundsWithdrawalApproved } from "../../../swimlanes/Funds/events/FundsWithdrawalApproved.js";
 import type { FundsWithdrawalDeclined } from "../../../swimlanes/Funds/events/FundsWithdrawalDeclined.js";
@@ -11,7 +11,8 @@ import { WithdrawCommissionCalculated } from "../../../swimlanes/Funds/events/Wi
 describe("Withdrawal Approval Slice - Unit Tests", () => {
   test("main flow", async () => {
     const givenEvents: Array<WithdrawCommissionCalculated | FundsWithdrawalApproved | FundsWithdrawalDeclined | FundsDepositApproved> = []
-    const command = new CalculateWithdrawCommissionCommand({
+    const command: CalculateWithdrawCommissionCommand = {
+      commandType: "CalculateWithdrawCommission",
       account: "1234",
       amount: 20,
       commission: 0.20,
@@ -20,7 +21,7 @@ describe("Withdrawal Approval Slice - Unit Tests", () => {
       source: "ATM",
       transactionId: "0011",
       transactionTime: new Date("2025-01-01T11:00:00Z"),
-    });
+    };
     const expectedEvents = [
       new WithdrawCommissionCalculated({
         account: '1234',

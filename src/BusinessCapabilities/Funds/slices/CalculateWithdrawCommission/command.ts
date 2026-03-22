@@ -1,4 +1,7 @@
-export interface CalculateWithdrawCommissionProps {
+import type { ICommand } from "../../../../types/abstractions/commands/ICommand.js";
+
+export interface CalculateWithdrawCommissionCommand extends ICommand {
+  readonly commandType: "CalculateWithdrawCommission";
   readonly account: string;
   readonly amount: number;
   readonly commission: number;
@@ -7,28 +10,4 @@ export interface CalculateWithdrawCommissionProps {
   readonly source: string;
   readonly transactionId: string;
   readonly transactionTime: Date;
-}
-
-export class CalculateWithdrawCommissionCommand {
-  readonly commandType = "CalculateWithdrawCommission" as const;
-
-  readonly account: string;
-  readonly amount: number;
-  readonly commission: number;
-  readonly currency: string;
-  readonly session: string;
-  readonly source: string;
-  readonly transactionId: string;
-  readonly transactionTime: Date;
-
-  constructor(props: CalculateWithdrawCommissionProps) {
-    this.account = props.account;
-    this.amount = props.amount;
-    this.commission = props.commission;
-    this.currency = props.currency;
-    this.session = props.session;
-    this.source = props.source;
-    this.transactionId = props.transactionId;
-    this.transactionTime = props.transactionTime;
-  }
 }

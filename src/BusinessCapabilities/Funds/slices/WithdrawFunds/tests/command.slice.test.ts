@@ -1,5 +1,5 @@
 import { test, describe } from "node:test";
-import { WithdrawFunds } from "../command.js";
+import type { WithdrawFunds } from "../command.js";
 import { handleWithdrawFunds } from "../commandHandler.js";
 import { FundsWithdrawn } from "../../../swimlanes/Funds/events/FundsWithdrawn.js";
 import { FundsWithdrawDeclined } from "../../../swimlanes/Funds/events/FundsWithdrawDeclined.js";
@@ -19,13 +19,14 @@ describe("Withdraw Funds Slice - Unit Tests", () => {
         transactionId: '0011'
       })
     ];
-    const command = new WithdrawFunds({
+    const command: WithdrawFunds = {
+      commandType: "WithdrawFunds",
       account: "1234",
       amount: 21,
       commission: 0.21,
       currency: "USD",
       transactionId: "0011",
-    });
+    };
     const expectedEvents = [
       new FundsWithdrawn({
         account: '1234',
@@ -55,13 +56,14 @@ describe("Withdraw Funds Slice - Unit Tests", () => {
         transactionId: '0011'
       })
     ];
-    const command = new WithdrawFunds({
+    const command: WithdrawFunds = {
+      commandType: "WithdrawFunds",
       account: "1234",
       amount: 100,
       commission: 1.00,
       currency: "USD",
       transactionId: "0011",
-    });
+    };
     const expectedEvents = [
       new FundsWithdrawDeclined({
         account: '1234',

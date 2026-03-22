@@ -1,6 +1,5 @@
 import type { Request, Response } from "express";
 import { randomUUID } from "node:crypto";
-import { ApproveWithdrawal } from "../../../slices/ApproveWithdrawal/command.js";
 import { createApproveWithdrawalAdapter } from "../../../slices/ApproveWithdrawal/adapter.js";
 import type { IEvDbStorageAdapter } from "@eventualize/core/adapters/IEvDbStorageAdapter";
 
@@ -28,7 +27,8 @@ export const createApprovalWithdrawalRestAdapter = (storageAdapter: IEvDbStorage
                 return;
             }
 
-            const command = new ApproveWithdrawal({
+            const command = {
+                commandType: "ApproveWithdrawal" as const,
                 account,
                 amount,
                 approvalDate: approvalDate ? new Date(approvalDate) : new Date(),
@@ -38,7 +38,7 @@ export const createApprovalWithdrawalRestAdapter = (storageAdapter: IEvDbStorage
                 payer: payer ?? "unknown",
                 transactionId: transactionId ?? randomUUID(),
                 transactionTime: transactionTime ? new Date(transactionTime) : new Date(),
-            });
+            };
 
             const result = await approveWithdrawal(command);
 

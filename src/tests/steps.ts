@@ -3,7 +3,7 @@ import * as assert from "node:assert";
 import StorageAdapterStub from "./StorageAdapterStub.js";
 import type { FundsStreamType } from "../BusinessCapabilities/Funds/swimlanes/Funds/index.js";
 import FundsStreamFactory from "../BusinessCapabilities/Funds/swimlanes/Funds/index.js";
-import { ApproveWithdrawal } from "../BusinessCapabilities/Funds/slices/ApproveWithdrawal/command.js";
+import type { ApproveWithdrawal } from "../BusinessCapabilities/Funds/slices/ApproveWithdrawal/command.js";
 import { handleApproveWithdrawal } from "../BusinessCapabilities/Funds/slices/ApproveWithdrawal/commandHandler.js";
 import type { FundsWithdrawalApproved } from "../BusinessCapabilities/Funds/swimlanes/Funds/events/FundsWithdrawalApproved.js";
 import type { FundsWithdrawalDeclined } from "../BusinessCapabilities/Funds/swimlanes/Funds/events/FundsWithdrawalDeclined.js";
@@ -26,7 +26,8 @@ export default class Steps {
   // ──────────────────────────────────────────────
 
   public static approveWithdrawalWithSufficientFunds(stream: FundsStreamType): void {
-    const command = new ApproveWithdrawal({
+    const command: ApproveWithdrawal = {
+      commandType: "ApproveWithdrawal",
       account: "1234",
       amount: 20,
       approvalDate: new Date("2025-01-01T11:00:00Z"),
@@ -36,12 +37,13 @@ export default class Steps {
       payer: "John Doe",
       transactionId: "0011",
       transactionTime: new Date("2025-01-01T11:00:00Z"),
-    });
+    };
     handleApproveWithdrawal(stream, command);
   }
 
   public static approveWithdrawalWithInsufficientFunds(stream: FundsStreamType): void {
-    const command = new ApproveWithdrawal({
+    const command: ApproveWithdrawal = {
+      commandType: "ApproveWithdrawal",
       account: "1234",
       amount: 20,
       approvalDate: new Date("2025-01-01T11:00:00Z"),
@@ -51,7 +53,7 @@ export default class Steps {
       payer: "John Doe",
       transactionId: "0011",
       transactionTime: new Date("2025-01-01T11:00:00Z"),
-    });
+    };
     handleApproveWithdrawal(stream, command);
   }
 
