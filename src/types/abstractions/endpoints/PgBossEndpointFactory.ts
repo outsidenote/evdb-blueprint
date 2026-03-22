@@ -38,13 +38,23 @@ async function isAlreadyProcessed(pool: pg.Pool, idempotencyKey: string): Promis
  */
 export type PgBossDeliverySource = "event" | "message";
 
+export interface PgBossEndpointConfigBase {
+  readonly eventType: string;
+  readonly handlerName: string;
+  readonly source: PgBossDeliverySource;
+  readonly kafkaTopic?: string;
+  readonly queueName: string;
+  readonly handler: (payload: Record<string, unknown>, context: PgBossEndpointContext) => Promise<void>;
+  readonly getIdempotencyKey: (message: Record<string, unknown>, context: PgBossEndpointContext) => string;
+}
+
 export class PgBossEndpointConfig<TPayload = Record<string, unknown>> {
   readonly eventType: string;
   readonly handlerName: string;
   readonly source: PgBossDeliverySource;
   readonly kafkaTopic?: string;
-  readonly handler: (payload: TPayload, context: PgBossEndpointContext) => Promise<void>;
-  readonly getIdempotencyKey: (message: TPayload, context: PgBossEndpointContext) => string;
+  readonly handler: (payload: Record<string, unknown>, context: PgBossEndpointContext) => Promise<void>;
+  readonly getIdempotencyKey: (message: Record<string, unknown>, context: PgBossEndpointContext) => string;
 
   constructor(config: {
     eventType: string;
@@ -58,8 +68,8 @@ export class PgBossEndpointConfig<TPayload = Record<string, unknown>> {
     this.handlerName = config.handlerName;
     this.source = config.source;
     this.kafkaTopic = config.kafkaTopic;
-    this.handler = config.handler;
-    this.getIdempotencyKey = config.getIdempotencyKey;
+    this.handler = config.handler as (payload: Record<string, unknown>, context: PgBossEndpointContext) => Promise<void>;
+    this.getIdempotencyKey = config.getIdempotencyKey as (message: Record<string, unknown>, context: PgBossEndpointContext) => string;
   }
 
   get queueName(): string {
@@ -116,9 +126,7 @@ export class PgBossEndpointFactory {
    */
   static async startAll(
     boss: PgBoss,
-    // todo: [bnaya-eshet 2026-03-22] consider a more specific type for endpoints, e.g. a union of all possible endpoint types
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- heterogeneous payload types require type erasure
-    endpoints: PgBossEndpointConfig<any>[],
+    endpoints: PgBossEndpointConfigBase[],
     pool: pg.Pool,
     kafka?: Kafka,
   ): Promise<PgBossEndpointFactory> {

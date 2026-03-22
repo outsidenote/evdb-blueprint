@@ -1,15 +1,13 @@
 import type { Kafka } from "kafkajs";
 import type { PgBoss } from "pg-boss";
-import type { PgBossEndpointConfig } from "./PgBossEndpointFactory.js";
+import type { PgBossEndpointConfigBase } from "./PgBossEndpointFactory.js";
 import { launchKafkaConsumer } from "./kafkaConsumerUtils.js";
 
 export interface AutomationEndpointConfig {
   /** The Kafka topic to consume from (e.g. "events.FundsWithdrawn"). */
   readonly topic: string;
   /** The pg-boss endpoint config that will process the message. */
-  // todo: [bnaya-eshet 2026-03-22] consider merging these two configs into one higher-level abstraction, since pgBossEndpoint is always required and the groupId is just a detail of how we implement the consumer  
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- heterogeneous payload types require type erasure
-  readonly pgBossEndpoint: PgBossEndpointConfig<any>;
+  readonly pgBossEndpoint: PgBossEndpointConfigBase;
   /** Consumer group ID. Defaults to the pg-boss queue name. */
   readonly groupId?: string;
 }
