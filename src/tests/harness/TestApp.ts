@@ -7,6 +7,8 @@ import { PgBossEndpointFactory } from "../../types/abstractions/endpoints/PgBoss
 import type { TestDatabase } from "./TestDatabase.js";
 
 export interface TestAppOptions {
+  // TODO: [bnaya-eshet 2026-03-22] consider a more specific type for workers, e.g. a union of all possible worker types
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- heterogeneous payload types require type erasure
   workers: (storageAdapter: IEvDbStorageAdapter) => PgBossEndpointConfig<any>[];
 }
 

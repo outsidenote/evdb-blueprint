@@ -7,6 +7,8 @@ import EvDbStreamCursor from "@eventualize/types/stream/EvDbStreamCursor";
 export type ViewConfig<TState> = {
   name: string;
   defaultState: TState;
+  // todo: [bnaya-eshet 2026-03-22] consider a more specific type for handlers, e.g. a union of all possible event types and their corresponding payload types
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- handlers have heterogeneous event types
   handlers: Record<string, (state: TState, event: any, metadata: IEvDbEventMetadata) => TState>;
 };
 

@@ -116,6 +116,8 @@ export class PgBossEndpointFactory {
    */
   static async startAll(
     boss: PgBoss,
+    // todo: [bnaya-eshet 2026-03-22] consider a more specific type for endpoints, e.g. a union of all possible endpoint types
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- heterogeneous payload types require type erasure
     endpoints: PgBossEndpointConfig<any>[],
     pool: pg.Pool,
     kafka?: Kafka,
