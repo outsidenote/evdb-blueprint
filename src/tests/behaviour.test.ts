@@ -2,7 +2,7 @@ import * as assert from "node:assert";
 import { test, describe } from "node:test";
 import express from "express";
 import request from "supertest";
-import { createWithdrawalRouter } from "../routes/withdrawal.js";
+import { createFundsRouter } from "../BusinessCapabilities/Funds/endpoints/routes.js";
 import InMemoryStorageAdapter from "./InMemoryStorageAdapter.js";
 
 function createTestApp() {
@@ -10,7 +10,7 @@ function createTestApp() {
 
   const app = express();
   app.use(express.json());
-  app.use("/api/withdrawals", createWithdrawalRouter(adapter));
+  app.use("/api/funds", createFundsRouter(adapter));
   return app;
 }
 
@@ -18,12 +18,12 @@ describe("Withdrawal API — Behaviour Tests", () => {
   // ──────────────────────────────────────────────────────────────────
   // Scenario 1: Approve withdrawal with sufficient funds
   // ──────────────────────────────────────────────────────────────────
-  test("POST /approve with sufficient funds returns FundsWithdrawalApproved", async (t) => {
+  test("POST /approve-withdrawal with sufficient funds returns FundsWithdrawalApproved", async (t) => {
     const app = createTestApp();
 
-    await t.test("When: POST /approve with currentBalance=200, amount=20", async () => {
+    await t.test("When: POST /approve-withdrawal with currentBalance=200, amount=20", async () => {
       const res = await request(app)
-        .post("/api/withdrawals/approve")
+        .post("/api/funds/approve-withdrawal")
         .send({
           account: "acc-001",
           amount: 20,
@@ -45,12 +45,12 @@ describe("Withdrawal API — Behaviour Tests", () => {
   // ──────────────────────────────────────────────────────────────────
   // Scenario 2: Decline withdrawal with insufficient funds
   // ──────────────────────────────────────────────────────────────────
-  test("POST /approve with insufficient funds returns FundsWithdrawalDeclined", async (t) => {
+  test("POST /approve-withdrawal with insufficient funds returns FundsWithdrawalDeclined", async (t) => {
     const app = createTestApp();
 
-    await t.test("When: POST /approve with currentBalance=10, amount=20", async () => {
+    await t.test("When: POST /approve-withdrawal with currentBalance=10, amount=20", async () => {
       const res = await request(app)
-        .post("/api/withdrawals/approve")
+        .post("/api/funds/approve-withdrawal")
         .send({
           account: "acc-002",
           amount: 20,
@@ -69,12 +69,12 @@ describe("Withdrawal API — Behaviour Tests", () => {
   // ──────────────────────────────────────────────────────────────────
   // Scenario 3: Missing required fields returns 400
   // ──────────────────────────────────────────────────────────────────
-  test("POST /approve with missing required fields returns 400", async (t) => {
+  test("POST /approve-withdrawal with missing required fields returns 400", async (t) => {
     const app = createTestApp();
 
-    await t.test("When: POST /approve without account", async () => {
+    await t.test("When: POST /approve-withdrawal without account", async () => {
       const res = await request(app)
-        .post("/api/withdrawals/approve")
+        .post("/api/funds/approve-withdrawal")
         .send({ amount: 20, currentBalance: 200 });
 
       assert.strictEqual(res.status, 400);

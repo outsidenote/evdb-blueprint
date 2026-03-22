@@ -49,9 +49,9 @@ Swagger UI: `http://localhost:3000/api-docs`
 
 | Method | Path                       | Description                  |
 |--------|----------------------------|------------------------------|
-| POST   | `/api/withdrawals/approve` | Execute `ApproveWithdrawal`  |
+| POST   | `/api/funds/approve-withdrawal` | Execute `ApproveWithdrawal`  |
 
-### POST `/api/withdrawals/approve`
+### POST `/api/funds/approve-withdrawal`
 
 Request:
 
