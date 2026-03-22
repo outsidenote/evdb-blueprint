@@ -33,7 +33,7 @@ describe("CDC pipeline: outbox → Debezium → Kafka", { timeout: 180_000 }, ()
     pool = new pg.Pool({ connectionString: connectionUri });
 
     const storeClient = EvDbPostgresPrismaClientFactory.create(connectionUri);
-    const storageAdapter = new EvDbPrismaStorageAdapter(storeClient as any);
+    const storageAdapter = new EvDbPrismaStorageAdapter(storeClient);
 
     const kafka = new Kafka({
       clientId: "cdc-integration-test-consumer",

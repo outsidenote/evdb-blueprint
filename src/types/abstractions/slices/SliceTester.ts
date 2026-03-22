@@ -12,7 +12,7 @@ export class SliceTester {
         TCommand,
         TEvents extends IEvDbEventPayload,
         TStreamType extends string,
-        TViews extends Record<string, EvDbView<any>> = {}
+        TViews extends Record<string, EvDbView<unknown>> = {}
     >(
         commandHandler: CommandHandler<StreamWithEventMethods<TEvents, TViews>, TCommand>,
         streamFactory: EvDbStreamFactory<TEvents, TStreamType, TViews>,

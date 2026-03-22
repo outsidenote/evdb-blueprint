@@ -26,7 +26,7 @@ export class CommandHandlerOrchestratorFactory {
     TCommand,
     TEvents extends IEvDbEventPayload,
     TStreamType extends string,
-    TViews extends Record<string, EvDbView<any>> = {},
+    TViews extends Record<string, EvDbView<unknown>> = {},
   >(
     storageAdapter: IEvDbStorageAdapter,
     streamFactory: EvDbStreamFactory<TEvents, TStreamType, TViews>,

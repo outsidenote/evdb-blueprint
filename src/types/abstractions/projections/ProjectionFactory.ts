@@ -48,7 +48,7 @@ export type ProjectionMode =
  * different payload types. Each handler still defines its own payload type.
  */
 export interface ProjectionConfig<
-  THandlers extends Record<string, ProjectionHandler<any>> = Record<string, ProjectionHandler<any>>
+  THandlers extends Record<string, ProjectionHandler<unknown>> = Record<string, ProjectionHandler<unknown>>
 > {
   /**
    * The logical name of this projection (e.g. "PendingWithdrawalLookup").
