@@ -23,7 +23,7 @@ export interface TestAppContext {
  */
 export async function createTestApp(db: TestDatabase, options: TestAppOptions): Promise<TestAppContext> {
   const storeClient = EvDbPostgresPrismaClientFactory.create(db.connectionUri);
-  const storageAdapter = new EvDbPrismaStorageAdapter(storeClient as any);
+  const storageAdapter = new EvDbPrismaStorageAdapter(storeClient);
   const pool = new pg.Pool({ connectionString: db.connectionUri });
 
   await PgBossEndpointFactory.startAll(db.boss, options.workers(storageAdapter), pool);

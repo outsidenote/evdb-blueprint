@@ -22,10 +22,10 @@
     "prebuild": "npm run lint:fix"
   },
   "dependencies": {
-    "@eventualize/core": "^4.1.0",
-    "@eventualize/postgres-storage-adapter": "^4.1.0",
-    "@eventualize/relational-storage-adapter": "^4.1.0",
-    "@eventualize/types": "^4.1.0",
+    "@eventualize/core": "^4.4.0",
+    "@eventualize/postgres-storage-adapter": "^4.4.0",
+    "@eventualize/relational-storage-adapter": "^4.4.0",
+    "@eventualize/types": "^4.4.0",
     "@prisma/adapter-pg": "7.3.0",
     "@prisma/client": "7.3.0",
     "express": "^4.21.0",
@@ -35,7 +35,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
-    "@eventualize/eslint-plugin": "^4.2.0",
+    "@eventualize/eslint-plugin": "^4.3.0",
     "@testcontainers/postgresql": "^11.12.0",
     "@types/express": "^5.0.0",
     "@types/node": "^24.0.0",
