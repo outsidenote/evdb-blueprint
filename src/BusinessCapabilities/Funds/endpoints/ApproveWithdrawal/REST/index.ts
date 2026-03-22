@@ -5,7 +5,7 @@ import type { IEvDbStorageAdapter } from "@eventualize/core/adapters/IEvDbStorag
 
 
 
-export const createApprovalWithdrawalRestAdapter = (storageAdapter: IEvDbStorageAdapter) => {
+export const createApproveWithdrawalRestAdapter = (storageAdapter: IEvDbStorageAdapter) => {
     const approveWithdrawal = createApproveWithdrawalAdapter(storageAdapter);
 
     return async (req: Request, res: Response) => {

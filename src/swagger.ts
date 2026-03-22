@@ -91,7 +91,7 @@ export const swaggerDocument = {
         },
       },
     },
-    "/api/withdrawals/approve": {
+    "/api/funds/approve-withdrawal": {
       post: {
         summary: "Approve a withdrawal",
         description:

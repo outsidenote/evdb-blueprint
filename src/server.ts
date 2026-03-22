@@ -5,7 +5,7 @@ import { PgBoss } from "pg-boss";
 import pg from "pg";
 import { createServer, type Server } from "node:http";
 
-import { createWithdrawalRouter } from "./routes/withdrawal.js";
+import { createFundsRouter } from "./BusinessCapabilities/Funds/endpoints/routes.js";
 import { createProjectionRouter } from "./types/abstractions/router/projections.js";
 import { ProjectionRepository } from "./types/abstractions/projections/ProjectionRepository.js";
 import { swaggerDocument } from "./swagger.js";
@@ -92,13 +92,13 @@ async function main() {
 
   app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
   app.use("/api/projections", createProjectionRouter(projectionRepository, allowedProjections));
-  app.use("/api/withdrawals", createWithdrawalRouter(storageAdapter));
+  app.use("/api/funds", createFundsRouter(storageAdapter));
 
   const httpServer = await startServer(app, config.port);
 
   console.log(`[Startup] Withdrawal API running at http://localhost:${config.port}`);
   console.log(`[Startup] Swagger UI: http://localhost:${config.port}/api-docs`);
-  console.log(`[Startup] POST /api/withdrawals/approve`);
+  console.log(`[Startup] POST /api/funds/approve-withdrawal`);
   console.log(`[Startup] GET  /api/projections/:projectionName`);
 
   // Graceful shutdown
