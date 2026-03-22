@@ -1,7 +1,6 @@
 import type { IEvDbStorageAdapter } from "@eventualize/core/adapters/IEvDbStorageAdapter";
 import { PgBossEndpointConfig } from "../../../../../types/abstractions/endpoints/PgBossEndpointFactory.js";
 import { createWithdrawFundsAdapter } from "../../../slices/WithdrawFunds/adapter.js";
-import { WithdrawFunds } from "../../../slices/WithdrawFunds/command.js";
 import { getIdempotencyKey } from "../../../../../types/abstractions/endpoints/idempotencyMessage.js";
 
 export const CHANNEL = "pg-boss" as const;
@@ -42,13 +41,14 @@ export function createWithdrawCommissionCalculatedWorker(
       getIdempotencyKey(payload.transactionId, "WithdrawFunds"),
 
     handler: async (payload) => {
-      const command = new WithdrawFunds({
+      const command = {
+        commandType: "WithdrawFunds" as const,
         account: payload.account,
         amount: payload.amount,
         commission: payload.commission,
         currency: payload.currency,
         transactionId: payload.transactionId,
-      });
+      };
 
       const result = await withdrawFunds(command);
 

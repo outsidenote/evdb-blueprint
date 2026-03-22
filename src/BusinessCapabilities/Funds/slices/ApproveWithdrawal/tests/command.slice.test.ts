@@ -1,5 +1,5 @@
 import { test, describe } from "node:test";
-import { ApproveWithdrawal } from "../command.js";
+import type { ApproveWithdrawal } from "../command.js";
 import { handleApproveWithdrawal } from "../commandHandler.js";
 import { FundsWithdrawalApproved } from "../../../swimlanes/Funds/events/FundsWithdrawalApproved.js";
 import { FundsWithdrawalDeclined } from "../../../swimlanes/Funds/events/FundsWithdrawalDeclined.js";
@@ -19,7 +19,8 @@ describe("Withdrawal Approval Slice - Unit Tests", () => {
         transactionId: '0011'
       })
     ]
-    const command = new ApproveWithdrawal({
+    const command: ApproveWithdrawal = {
+      commandType: "ApproveWithdrawal",
       account: "1234",
       amount: 20,
       approvalDate: new Date("2025-01-01T11:00:00Z"),
@@ -29,7 +30,7 @@ describe("Withdrawal Approval Slice - Unit Tests", () => {
       payer: "John Doe",
       transactionId: "0011",
       transactionTime: new Date("2025-01-01T11:00:00Z"),
-    });
+    };
     const expectedEvents = [
       new FundsWithdrawalApproved({
         account: '1234',
@@ -61,7 +62,8 @@ describe("Withdrawal Approval Slice - Unit Tests", () => {
       })
     ]
 
-    const command = new ApproveWithdrawal({
+    const command: ApproveWithdrawal = {
+      commandType: "ApproveWithdrawal",
       account: "123",
       amount: 100,
       approvalDate: new Date("2025-01-01T11:00:00Z"),
@@ -71,7 +73,7 @@ describe("Withdrawal Approval Slice - Unit Tests", () => {
       payer: "John Doe",
       transactionId: "0011",
       transactionTime: new Date("2025-01-01T11:00:00Z"),
-    });
+    };
     const expectedEvents = [
       new FundsWithdrawalDeclined({
         account: '123',
