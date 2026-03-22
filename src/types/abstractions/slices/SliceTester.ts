@@ -1,18 +1,18 @@
 import * as assert from "node:assert";
-import { CommandHandler } from "../commands/commandHandler.js";
-import IEvDbEventPayload from "@eventualize/types/events/IEvDbEventPayload";
-import { EvDbView } from "@eventualize/core/view/EvDbView";
-import { StreamWithEventMethods } from "@eventualize/core/factories/EvDbStreamFactory";
-import { EvDbStreamFactory } from "@eventualize/core/factories/EvDbStreamFactory";
+import type { CommandHandler } from "../commands/commandHandler.js";
+import type IEvDbEventPayload from "@eventualize/types/events/IEvDbEventPayload";
+import type { EvDbView } from "@eventualize/core/view/EvDbView";
+import type { StreamWithEventMethods } from "@eventualize/core/factories/EvDbStreamFactory";
+import type { EvDbStreamFactory } from "@eventualize/core/factories/EvDbStreamFactory";
 import StorageAdapterStub from "../../../tests/StorageAdapterStub.js";
-import EvDbStream from "@eventualize/core/store/EvDbStream";
+import type EvDbStream from "@eventualize/core/store/EvDbStream";
 
 export class SliceTester {
     static async testCommandHandler<
         TCommand,
         TEvents extends IEvDbEventPayload,
         TStreamType extends string,
-        TViews extends Record<string, EvDbView<any>> = {}
+        TViews extends Record<string, EvDbView<unknown>> = {}
     >(
         commandHandler: CommandHandler<StreamWithEventMethods<TEvents, TViews>, TCommand>,
         streamFactory: EvDbStreamFactory<TEvents, TStreamType, TViews>,
@@ -24,7 +24,7 @@ export class SliceTester {
         const stream = await streamFactory.create("test-stream", storageAdapter, storageAdapter);
         givenEvents.forEach(event => {
             const methodName = `appendEvent${event.payloadType}`;
-            ((stream as Record<string, any>)[methodName] as Function)(event)
+            ((stream as unknown as Record<string, (e: TEvents) => void>)[methodName])(event)
         });
         try {
             commandHandler(stream, command);

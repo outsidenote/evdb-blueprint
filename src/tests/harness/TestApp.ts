@@ -7,6 +7,8 @@ import { PgBossEndpointFactory } from "../../types/abstractions/endpoints/PgBoss
 import type { TestDatabase } from "./TestDatabase.js";
 
 export interface TestAppOptions {
+  // TODO: [bnaya-eshet 2026-03-22] consider a more specific type for workers, e.g. a union of all possible worker types
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- heterogeneous payload types require type erasure
   workers: (storageAdapter: IEvDbStorageAdapter) => PgBossEndpointConfig<any>[];
 }
 
@@ -23,7 +25,7 @@ export interface TestAppContext {
  */
 export async function createTestApp(db: TestDatabase, options: TestAppOptions): Promise<TestAppContext> {
   const storeClient = EvDbPostgresPrismaClientFactory.create(db.connectionUri);
-  const storageAdapter = new EvDbPrismaStorageAdapter(storeClient as any);
+  const storageAdapter = new EvDbPrismaStorageAdapter(storeClient);
   const pool = new pg.Pool({ connectionString: db.connectionUri });
 
   await PgBossEndpointFactory.startAll(db.boss, options.workers(storageAdapter), pool);

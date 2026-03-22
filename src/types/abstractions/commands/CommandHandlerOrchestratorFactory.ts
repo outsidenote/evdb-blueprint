@@ -1,9 +1,9 @@
 import type { CommandHandler, CommandHandlerOrchestrator, CommandHandlerOrchestratorResult } from "./commandHandler.js";
-import { IEvDbStorageAdapter } from "@eventualize/core/adapters/IEvDbStorageAdapter";
-import { EvDbStreamFactory } from "@eventualize/core/factories/EvDbStreamFactory";
-import IEvDbEventPayload from "@eventualize/types/events/IEvDbEventPayload";
-import { EvDbView } from "@eventualize/core/view/EvDbView";
-import { StreamWithEventMethods } from "@eventualize/core/factories/EvDbStreamFactory";
+import type { IEvDbStorageAdapter } from "@eventualize/core/adapters/IEvDbStorageAdapter";
+import type { EvDbStreamFactory } from "@eventualize/core/factories/EvDbStreamFactory";
+import type IEvDbEventPayload from "@eventualize/types/events/IEvDbEventPayload";
+import type { EvDbView } from "@eventualize/core/view/EvDbView";
+import type { StreamWithEventMethods } from "@eventualize/core/factories/EvDbStreamFactory";
 
 /**
  * Creates a CommandHandlerOrchestrator that orchestrates:
@@ -26,7 +26,7 @@ export class CommandHandlerOrchestratorFactory {
     TCommand,
     TEvents extends IEvDbEventPayload,
     TStreamType extends string,
-    TViews extends Record<string, EvDbView<any>> = {},
+    TViews extends Record<string, EvDbView<unknown>> = {},
   >(
     storageAdapter: IEvDbStorageAdapter,
     streamFactory: EvDbStreamFactory<TEvents, TStreamType, TViews>,

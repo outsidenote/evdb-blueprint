@@ -1,5 +1,5 @@
 import { type Kafka } from "kafkajs";
-import { Pool } from "pg";
+import type { Pool } from "pg";
 import { launchKafkaConsumer, type EventMeta } from "../endpoints/kafkaConsumerUtils.js";
 import { applyProjectionEvent } from "./projectionUtils.js";
 
@@ -48,7 +48,7 @@ export type ProjectionMode =
  * different payload types. Each handler still defines its own payload type.
  */
 export interface ProjectionConfig<
-  THandlers extends Record<string, ProjectionHandler<any>> = Record<string, ProjectionHandler<any>>
+  THandlers extends Record<string, ProjectionHandler<unknown>> = Record<string, ProjectionHandler<unknown>>
 > {
   /**
    * The logical name of this projection (e.g. "PendingWithdrawalLookup").

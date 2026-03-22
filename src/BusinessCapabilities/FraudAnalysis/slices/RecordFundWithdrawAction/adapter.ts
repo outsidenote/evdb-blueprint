@@ -3,7 +3,7 @@ import { handleRecordFundWithdrawAction } from "./commandHandler.js";
 import { CommandHandlerOrchestratorFactory } from "../../../../types/abstractions/commands/CommandHandlerOrchestratorFactory.js";
 import type { CommandHandlerOrchestrator } from "../../../../types/abstractions/commands/commandHandler.js";
 import FraudAnalysisStreamFactory from "../../swimlanes/FraudAnalysis/index.js";
-import { IEvDbStorageAdapter } from "@eventualize/core/adapters/IEvDbStorageAdapter";
+import type { IEvDbStorageAdapter } from "@eventualize/core/adapters/IEvDbStorageAdapter";
 
 /**
  * Creates the CommandAdapter for the RecordFundWithdrawAction slice.

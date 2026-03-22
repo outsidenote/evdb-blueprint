@@ -31,7 +31,7 @@ function makeCommand(overrides: Partial<ApproveWithdrawal> = {}): ApproveWithdra
  */
 async function seedDeposit(storageAdapter: IEvDbStorageAdapter, account: string, amount: number) {
   const stream = FundsStreamFactory.create(account, storageAdapter);
-  (stream as any).appendEventFundsDepositApproved(
+  stream.appendEventFundsDepositApproved(
     new FundsDepositApproved({
       account,
       amount,
@@ -51,7 +51,7 @@ describe("Outbox verification: external events (CDC channel)", () => {
   before(async () => {
     await db.start();
     const storeClient = EvDbPostgresPrismaClientFactory.create(db.connectionUri);
-    storageAdapter = new EvDbPrismaStorageAdapter(storeClient as any);
+    storageAdapter = new EvDbPrismaStorageAdapter(storeClient);
 
     // Create the pg-boss queue so the outbox trigger can insert jobs
     await db.boss.createQueue(QUEUE_NAME);

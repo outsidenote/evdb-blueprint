@@ -16,13 +16,16 @@
     "test:integration": "node --import tsx --test src/tests/integration.test.ts",
     "test:integration-outbox": "node --import tsx --test src/tests/integration-outbox.test.ts",
     "test:integration-cdc": "node --import tsx --test src/tests/integration-cdc.test.ts",
-    "test": "node --import tsx --test 'src/**/*.test.ts'"
+    "test": "node --import tsx --test 'src/**/*.test.ts'",
+    "lint": "eslint src",
+    "lint:fix": "eslint src --fix",
+    "prebuild": "npm run lint:fix"
   },
   "dependencies": {
-    "@eventualize/core": "^4.1.0",
-    "@eventualize/postgres-storage-adapter": "^4.1.0",
-    "@eventualize/relational-storage-adapter": "^4.1.0",
-    "@eventualize/types": "^4.1.0",
+    "@eventualize/core": "^4.4.0",
+    "@eventualize/postgres-storage-adapter": "^4.4.0",
+    "@eventualize/relational-storage-adapter": "^4.4.0",
+    "@eventualize/types": "^4.4.0",
     "@prisma/adapter-pg": "7.3.0",
     "@prisma/client": "7.3.0",
     "express": "^4.21.0",
@@ -31,17 +34,21 @@
     "swagger-ui-express": "^5.0.0"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@eventualize/eslint-plugin": "^4.3.0",
     "@testcontainers/postgresql": "^11.12.0",
     "@types/express": "^5.0.0",
     "@types/node": "^24.0.0",
     "@types/pg": "^8.18.0",
     "@types/supertest": "^6.0.3",
     "@types/swagger-ui-express": "^4.1.0",
+    "eslint": "^10.0.3",
     "kafkajs": "^2.2.4",
     "rimraf": "^6.0.0",
     "supertest": "^7.2.2",
     "testcontainers": "^11.12.0",
     "tsx": "^4.21.0",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.57.1"
   }
 }

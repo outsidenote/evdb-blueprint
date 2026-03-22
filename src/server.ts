@@ -48,7 +48,7 @@ async function stopServer(server?: Server): Promise<void> {
 
 async function main() {
   const storeClient = EvDbPostgresPrismaClientFactory.create(config.postgresConnection);
-  const storageAdapter = new EvDbPrismaStorageAdapter(storeClient as any);
+  const storageAdapter = new EvDbPrismaStorageAdapter(storeClient);
 
   const kafka = new Kafka({
     clientId: "evdb-blueprint",

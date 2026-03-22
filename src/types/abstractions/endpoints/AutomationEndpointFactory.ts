@@ -1,13 +1,13 @@
-import { Kafka } from "kafkajs";
-import { PgBoss } from "pg-boss";
-import { PgBossEndpointConfig } from "./PgBossEndpointFactory.js";
+import type { Kafka } from "kafkajs";
+import type { PgBoss } from "pg-boss";
+import type { PgBossEndpointConfigBase } from "./PgBossEndpointFactory.js";
 import { launchKafkaConsumer } from "./kafkaConsumerUtils.js";
 
 export interface AutomationEndpointConfig {
   /** The Kafka topic to consume from (e.g. "events.FundsWithdrawn"). */
   readonly topic: string;
   /** The pg-boss endpoint config that will process the message. */
-  readonly pgBossEndpoint: PgBossEndpointConfig<any>;
+  readonly pgBossEndpoint: PgBossEndpointConfigBase;
   /** Consumer group ID. Defaults to the pg-boss queue name. */
   readonly groupId?: string;
 }
