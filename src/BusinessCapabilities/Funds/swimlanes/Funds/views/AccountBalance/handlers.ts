@@ -12,20 +12,4 @@ export const handlers = {
     state: AccountBalanceViewState,
     event: FundsWithdrawalApproved,
   ): AccountBalanceViewState => ({ balance: state.balance - event.amount }),
-
-  FundsWithdrawalDeclined: (
-    state: AccountBalanceViewState,
-  ): AccountBalanceViewState => state,
-
-  WithdrawCommissionCalculated: (
-    state: AccountBalanceViewState,
-  ): AccountBalanceViewState => state,
-
-  FundsWithdrawn: (
-    state: AccountBalanceViewState,
-  ): AccountBalanceViewState => state,
-
-  FundsWithdrawDeclined: (
-    state: AccountBalanceViewState,
-  ): AccountBalanceViewState => state,
 };
