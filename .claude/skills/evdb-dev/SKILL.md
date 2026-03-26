@@ -68,12 +68,14 @@ to another screen in a different slice.
 **Code**: In-process view inside the EvDbStream — `views/<ViewName>/state.ts` + `handlers.ts`.
 
 ### Pattern 3: Kafka Projection (multiple swimlanes)
-**Signal**: A `READMODEL` with `INBOUND EVENT` deps from **different swimlanes**.
+**Signal**: A `READMODEL` with `INBOUND EVENT` deps from **different swimlanes** AND **no** `"todoList": true` field.
 **Code**: Each populating event emits a Kafka message; a projection slice consumes and writes to SQL.
 
 ### Pattern 4: TODO-List Read Model (pg-boss queue feed)
-**Signal**: A `READMODEL` with an `OUTBOUND AUTOMATION` dependency.
+**Signal**: A `READMODEL` with `"todoList": true` in the slice JSON, OR with an `OUTBOUND AUTOMATION` dependency in the graph.
+`"todoList": true` is the authoritative indicator — it overrides any multi-swimlane heuristic. When in doubt, check the slice JSON field.
 **Code**: pg-boss queue, populated via `createPgBossQueueMessageFromEvent` in the outbox message producer.
+No `ProjectionConfig` or Kafka projection is created for these — the read model is implicit in the pg-boss queue.
 
 ### Pattern 5: Automation (event-driven command handler)
 **Signal**: A `PROCESSOR` with `type: "AUTOMATION"`, `INBOUND READMODEL`, `OUTBOUND COMMAND`.
@@ -98,7 +100,8 @@ to another screen in a different slice.
 | `commands[]` | `slices/<SliceName>/command.ts` |
 | `events[]` | `swimlanes/<Stream>/events/<EventName>.ts` |
 | `readmodels[]` — same swimlane | `swimlanes/<Stream>/views/<ViewName>/state.ts` + `handlers.ts` |
-| `readmodels[]` — multiple swimlanes | `slices/<ProjectionName>/index.ts` (ProjectionConfig) |
+| `readmodels[]` — `"todoList": true` | outbox message producer only (`createPgBossQueueMessageFromEvent`) — no projection file |
+| `readmodels[]` — multiple swimlanes, no `todoList` | `slices/<ProjectionName>/index.ts` (ProjectionConfig) |
 | `processors[]` `type: "AUTOMATION"` | `endpoints/<SliceName>/pg-boss/index.ts` |
 | `specifications[]` | `gwts.ts` predicates + `slices/<SliceName>/tests/command.slice.test.ts` |
 
@@ -188,7 +191,7 @@ src/BusinessCapabilities/<context>/
 - **Generated fields**: computed in endpoints only — never in the pure handler.
 - **Stream ID**: derived from `aggregate` in slice JSON (e.g. `command.account` for `aggregate: "funds"`).
 - **Idempotency**: every pg-boss worker uses `getIdempotencyKey(transactionId, "<SliceName>")`.
-- **Outbox triple**: events feeding automations produce: pg-boss message + Kafka message + idempotency marker.
+- **Outbox triple**: when *creating a new messages file* for an event introduced by the current slice, include all three: pg-boss message + Kafka message + idempotency marker. When *updating an existing messages file* (the event belongs to a previously implemented slice), only add `createPgBossQueueMessageFromEvent` — the Kafka message and idempotency marker already exist and must not be duplicated.
 - **View names**: always `const viewName = "..." as const` from `state.ts`, imported by reference.
 - **Storage injection**: never singleton — always injected from `server.ts` downward.
 - **`.js` extensions**: all relative imports use `.js` even for `.ts` source files.

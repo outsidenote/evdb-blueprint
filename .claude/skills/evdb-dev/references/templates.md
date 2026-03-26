@@ -64,6 +64,11 @@ For `SliceState<SliceName>` handlers: only include event types that appear in `s
 Only add a message producer for events that have an `OUTBOUND AUTOMATION` or cross-context
 dependency. Events with no downstream consumers omit the second argument to `.withEventType()`.
 
+**Two cases — pick the right one:**
+
+**Case A: Creating a new messages file** (event is introduced by the current slice)
+Use the full outbox triple: pg-boss queue message + Kafka message + idempotency marker.
+
 ```typescript
 import type EvDbEvent from "@eventualize/types/events/EvDbEvent";
 import type { <EventName> } from "../events/<EventName>.js";
@@ -84,6 +89,19 @@ export const <eventName>Messages = (
     createIdempotencyMessageFromEvent(event, transactionId, "<SliceName>"),
   ];
 };
+```
+
+**Case B: Updating an existing messages file** (event belongs to a previously implemented slice)
+Only add `createPgBossQueueMessageFromEvent` to the existing return array. The Kafka message
+and idempotency marker are already present — do not add them again.
+
+```typescript
+// existing imports stay; add only what's new:
+import { QUEUE_NAME as <TARGET>_QUEUE } from "../../../endpoints/<TargetSlice>/pg-boss/index.js";
+import { createPgBossQueueMessageFromEvent } from "../../../../../types/abstractions/endpoints/queueMessage.js";
+
+// inside the existing messages function, add to the return array:
+createPgBossQueueMessageFromEvent([<TARGET>_QUEUE], event, payload),
 ```
 
 ---
