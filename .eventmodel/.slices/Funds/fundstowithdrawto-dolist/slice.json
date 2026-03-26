@@ -1,0 +1,119 @@
+{
+  "id": "3458764660904120751",
+  "status": "Planned",
+  "title": "slice: Funds to Withdraw TO-DO list",
+  "context": "Funds",
+  "sliceType": "STATE_VIEW",
+  "commands": [],
+  "events": [],
+  "readmodels": [
+    {
+      "id": "3458764660904120726",
+      "tags": [],
+      "modelContext": "Funds",
+      "slice": "slice: Funds to Withdraw TO-DO list",
+      "title": "Funds to Withdraw",
+      "fields": [
+        {
+          "name": "Account",
+          "type": "UUID",
+          "example": "1234",
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "Amount",
+          "type": "Double",
+          "example": "100",
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "commission",
+          "type": "Double",
+          "example": "0.05",
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "Currency",
+          "type": "String",
+          "example": "USD",
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "Payer",
+          "type": "String",
+          "example": "John Doe",
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "source",
+          "type": "String",
+          "example": "PayPal",
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "ApprovalDate",
+          "type": "DateTime",
+          "example": "2025-01-01 11:00",
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "session",
+          "type": "UUID",
+          "example": "0011",
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "transactionId",
+          "type": "String",
+          "example": "0011",
+          "cardinality": "Single",
+          "idAttribute": false
+        }
+      ],
+      "type": "READMODEL",
+      "description": "",
+      "aggregate": "funds",
+      "aggregateDependencies": [
+        "funds"
+      ],
+      "dependencies": [
+        {
+          "id": "3458764660904120816",
+          "type": "OUTBOUND",
+          "title": "processor",
+          "elementType": "AUTOMATION"
+        },
+        {
+          "id": "3458764660904120531",
+          "type": "INBOUND",
+          "title": "Withdraw Commission Calculated",
+          "elementType": "EVENT"
+        }
+      ],
+      "createsAggregate": false,
+      "triggers": [],
+      "sketched": false,
+      "prototype": {
+        "activeByDefault": false
+      }
+    }
+  ],
+  "screens": [],
+  "screenImages": [],
+  "screenLayouts": [],
+  "processors": [],
+  "tables": [],
+  "specifications": [],
+  "actors": [],
+  "aggregates": [
+    "funds"
+  ]
+}

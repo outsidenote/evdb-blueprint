@@ -1,0 +1,79 @@
+{
+  "id": "3458764660904347056",
+  "status": "Planned",
+  "title": "slice: Account Balance Read Model",
+  "context": "Funds",
+  "sliceType": "STATE_VIEW",
+  "commands": [],
+  "events": [],
+  "readmodels": [
+    {
+      "id": "3458764660904347028",
+      "tags": [],
+      "modelContext": "Funds",
+      "slice": "slice: Account Balance Read Model",
+      "title": "Account Balance (USD)",
+      "fields": [
+        {
+          "name": "Funds",
+          "type": "Double",
+          "example": "189\n",
+          "mapping": "Amount",
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "Account",
+          "type": "UUID",
+          "example": "1234",
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "ApprovalDate",
+          "type": "DateTime",
+          "example": "2025-01-01 10:00",
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "Currency",
+          "type": "String",
+          "example": "USD",
+          "cardinality": "Single",
+          "idAttribute": false
+        }
+      ],
+      "type": "READMODEL",
+      "description": "",
+      "aggregate": "funds",
+      "aggregateDependencies": [
+        "funds"
+      ],
+      "dependencies": [
+        {
+          "id": "3458764660904120896",
+          "type": "INBOUND",
+          "title": "Funds Withdrawn from Account",
+          "elementType": "EVENT"
+        }
+      ],
+      "createsAggregate": false,
+      "triggers": [],
+      "sketched": false,
+      "prototype": {
+        "activeByDefault": false
+      }
+    }
+  ],
+  "screens": [],
+  "screenImages": [],
+  "screenLayouts": [],
+  "processors": [],
+  "tables": [],
+  "specifications": [],
+  "actors": [],
+  "aggregates": [
+    "funds"
+  ]
+}
