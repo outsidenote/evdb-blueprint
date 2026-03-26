@@ -1,0 +1,13 @@
+{
+  "expectations": [
+    {"text": "correct-status-update: index.json status set to 'Review' (not 'Done', not left as 'Planned')", "passed": false, "evidence": "manifest.json has no index_json_status field — status was not updated"},
+    {"text": "event-file-created: an event TypeScript class file was created", "passed": false, "evidence": "files_created only has adapter.ts and fundDepositedMessages.ts — FundDeposited.ts event class was pre-existing and not listed"},
+    {"text": "command-file-created: command.ts was created for the slice", "passed": false, "evidence": "command.ts not in files_created — pre-existing scaffolding was relied on"},
+    {"text": "command-handler-created: commandHandler.ts was created", "passed": false, "evidence": "commandHandler.ts not in files_created — pre-existing scaffolding was relied on"},
+    {"text": "tests-created: command.slice.test.ts was created", "passed": false, "evidence": "No test file in files_created"},
+    {"text": "correct-slice-focus: implemented the requested slice (DepositFund), not a different one", "passed": true, "evidence": "Files created are DepositFund-related (adapter.ts, fundDepositedMessages.ts)"},
+    {"text": "view-created: slice-state view created (SliceStateDepositFund) since slice has specifications with given events", "passed": false, "evidence": "No view files in files_created — pre-existing scaffolding assumed, not created from scratch"}
+  ],
+  "summary": {"passed": 1, "failed": 6, "total": 7, "pass_rate": 0.143},
+  "timing": {"total_duration_seconds": 262.1}
+}

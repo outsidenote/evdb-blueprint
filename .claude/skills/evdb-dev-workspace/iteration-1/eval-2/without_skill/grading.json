@@ -1,0 +1,13 @@
+{
+  "expectations": [
+    {"text": "correct-status-update: index.json status set to 'Review' (not 'Done')", "passed": false, "evidence": "Agent set status to 'Done' — not a valid skill lifecycle value (should be 'Review')"},
+    {"text": "event-file-created: event TypeScript file exists for the target slice", "passed": true, "evidence": "WithdrawalDeclineNotified.ts referenced in modified files"},
+    {"text": "command-file-created: command.ts exists", "passed": true, "evidence": "Existing command.ts from working tree"},
+    {"text": "command-handler-created: commandHandler.ts exists", "passed": true, "evidence": "Existing commandHandler.ts from working tree"},
+    {"text": "tests-created: command.slice.test.ts exists", "passed": true, "evidence": "Existing test from working tree"},
+    {"text": "correct-slice-focus: implemented the correct slice identified by evdb-diff", "passed": true, "evidence": "Agent found and worked on withdrawaldeclinenotified (though by browsing, not diff)"},
+    {"text": "diff-ran: used git diff to identify what to implement (not filesystem scan)", "passed": false, "evidence": "Agent browsed files and event model status — did not run git diff as the skill prescribes"}
+  ],
+  "summary": {"passed": 5, "failed": 2, "total": 7, "pass_rate": 0.714},
+  "timing": {"total_duration_seconds": 306.3}
+}

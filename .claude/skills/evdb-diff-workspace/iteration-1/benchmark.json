@@ -1,0 +1,193 @@
+{
+  "metadata": {
+    "skill_name": "evdb-diff",
+    "skill_path": ".claude/skills/evdb-diff",
+    "executor_model": "claude-sonnet-4-6",
+    "analyzer_model": "claude-sonnet-4-6",
+    "timestamp": "2026-03-26T16:38:00Z",
+    "evals_run": [0, 1, 2],
+    "runs_per_configuration": 1
+  },
+  "runs": [
+    {
+      "eval_id": 0,
+      "eval_name": "casual-what-to-implement",
+      "configuration": "with_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1.0,
+        "passed": 7,
+        "failed": 0,
+        "total": 7,
+        "time_seconds": 19.3,
+        "tokens": 10754,
+        "tool_calls": 4,
+        "errors": 0
+      },
+      "expectations": [
+        {"text": "is-valid-json: output is parseable as JSON", "passed": true, "evidence": "Output is a valid JSON array"},
+        {"text": "is-bare-json-array: output contains no markdown fences, no prose", "passed": true, "evidence": "Output is a raw JSON array with no prose or markdown fences"},
+        {"text": "correct-slice-name: output contains 'slice: Withdrawal Decline Notified'", "passed": true, "evidence": "Found: \"slice\": \"slice: Withdrawal Decline Notified\""},
+        {"text": "correct-folder: output contains 'withdrawaldeclinenotified'", "passed": true, "evidence": "Found: \"folder\": \"withdrawaldeclinenotified\""},
+        {"text": "correct-action: output contains action value 'implement'", "passed": true, "evidence": "Found: \"action\": \"implement\""},
+        {"text": "single-item: the array has exactly 1 element", "passed": true, "evidence": "Array has exactly 1 element"},
+        {"text": "correct-context: output contains context value 'Funds'", "passed": true, "evidence": "Found: \"context\": \"Funds\""}
+      ],
+      "notes": []
+    },
+    {
+      "eval_id": 0,
+      "eval_name": "casual-what-to-implement",
+      "configuration": "without_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 0.571,
+        "passed": 4,
+        "failed": 3,
+        "total": 7,
+        "time_seconds": 119.3,
+        "tokens": 33331,
+        "tool_calls": 29,
+        "errors": 0
+      },
+      "expectations": [
+        {"text": "is-valid-json: output is parseable as JSON", "passed": true, "evidence": "Output is valid JSON (an object, not an array)"},
+        {"text": "is-bare-json-array: output contains no markdown fences, no prose", "passed": false, "evidence": "Output is a JSON object with summary/already_implemented/still_missing keys — not a bare array"},
+        {"text": "correct-slice-name: output contains 'slice: Withdrawal Decline Notified'", "passed": true, "evidence": "Found in slice.name field"},
+        {"text": "correct-folder: output contains 'withdrawaldeclinenotified'", "passed": true, "evidence": "Found in multiple places"},
+        {"text": "correct-action: output contains action value 'implement'", "passed": false, "evidence": "No 'action' field present — uses a completely different schema"},
+        {"text": "single-item: the array has exactly 1 element", "passed": false, "evidence": "Not an array — deeply nested object with 11 already_implemented and 2 still_missing items"},
+        {"text": "correct-context: output contains context value 'Funds'", "passed": true, "evidence": "Found context 'Funds'"}
+      ],
+      "notes": ["Contaminated: agent dug into individual slice files, violating the skill's rule to only use index.json diff"]
+    },
+    {
+      "eval_id": 1,
+      "eval_name": "explicit-action-list-request",
+      "configuration": "with_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1.0,
+        "passed": 7,
+        "failed": 0,
+        "total": 7,
+        "time_seconds": 20.1,
+        "tokens": 10751,
+        "tool_calls": 4,
+        "errors": 0
+      },
+      "expectations": [
+        {"text": "is-valid-json: output is parseable as JSON", "passed": true, "evidence": "Output is a valid JSON array"},
+        {"text": "is-bare-json-array: output contains no markdown fences, no prose", "passed": true, "evidence": "Output is a raw JSON array with no prose or markdown fences"},
+        {"text": "correct-slice-name: output contains 'slice: Withdrawal Decline Notified'", "passed": true, "evidence": "Found: \"slice\": \"slice: Withdrawal Decline Notified\""},
+        {"text": "correct-folder: output contains 'withdrawaldeclinenotified'", "passed": true, "evidence": "Found: \"folder\": \"withdrawaldeclinenotified\""},
+        {"text": "correct-action: output contains action value 'implement'", "passed": true, "evidence": "Found: \"action\": \"implement\""},
+        {"text": "single-item: the array has exactly 1 element", "passed": true, "evidence": "Array has exactly 1 element"},
+        {"text": "correct-context: output contains context value 'Funds'", "passed": true, "evidence": "Found: \"context\": \"Funds\""}
+      ],
+      "notes": []
+    },
+    {
+      "eval_id": 1,
+      "eval_name": "explicit-action-list-request",
+      "configuration": "without_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1.0,
+        "passed": 7,
+        "failed": 0,
+        "total": 7,
+        "time_seconds": 84.1,
+        "tokens": 37209,
+        "tool_calls": 25,
+        "errors": 0
+      },
+      "expectations": [
+        {"text": "is-valid-json: output is parseable as JSON", "passed": true, "evidence": "Output is a valid JSON array"},
+        {"text": "is-bare-json-array: output contains no markdown fences, no prose", "passed": true, "evidence": "Output is a raw JSON array (agent found the WIP file and used it as a guide — contaminated baseline)"},
+        {"text": "correct-slice-name: output contains 'slice: Withdrawal Decline Notified'", "passed": true, "evidence": "Found: \"slice\": \"slice: Withdrawal Decline Notified\""},
+        {"text": "correct-folder: output contains 'withdrawaldeclinenotified'", "passed": true, "evidence": "Found: \"folder\": \"withdrawaldeclinenotified\""},
+        {"text": "correct-action: output contains action value 'implement'", "passed": true, "evidence": "Found: \"action\": \"implement\""},
+        {"text": "single-item: the array has exactly 1 element", "passed": true, "evidence": "Array has exactly 1 element"},
+        {"text": "correct-context: output contains context value 'Funds'", "passed": true, "evidence": "Found: \"context\": \"Funds\""}
+      ],
+      "notes": ["Contaminated baseline: agent found .claude/wip/evdb-diff.md and used it as a guide — took 25 tool calls vs 4 with skill"]
+    },
+    {
+      "eval_id": 2,
+      "eval_name": "new-slice-added-what-changed",
+      "configuration": "with_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1.0,
+        "passed": 7,
+        "failed": 0,
+        "total": 7,
+        "time_seconds": 20.0,
+        "tokens": 10825,
+        "tool_calls": 4,
+        "errors": 0
+      },
+      "expectations": [
+        {"text": "is-valid-json: output is parseable as JSON", "passed": true, "evidence": "Output is a valid JSON array"},
+        {"text": "is-bare-json-array: output contains no markdown fences, no prose", "passed": true, "evidence": "Output is a raw JSON array with no prose or markdown fences"},
+        {"text": "correct-slice-name: output contains 'slice: Withdrawal Decline Notified'", "passed": true, "evidence": "Found: \"slice\": \"slice: Withdrawal Decline Notified\""},
+        {"text": "correct-folder: output contains 'withdrawaldeclinenotified'", "passed": true, "evidence": "Found: \"folder\": \"withdrawaldeclinenotified\""},
+        {"text": "correct-action: output contains action value 'implement'", "passed": true, "evidence": "Found: \"action\": \"implement\""},
+        {"text": "single-item: the array has exactly 1 element", "passed": true, "evidence": "Array has exactly 1 element"},
+        {"text": "correct-context: output contains context value 'Funds'", "passed": true, "evidence": "Found: \"context\": \"Funds\""}
+      ],
+      "notes": []
+    },
+    {
+      "eval_id": 2,
+      "eval_name": "new-slice-added-what-changed",
+      "configuration": "without_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 0.571,
+        "passed": 4,
+        "failed": 3,
+        "total": 7,
+        "time_seconds": 49.1,
+        "tokens": 20087,
+        "tool_calls": 8,
+        "errors": 0
+      },
+      "expectations": [
+        {"text": "is-valid-json: output is parseable as JSON", "passed": true, "evidence": "Output is valid JSON (an object, not an array)"},
+        {"text": "is-bare-json-array: output contains no markdown fences, no prose", "passed": false, "evidence": "Output is a JSON object with changed_slices/index_changes keys — not a bare array"},
+        {"text": "correct-slice-name: output contains 'slice: Withdrawal Decline Notified'", "passed": true, "evidence": "Found in changed_slices[0].slice"},
+        {"text": "correct-folder: output contains 'withdrawaldeclinenotified'", "passed": true, "evidence": "Found in changed_slices[0].folder"},
+        {"text": "correct-action: output contains action value 'implement'", "passed": false, "evidence": "Uses change_type='added' — no 'action' field, 'implement' does not appear anywhere"},
+        {"text": "single-item: the array has exactly 1 element", "passed": false, "evidence": "Not an array; changed_slices has 2 entries including an extra 'modified' withdrawfunds slice"},
+        {"text": "correct-context: output contains context value 'Funds'", "passed": true, "evidence": "Found context 'Funds'"}
+      ],
+      "notes": ["Dug into individual slice JSON files violating the index-only rule; added extra 'modified' entry not in the index diff"]
+    }
+  ],
+  "run_summary": {
+    "with_skill": {
+      "pass_rate": {"mean": 1.0, "stddev": 0.0, "min": 1.0, "max": 1.0},
+      "time_seconds": {"mean": 19.8, "stddev": 0.4, "min": 19.3, "max": 20.1},
+      "tokens": {"mean": 10777, "stddev": 39, "min": 10751, "max": 10825}
+    },
+    "without_skill": {
+      "pass_rate": {"mean": 0.714, "stddev": 0.248, "min": 0.571, "max": 1.0},
+      "time_seconds": {"mean": 84.2, "stddev": 35.1, "min": 49.1, "max": 119.3},
+      "tokens": {"mean": 30209, "stddev": 8758, "min": 20087, "max": 37209}
+    },
+    "delta": {
+      "pass_rate": "+0.29",
+      "time_seconds": "-64.4",
+      "tokens": "-19432"
+    }
+  },
+  "notes": [
+    "is-valid-json and correct-slice-name/folder/context pass in both configs — they don't discriminate skill value well",
+    "is-bare-json-array and correct-action are the key differentiators — without_skill fails these 2/3 times",
+    "Eval 1 baseline is contaminated — agent found .claude/wip/evdb-diff.md and used it, explaining the 7/7 pass rate; real baseline would likely be lower",
+    "With-skill is 4x faster (19.8s vs 84.2s) and uses 3x fewer tokens (10.8K vs 30.2K)",
+    "With-skill uses ~4 tool calls vs 8-29 without — dramatically more focused execution"
+  ]
+}

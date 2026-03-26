@@ -1,0 +1,14 @@
+{
+  "eval_id": 0,
+  "eval_name": "casual-what-to-implement",
+  "prompt": "what do I need to implement?",
+  "assertions": [
+    {"text": "is-valid-json: output is parseable as JSON"},
+    {"text": "is-bare-json-array: output contains no markdown fences, no prose — just a raw JSON array"},
+    {"text": "correct-slice-name: output contains 'slice: Withdrawal Decline Notified'"},
+    {"text": "correct-folder: output contains 'withdrawaldeclinenotified'"},
+    {"text": "correct-action: output contains action value 'implement' (not 'delete')"},
+    {"text": "single-item: the array has exactly 1 element"},
+    {"text": "correct-context: output contains context value 'Funds'"}
+  ]
+}

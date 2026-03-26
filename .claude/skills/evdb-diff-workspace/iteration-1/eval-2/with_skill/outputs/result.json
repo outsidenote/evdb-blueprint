@@ -1,0 +1,8 @@
+[
+  {
+    "slice": "slice: Withdrawal Decline Notified",
+    "folder": "withdrawaldeclinenotified",
+    "context": "Funds",
+    "action": "implement"
+  }
+]

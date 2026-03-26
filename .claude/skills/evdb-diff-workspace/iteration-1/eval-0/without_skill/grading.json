@@ -1,0 +1,13 @@
+{
+  "expectations": [
+    {"text": "is-valid-json: output is parseable as JSON", "passed": true, "evidence": "Output is valid JSON (an object, not an array)"},
+    {"text": "is-bare-json-array: output contains no markdown fences, no prose", "passed": false, "evidence": "Output is a JSON object with summary/already_implemented/still_missing keys — not a bare array"},
+    {"text": "correct-slice-name: output contains 'slice: Withdrawal Decline Notified'", "passed": true, "evidence": "Found in slice.name field"},
+    {"text": "correct-folder: output contains 'withdrawaldeclinenotified'", "passed": true, "evidence": "Found in multiple places"},
+    {"text": "correct-action: output contains action value 'implement'", "passed": false, "evidence": "No 'action' field present — uses a completely different schema"},
+    {"text": "single-item: the array has exactly 1 element", "passed": false, "evidence": "Not an array — deeply nested object with 11 already_implemented and 2 still_missing items"},
+    {"text": "correct-context: output contains context value 'Funds'", "passed": true, "evidence": "Found context 'Funds'"}
+  ],
+  "summary": {"passed": 4, "failed": 3, "total": 7, "pass_rate": 0.571},
+  "timing": {"total_duration_seconds": 119.3}
+}

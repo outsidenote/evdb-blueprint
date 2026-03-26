@@ -1,0 +1,13 @@
+{
+  "expectations": [
+    {"text": "correct-status-update: index.json status set to 'Review'", "passed": true, "evidence": "manifest.json shows index_json_status: 'Review'"},
+    {"text": "event-file-created: event TypeScript file exists for the target slice", "passed": true, "evidence": "WithdrawalDeclineNotified.ts in files_created (untracked → tracked)"},
+    {"text": "command-file-created: command.ts exists", "passed": true, "evidence": "NotifyWithdrawalDecline/command.ts in files_created"},
+    {"text": "command-handler-created: commandHandler.ts exists", "passed": true, "evidence": "NotifyWithdrawalDecline/commandHandler.ts in files_created"},
+    {"text": "tests-created: command.slice.test.ts exists", "passed": true, "evidence": "NotifyWithdrawalDecline/tests/command.slice.test.ts in files_created"},
+    {"text": "correct-slice-focus: implemented the correct slice identified by evdb-diff", "passed": true, "evidence": "Correctly identified withdrawaldeclinenotified from diff and implemented it"},
+    {"text": "diff-ran: skill used git diff to identify what to implement (not filesystem scan)", "passed": true, "evidence": "manifest.json shows diff_ran: true — skill followed SDLC workflow step 1"}
+  ],
+  "summary": {"passed": 7, "failed": 0, "total": 7, "pass_rate": 1.0},
+  "timing": {"total_duration_seconds": 115.8}
+}

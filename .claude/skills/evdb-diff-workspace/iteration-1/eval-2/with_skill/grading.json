@@ -1,0 +1,13 @@
+{
+  "expectations": [
+    {"text": "is-valid-json: output is parseable as JSON", "passed": true, "evidence": "Output is a valid JSON array"},
+    {"text": "is-bare-json-array: output contains no markdown fences, no prose", "passed": true, "evidence": "Output is a raw JSON array with no prose or markdown fences"},
+    {"text": "correct-slice-name: output contains 'slice: Withdrawal Decline Notified'", "passed": true, "evidence": "Found: \"slice\": \"slice: Withdrawal Decline Notified\""},
+    {"text": "correct-folder: output contains 'withdrawaldeclinenotified'", "passed": true, "evidence": "Found: \"folder\": \"withdrawaldeclinenotified\""},
+    {"text": "correct-action: output contains action value 'implement'", "passed": true, "evidence": "Found: \"action\": \"implement\""},
+    {"text": "single-item: the array has exactly 1 element", "passed": true, "evidence": "Array has exactly 1 element"},
+    {"text": "correct-context: output contains context value 'Funds'", "passed": true, "evidence": "Found: \"context\": \"Funds\""}
+  ],
+  "summary": {"passed": 7, "failed": 0, "total": 7, "pass_rate": 1.0},
+  "timing": {"total_duration_seconds": 20.0}
+}

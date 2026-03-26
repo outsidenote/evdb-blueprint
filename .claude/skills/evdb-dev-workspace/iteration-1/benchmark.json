@@ -1,0 +1,193 @@
+{
+  "metadata": {
+    "skill_name": "evdb-dev",
+    "skill_path": ".claude/skills/evdb-dev",
+    "executor_model": "claude-sonnet-4-6",
+    "analyzer_model": "claude-sonnet-4-6",
+    "timestamp": "2026-03-26T17:15:00Z",
+    "evals_run": [0, 1, 2],
+    "runs_per_configuration": 1
+  },
+  "runs": [
+    {
+      "eval_id": 0,
+      "eval_name": "implement-depositfund-from-scratch",
+      "configuration": "with_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1.0,
+        "passed": 7,
+        "failed": 0,
+        "total": 7,
+        "time_seconds": 324.2,
+        "tokens": 67392,
+        "tool_calls": 60,
+        "errors": 0
+      },
+      "expectations": [
+        {"text": "correct-status-update: index.json status set to 'Review'", "passed": true, "evidence": "manifest.json shows index_json_status: 'Review'"},
+        {"text": "event-file-created: FundDeposited.ts event class created", "passed": true, "evidence": "FundDeposited.ts in files_created"},
+        {"text": "command-file-created: command.ts created for DepositFund", "passed": true, "evidence": "slices/DepositFund/command.ts in files_created"},
+        {"text": "command-handler-created: commandHandler.ts created", "passed": true, "evidence": "slices/DepositFund/commandHandler.ts in files_created"},
+        {"text": "tests-created: command.slice.test.ts created", "passed": true, "evidence": "slices/DepositFund/tests/command.slice.test.ts in files_created"},
+        {"text": "correct-slice-focus: implemented DepositFund, not a different slice", "passed": true, "evidence": "All files are under DepositFund/FundDeposited naming"},
+        {"text": "view-created: SliceStateDepositFund view created for specifications", "passed": true, "evidence": "views/SliceStateDepositFund/state.ts and handlers.ts in files_created"}
+      ],
+      "notes": []
+    },
+    {
+      "eval_id": 0,
+      "eval_name": "implement-depositfund-from-scratch",
+      "configuration": "without_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 0.143,
+        "passed": 1,
+        "failed": 6,
+        "total": 7,
+        "time_seconds": 262.1,
+        "tokens": 63804,
+        "tool_calls": 82,
+        "errors": 0
+      },
+      "expectations": [
+        {"text": "correct-status-update: index.json status set to 'Review'", "passed": false, "evidence": "No status update in manifest — status left unchanged"},
+        {"text": "event-file-created: FundDeposited.ts event class created", "passed": false, "evidence": "Only adapter.ts and messages file in files_created"},
+        {"text": "command-file-created: command.ts created for DepositFund", "passed": false, "evidence": "command.ts not created — relied on pre-existing scaffolding"},
+        {"text": "command-handler-created: commandHandler.ts created", "passed": false, "evidence": "commandHandler.ts not created — relied on pre-existing scaffolding"},
+        {"text": "tests-created: command.slice.test.ts created", "passed": false, "evidence": "No test file created"},
+        {"text": "correct-slice-focus: implemented DepositFund, not a different slice", "passed": true, "evidence": "Files are DepositFund-related"},
+        {"text": "view-created: SliceStateDepositFund view created for specifications", "passed": false, "evidence": "No view files created"}
+      ],
+      "notes": ["Relied heavily on pre-existing scaffolding rather than implementing from scratch; 82 tool calls to fill 2 gaps"]
+    },
+    {
+      "eval_id": 1,
+      "eval_name": "implement-withdrawalapproval-already-exists",
+      "configuration": "with_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1.0,
+        "passed": 7,
+        "failed": 0,
+        "total": 7,
+        "time_seconds": 96.4,
+        "tokens": 42206,
+        "tool_calls": 29,
+        "errors": 0
+      },
+      "expectations": [
+        {"text": "correct-status-update: index.json status set to 'Review'", "passed": true, "evidence": "manifest shows index_json_status: 'Review'"},
+        {"text": "event-file-created: FundsWithdrawalApproved + FundsWithdrawalDeclined exist", "passed": true, "evidence": "Skill confirmed both event files exist"},
+        {"text": "command-file-created: command.ts for ApproveWithdrawal exists", "passed": true, "evidence": "Skill confirmed ApproveWithdrawal/command.ts exists"},
+        {"text": "command-handler-created: commandHandler.ts exists", "passed": true, "evidence": "Skill confirmed commandHandler.ts exists"},
+        {"text": "tests-created: command.slice.test.ts exists", "passed": true, "evidence": "Skill confirmed tests exist"},
+        {"text": "correct-slice-focus: focused on WithdrawalApproval, not a different slice", "passed": true, "evidence": "Skill correctly mapped WithdrawalApproval to ApproveWithdrawal naming"},
+        {"text": "view-created: SliceStateApproveWithdrawal view exists", "passed": true, "evidence": "Skill confirmed view exists with state.ts + handlers.ts"}
+      ],
+      "notes": ["Slice already implemented — skill correctly identified this and only updated status; 29 tool calls vs 79 for baseline"]
+    },
+    {
+      "eval_id": 1,
+      "eval_name": "implement-withdrawalapproval-already-exists",
+      "configuration": "without_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 0.0,
+        "passed": 0,
+        "failed": 7,
+        "total": 7,
+        "time_seconds": 321.7,
+        "tokens": 74820,
+        "tool_calls": 79,
+        "errors": 0
+      },
+      "expectations": [
+        {"text": "correct-status-update: index.json status set to 'Review' for WithdrawalApproval", "passed": false, "evidence": "Updated status for wrong slice (NotifyWithdrawalDecline)"},
+        {"text": "event-file-created: FundsWithdrawalApproved + FundsWithdrawalDeclined exist", "passed": false, "evidence": "Created WithdrawalDeclineNotified.ts — completely different event"},
+        {"text": "command-file-created: command.ts for ApproveWithdrawal exists", "passed": false, "evidence": "Created NotifyWithdrawalDecline/command.ts — wrong slice"},
+        {"text": "command-handler-created: commandHandler.ts for ApproveWithdrawal exists", "passed": false, "evidence": "Created NotifyWithdrawalDecline/commandHandler.ts — wrong slice"},
+        {"text": "tests-created: command.slice.test.ts for ApproveWithdrawal exists", "passed": false, "evidence": "Created tests for NotifyWithdrawalDecline"},
+        {"text": "correct-slice-focus: focused on WithdrawalApproval, not a different slice", "passed": false, "evidence": "Completely lost context — implemented NotifyWithdrawalDecline instead"},
+        {"text": "view-created: SliceStateApproveWithdrawal view exists", "passed": false, "evidence": "No ApproveWithdrawal view created or verified"}
+      ],
+      "notes": ["Critical failure: agent implemented entirely wrong slice (NotifyWithdrawalDecline vs WithdrawalApproval); 79 tool calls, 322 seconds"]
+    },
+    {
+      "eval_id": 2,
+      "eval_name": "what-to-code-next-sdlc-workflow",
+      "configuration": "with_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1.0,
+        "passed": 7,
+        "failed": 0,
+        "total": 7,
+        "time_seconds": 115.8,
+        "tokens": 38168,
+        "tool_calls": 24,
+        "errors": 0
+      },
+      "expectations": [
+        {"text": "correct-status-update: index.json status set to 'Review'", "passed": true, "evidence": "manifest shows index_json_status: 'Review'"},
+        {"text": "event-file-created: event file for target slice exists", "passed": true, "evidence": "WithdrawalDeclineNotified.ts listed"},
+        {"text": "command-file-created: command.ts exists", "passed": true, "evidence": "NotifyWithdrawalDecline/command.ts listed"},
+        {"text": "command-handler-created: commandHandler.ts exists", "passed": true, "evidence": "NotifyWithdrawalDecline/commandHandler.ts listed"},
+        {"text": "tests-created: command.slice.test.ts exists", "passed": true, "evidence": "command.slice.test.ts listed"},
+        {"text": "correct-slice-focus: implemented the correct slice from the diff", "passed": true, "evidence": "Correctly identified and implemented withdrawaldeclinenotified"},
+        {"text": "diff-ran: used git diff to identify what to implement", "passed": true, "evidence": "manifest shows diff_ran: true"}
+      ],
+      "notes": ["Fastest and most token-efficient run — 24 tool calls, 116s. SDLC workflow guided the agent directly to the right work."]
+    },
+    {
+      "eval_id": 2,
+      "eval_name": "what-to-code-next-sdlc-workflow",
+      "configuration": "without_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 0.714,
+        "passed": 5,
+        "failed": 2,
+        "total": 7,
+        "time_seconds": 306.3,
+        "tokens": 67429,
+        "tool_calls": 80,
+        "errors": 0
+      },
+      "expectations": [
+        {"text": "correct-status-update: index.json status set to 'Review' (not 'Done')", "passed": false, "evidence": "Set status to 'Done' — not a valid skill lifecycle value"},
+        {"text": "event-file-created: event file for target slice exists", "passed": true, "evidence": "WithdrawalDeclineNotified.ts exists in working tree"},
+        {"text": "command-file-created: command.ts exists", "passed": true, "evidence": "Existing command.ts from working tree"},
+        {"text": "command-handler-created: commandHandler.ts exists", "passed": true, "evidence": "Existing commandHandler.ts from working tree"},
+        {"text": "tests-created: command.slice.test.ts exists", "passed": true, "evidence": "Existing test from working tree"},
+        {"text": "correct-slice-focus: found the right slice to work on", "passed": true, "evidence": "Agent did find withdrawaldeclinenotified as the target"},
+        {"text": "diff-ran: used git diff to identify what to implement", "passed": false, "evidence": "Agent browsed files and checked event model status — did not use git diff"}
+      ],
+      "notes": ["Found correct slice but used wrong status value ('Done' vs 'Review'); created extra files beyond scope; 80 tool calls, 306s"]
+    }
+  ],
+  "run_summary": {
+    "with_skill": {
+      "pass_rate": {"mean": 1.0, "stddev": 0.0, "min": 1.0, "max": 1.0},
+      "time_seconds": {"mean": 178.8, "stddev": 117.9, "min": 96.4, "max": 324.2},
+      "tokens": {"mean": 49255, "stddev": 15134, "min": 38168, "max": 67392}
+    },
+    "without_skill": {
+      "pass_rate": {"mean": 0.286, "stddev": 0.299, "min": 0.0, "max": 0.714},
+      "time_seconds": {"mean": 296.7, "stddev": 30.1, "min": 262.1, "max": 321.7},
+      "tokens": {"mean": 68684, "stddev": 5523, "min": 63804, "max": 74820}
+    },
+    "delta": {
+      "pass_rate": "+0.71",
+      "time_seconds": "-117.9",
+      "tokens": "-19429"
+    }
+  },
+  "notes": [
+    "correct-slice-focus passes for both configs in eval-0 and eval-2 but catastrophically fails for without_skill in eval-1 (wrong slice entirely)",
+    "diff-ran is the single strongest discriminator — without skill, agents browse files; with skill, they use the prescribed git diff workflow",
+    "correct-status-update fails consistently without skill — 'Done' vs 'Review' is a convention only the skill encodes",
+    "With skill uses 39% fewer tokens on average (49K vs 69K) and is 40% faster (179s vs 297s)",
+    "Eval 1 is a poor test of new-slice creation (code already existed) — future iterations should use a branch without pre-existing code, or test with a fresh context"
+  ]
+}

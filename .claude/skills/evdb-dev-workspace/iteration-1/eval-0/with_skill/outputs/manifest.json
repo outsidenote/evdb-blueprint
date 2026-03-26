@@ -1,0 +1,24 @@
+{
+  "files_created": [
+    "src/BusinessCapabilities/Funds/swimlanes/Funds/events/FundDeposited.ts",
+    "src/BusinessCapabilities/Funds/swimlanes/Funds/views/SliceStateDepositFund/state.ts",
+    "src/BusinessCapabilities/Funds/swimlanes/Funds/views/SliceStateDepositFund/handlers.ts",
+    "src/BusinessCapabilities/Funds/swimlanes/Funds/views/SliceStateDepositFund/view.slice.test.ts",
+    "src/BusinessCapabilities/Funds/swimlanes/Funds/views/FundsView/state.ts",
+    "src/BusinessCapabilities/Funds/swimlanes/Funds/views/FundsView/handlers.ts",
+    "src/BusinessCapabilities/Funds/swimlanes/Funds/views/FundsView/view.slice.test.ts",
+    "src/BusinessCapabilities/Funds/slices/DepositFund/command.ts",
+    "src/BusinessCapabilities/Funds/slices/DepositFund/gwts.ts",
+    "src/BusinessCapabilities/Funds/slices/DepositFund/commandHandler.ts",
+    "src/BusinessCapabilities/Funds/slices/DepositFund/adapter.ts",
+    "src/BusinessCapabilities/Funds/slices/DepositFund/tests/command.slice.test.ts",
+    "src/BusinessCapabilities/Funds/endpoints/DepositFund/REST/index.ts"
+  ],
+  "files_modified": [
+    "src/BusinessCapabilities/Funds/swimlanes/Funds/index.ts",
+    "src/BusinessCapabilities/Funds/endpoints/routes.ts",
+    ".eventmodel/.slices/index.json"
+  ],
+  "index_json_status": "Review",
+  "pattern_identified": "Pattern 1: REST Request/Response — STATE_CHANGE slice with SCREEN → COMMAND (DepositFund) → EVENT (FundDeposited) → READMODEL (FundsView) all within the same Funds swimlane. Implemented as a REST POST endpoint with a SliceStateDepositFund view for tracking prior deposits and a FundsView for the deposit read model. One domain validation spec: amount cannot be less than zero (throws Error)."
+}

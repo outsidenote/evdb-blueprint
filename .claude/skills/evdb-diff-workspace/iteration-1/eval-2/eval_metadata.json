@@ -1,0 +1,14 @@
+{
+  "eval_id": 2,
+  "eval_name": "new-slice-added-what-changed",
+  "prompt": "I added a new slice to my event model index. What slices changed and what are the actions?",
+  "assertions": [
+    {"text": "is-valid-json: output is parseable as JSON"},
+    {"text": "is-bare-json-array: output contains no markdown fences, no prose — just a raw JSON array"},
+    {"text": "correct-slice-name: output contains 'slice: Withdrawal Decline Notified'"},
+    {"text": "correct-folder: output contains 'withdrawaldeclinenotified'"},
+    {"text": "correct-action: output contains action value 'implement' (not 'delete')"},
+    {"text": "single-item: the array has exactly 1 element"},
+    {"text": "correct-context: output contains context value 'Funds'"}
+  ]
+}

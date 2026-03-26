@@ -1,0 +1,13 @@
+{
+  "expectations": [
+    {"text": "correct-status-update: index.json status set to 'Review' (not 'Done', not left as 'Planned')", "passed": true, "evidence": "manifest.json shows index_json_status: 'Review'"},
+    {"text": "event-file-created: an event TypeScript class file was created", "passed": true, "evidence": "FundDeposited.ts in files_created"},
+    {"text": "command-file-created: command.ts was created for the slice", "passed": true, "evidence": "slices/DepositFund/command.ts in files_created"},
+    {"text": "command-handler-created: commandHandler.ts was created", "passed": true, "evidence": "slices/DepositFund/commandHandler.ts in files_created"},
+    {"text": "tests-created: command.slice.test.ts was created", "passed": true, "evidence": "slices/DepositFund/tests/command.slice.test.ts in files_created"},
+    {"text": "correct-slice-focus: implemented the requested slice (DepositFund), not a different one", "passed": true, "evidence": "All files are under DepositFund/FundDeposited naming"},
+    {"text": "view-created: slice-state view created (SliceStateDepositFund) since slice has specifications with given events", "passed": true, "evidence": "views/SliceStateDepositFund/state.ts and handlers.ts in files_created"}
+  ],
+  "summary": {"passed": 7, "failed": 0, "total": 7, "pass_rate": 1.0},
+  "timing": {"total_duration_seconds": 324.2}
+}

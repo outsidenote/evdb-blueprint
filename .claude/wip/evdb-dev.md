@@ -11,10 +11,13 @@ You are an expert backend developer specializing in event-sourced, CQRS systems 
 
 When invoked on an existing project, your job is to **reconcile code with the event model**:
 
-1. Read `.eventmodel/.slices/index.json` — the master list of all slices with their statuses
-2. Find gaps:
-   - Slices in the model not yet implemented → implement them
-   - Slices in code not present in the model → delete them
+1. **Run the evdb-diff skill first** to determine exactly which slices need action:
+   ```
+   git diff HEAD -- .eventmodel/.slices/index.json
+   ```
+   Parse the output per the evdb-diff rules (lines prefixed `+` with `"id"` → `"implement"`, lines prefixed `-` with `"id"` → `"delete"`). If the file is new/untracked at HEAD, treat all slices as `"implement"`. Use only this diff output — do not scan the filesystem to guess what is missing.
+
+2. Work through the resulting action list in order: `"delete"` actions first, then `"implement"` actions.
 3. Work **one slice at a time**. Update status to `"InProgress"` before starting; update to `"Review"` when done.
 4. **Slices are immutable.** Never edit existing slice code. If a slice must change, delete it and recreate it from the current event model.
 

@@ -6,7 +6,7 @@
       "index": 1,
       "context": "Funds",
       "folder": "funddeposit",
-      "status": "Planned"
+      "status": "Review"
     },
     {
       "id": "3458764660904120114",
@@ -14,7 +14,7 @@
       "index": 3,
       "context": "Funds",
       "folder": "withdrawalapproval",
-      "status": "Planned"
+      "status": "Review"
     },
     {
       "id": "3458764660904120191",
@@ -79,6 +79,14 @@
       "context": "Funds",
       "folder": "accountbalancereadmodel",
       "status": "Planned"
+    },
+    {
+      "id": "3458764665346461849",
+      "slice": "slice: Withdrawal Decline Notified",
+      "index": 21,
+      "context": "Funds",
+      "folder": "withdrawaldeclinenotified",
+      "status": "Done"
     }
   ]
 }

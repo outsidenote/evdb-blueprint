@@ -1,0 +1,44 @@
+{
+  "task": "Implement the next slice: Withdrawal Decline Notified (withdrawaldeclinenotified)",
+  "slice": {
+    "id": "3458764665346461849",
+    "title": "slice: Withdrawal Decline Notified",
+    "context": "Funds",
+    "folder": "withdrawaldeclinenotified",
+    "statusBefore": "Review",
+    "statusAfter": "Done"
+  },
+  "filesCreated": [
+    "src/BusinessCapabilities/Funds/swimlanes/Funds/messages/withdrawalDeclineNotifiedMessages.ts",
+    "src/BusinessCapabilities/Funds/slices/WithdrawalDeclines/index.ts",
+    "src/BusinessCapabilities/Funds/slices/WithdrawalDeclines/projection.slice.test.ts"
+  ],
+  "filesModified": [
+    "src/BusinessCapabilities/Funds/swimlanes/Funds/index.ts",
+    "src/server.ts",
+    ".eventmodel/.slices/index.json",
+    ".eventmodel/.slices/Funds/withdrawaldeclinenotified/slice.json"
+  ],
+  "changes": [
+    {
+      "file": "src/BusinessCapabilities/Funds/swimlanes/Funds/messages/withdrawalDeclineNotifiedMessages.ts",
+      "description": "New messages function for WithdrawalDeclineNotified event — emits an idempotency message keyed by transactionId for the NotifyWithdrawalDecline consumer"
+    },
+    {
+      "file": "src/BusinessCapabilities/Funds/swimlanes/Funds/index.ts",
+      "description": "Imported withdrawalDeclineNotifiedMessages and wired it to the WithdrawalDeclineNotified event type in the stream factory (previously registered with no messages handler)"
+    },
+    {
+      "file": "src/BusinessCapabilities/Funds/slices/WithdrawalDeclines/index.ts",
+      "description": "New ProjectionConfig for the 'withdrawal declines' read model — listens to WithdrawalDeclinedNotification messages and UPSERTs decline records keyed by account"
+    },
+    {
+      "file": "src/BusinessCapabilities/Funds/slices/WithdrawalDeclines/projection.slice.test.ts",
+      "description": "Projection slice tests: create decline record, update existing record on replay, multiple accounts tracked independently"
+    },
+    {
+      "file": "src/server.ts",
+      "description": "Imported withdrawalDeclinesSlice and added it to the projectionSlices array so it is registered at startup"
+    }
+  ]
+}

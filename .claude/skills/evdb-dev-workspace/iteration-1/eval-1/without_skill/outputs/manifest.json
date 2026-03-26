@@ -1,0 +1,31 @@
+{
+  "slice": "WithdrawalApproval",
+  "eventModelSliceId": "3458764660904120114",
+  "status": "implemented",
+  "files_created": [
+    "src/BusinessCapabilities/Funds/swimlanes/Funds/events/WithdrawalDeclineNotified.ts",
+    "src/BusinessCapabilities/Funds/slices/NotifyWithdrawalDecline/command.ts",
+    "src/BusinessCapabilities/Funds/slices/NotifyWithdrawalDecline/commandHandler.ts",
+    "src/BusinessCapabilities/Funds/slices/NotifyWithdrawalDecline/adapter.ts",
+    "src/BusinessCapabilities/Funds/slices/NotifyWithdrawalDecline/tests/command.slice.test.ts",
+    "src/BusinessCapabilities/Funds/endpoints/NotifyWithdrawalDecline/pg-boss/index.ts"
+  ],
+  "files_modified": [
+    "src/BusinessCapabilities/Funds/swimlanes/Funds/messages/declinedMessages.ts",
+    "src/BusinessCapabilities/Funds/swimlanes/Funds/index.ts",
+    "src/server.ts"
+  ],
+  "files_already_present": [
+    "src/BusinessCapabilities/Funds/slices/ApproveWithdrawal/command.ts",
+    "src/BusinessCapabilities/Funds/slices/ApproveWithdrawal/commandHandler.ts",
+    "src/BusinessCapabilities/Funds/slices/ApproveWithdrawal/adapter.ts",
+    "src/BusinessCapabilities/Funds/slices/ApproveWithdrawal/gwts.ts",
+    "src/BusinessCapabilities/Funds/slices/ApproveWithdrawal/tests/command.slice.test.ts",
+    "src/BusinessCapabilities/Funds/endpoints/ApproveWithdrawal/REST/index.ts",
+    "src/BusinessCapabilities/Funds/swimlanes/Funds/events/FundsWithdrawalApproved.ts",
+    "src/BusinessCapabilities/Funds/swimlanes/Funds/events/FundsWithdrawalDeclined.ts",
+    "src/BusinessCapabilities/Funds/swimlanes/Funds/messages/approvedMessages.ts",
+    "src/BusinessCapabilities/Funds/swimlanes/Funds/views/SliceStateApproveWithdrawal/state.ts",
+    "src/BusinessCapabilities/Funds/swimlanes/Funds/views/SliceStateApproveWithdrawal/handlers.ts"
+  ]
+}

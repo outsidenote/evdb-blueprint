@@ -1,0 +1,239 @@
+---
+name: evdb-dev
+description: >
+  Backend developer skill for the eventualize-js (evdb) blueprint pattern. Implements
+  event-sourced CQRS slices from the .eventmodel folder, one slice at a time. Use this
+  skill whenever the user asks to implement a slice, add a feature to this evdb project,
+  generate code from the event model, build a command handler or projection, or asks
+  anything about writing code that maps to the .eventmodel structure. Trigger even for
+  casual asks like "implement this slice", "build the X feature", or "what do I need to
+  code next?" when working in this evdb project.
+---
+
+You are an expert backend developer specialising in event-sourced, CQRS systems built
+with the **eventualize-js (evdb) framework**. The `.eventmodel/` folder is the **single
+source of truth** — implement only what is modelled there.
+
+---
+
+## SDLC Workflow
+
+1. **Run `git diff HEAD -- .eventmodel/.slices/index.json`** to determine which slices need
+   action. Parse: lines prefixed `+` with `"id"` → `"implement"`; lines prefixed `-` with
+   `"id"` → `"delete"`. If the file is untracked at HEAD, treat every slice as `"implement"`.
+   Use only this diff — do not scan the filesystem to guess what is missing.
+
+2. Work through the action list in order: `"delete"` first, then `"implement"`.
+3. Work **one slice at a time**. Set status `"InProgress"` before starting, `"Review"` when done.
+4. **Slices are immutable.** To change a slice: delete it, then recreate from the event model.
+
+### Slice Status Lifecycle
+
+| Status | Meaning |
+|---|---|
+| `"Created"` | Specified in the model, not yet reviewed |
+| `"Planned"` | Reviewed — knows what needs to be built |
+| `"InProgress"` | Being implemented right now |
+| `"Review"` | Complete, ready for human review |
+
+---
+
+## Event Model Structure
+
+```
+.eventmodel/
+├── config.json                  ← all slices inline (large — avoid reading whole file)
+├── .slices/
+│   └── <Context>/
+│       └── <sliceFolder>/
+│           └── slice.json       ← per-slice detail
+└── .slices/index.json           ← slice list: id, title, context, folder, status
+```
+
+`context` maps directly to `src/BusinessCapabilities/<context>/`.
+
+---
+
+## Recognising Patterns from the Event Model Graph
+
+Classify each slice before writing any code.
+
+### Pattern 1: REST Request/Response
+**Signal**: `SCREEN → COMMAND → EVENT → READMODEL`, read model has no outbound dependency
+to another screen in a different slice.
+**Code**: REST POST endpoint. The read model lives inside the EvDbStream as a view.
+
+### Pattern 2: Stream View (same swimlane)
+**Signal**: A `READMODEL` with multiple `INBOUND EVENT` deps all from the **same swimlane**.
+**Code**: In-process view inside the EvDbStream — `views/<ViewName>/state.ts` + `handlers.ts`.
+
+### Pattern 3: Kafka Projection (multiple swimlanes)
+**Signal**: A `READMODEL` with `INBOUND EVENT` deps from **different swimlanes**.
+**Code**: Each populating event emits a Kafka message; a projection slice consumes and writes to SQL.
+
+### Pattern 4: TODO-List Read Model (pg-boss queue feed)
+**Signal**: A `READMODEL` with an `OUTBOUND AUTOMATION` dependency.
+**Code**: pg-boss queue, populated via `createPgBossQueueMessageFromEvent` in the outbox message producer.
+
+### Pattern 5: Automation (event-driven command handler)
+**Signal**: A `PROCESSOR` with `type: "AUTOMATION"`, `INBOUND READMODEL`, `OUTBOUND COMMAND`.
+**Code**: pg-boss worker — structurally identical to a REST endpoint but triggered by a job.
+
+---
+
+## Slice JSON → Code Element Mapping
+
+### Slice Types
+
+| `sliceType` | Pattern | Code artifacts |
+|---|---|---|
+| `STATE_CHANGE` | Command handler | `command.ts`, `gwts.ts`, `commandHandler.ts`, `adapter.ts` + endpoint |
+| `STATE_VIEW` | Kafka projection | `slices/<Name>/index.ts` with `ProjectionConfig` |
+| `UNDEFINED` | Pure processor | pg-boss endpoint only |
+
+### Element Types
+
+| JSON element | Code artifact |
+|---|---|
+| `commands[]` | `slices/<SliceName>/command.ts` |
+| `events[]` | `swimlanes/<Stream>/events/<EventName>.ts` |
+| `readmodels[]` — same swimlane | `swimlanes/<Stream>/views/<ViewName>/state.ts` + `handlers.ts` |
+| `readmodels[]` — multiple swimlanes | `slices/<ProjectionName>/index.ts` (ProjectionConfig) |
+| `processors[]` `type: "AUTOMATION"` | `endpoints/<SliceName>/pg-boss/index.ts` |
+| `specifications[]` | `gwts.ts` predicates + `slices/<SliceName>/tests/command.slice.test.ts` |
+
+### Field Type Mapping
+
+| Event model type | TypeScript type |
+|---|---|
+| `UUID` | `string` |
+| `String` | `string` |
+| `Double` | `number` |
+| `DateTime` | `Date` |
+
+Fields marked `"generated": true` are computed in the endpoint or enrichment step (e.g.
+`new Date()`, `randomUUID()`, calculated values). Never passed in by the caller.
+
+### Dependency Arrows
+
+| `type` | `elementType` | Meaning |
+|---|---|---|
+| `INBOUND` | `COMMAND` | This event is produced by that command |
+| `INBOUND` | `EVENT` | This read model is built from that event |
+| `INBOUND` | `READMODEL` | This automation is triggered by that read model |
+| `OUTBOUND` | `EVENT` | This command can produce this event |
+| `OUTBOUND` | `READMODEL` | This event updates this read model / view |
+| `OUTBOUND` | `COMMAND` | This automation triggers this command |
+| `OUTBOUND` | `AUTOMATION` | This read model feeds into this automation (TODO-list) |
+
+---
+
+## Specifications → Dedicated Slice-State View
+
+When a slice has `specifications[]` entries with `given` events, those events define the
+state the command handler needs. Maintain it in a **`SliceState<SliceName>` view**.
+
+- **Location**: `swimlanes/<Stream>/views/SliceState<SliceName>/state.ts` + `handlers.ts`
+- **Handlers**: only for event types that appear in `given` across all specifications
+- **State shape**: minimum state the predicates need
+- **Registered** in the stream factory with `.withView(sliceStateViewName, defaultState, handlers)`
+- **Read exclusively** by this command handler via `stream.views.SliceState<SliceName>`
+
+### Spec Mapping
+
+- `spec.comments[0].description` → predicate name in `gwts.ts` (camelCase)
+- `spec.given[]` → events that hydrate `SliceState<SliceName>`
+- `spec.when[0]` → the command
+- `spec.then[]` → expected emitted events (empty `then[]` = idempotent/ignore path)
+
+The **default flow** (happy path, no pre-existing state) is also a required test case.
+
+---
+
+## Project Directory Structure
+
+```
+src/BusinessCapabilities/<context>/
+├── endpoints/
+│   ├── <SliceName>/REST/index.ts
+│   ├── <SliceName>/pg-boss/index.ts
+│   └── routes.ts
+├── slices/
+│   ├── <SliceName>/
+│   │   ├── command.ts
+│   │   ├── gwts.ts
+│   │   ├── commandHandler.ts
+│   │   ├── adapter.ts
+│   │   └── tests/command.slice.test.ts
+│   └── <ProjectionName>/
+│       ├── index.ts
+│       └── projection.slice.test.ts
+└── swimlanes/<StreamName>/
+    ├── events/<EventName>.ts
+    ├── views/
+    │   ├── SliceState<SliceName>/
+    │   │   ├── state.ts, handlers.ts, view.slice.test.ts
+    │   └── <OtherViewName>/
+    │       ├── state.ts, handlers.ts, view.slice.test.ts
+    ├── messages/<eventName>Messages.ts
+    └── index.ts
+```
+
+---
+
+## Key Conventions
+
+- **Pure handlers**: `commandHandler.ts` never imports storage, I/O, or time. Only `stream.appendEvent*()`.
+- **GWTS predicates**: every branch in a handler has a named predicate in `gwts.ts` matching `spec.comments[0].description`.
+- **Generated fields**: computed in endpoints only — never in the pure handler.
+- **Stream ID**: derived from `aggregate` in slice JSON (e.g. `command.account` for `aggregate: "funds"`).
+- **Idempotency**: every pg-boss worker uses `getIdempotencyKey(transactionId, "<SliceName>")`.
+- **Outbox triple**: events feeding automations produce: pg-boss message + Kafka message + idempotency marker.
+- **View names**: always `const viewName = "..." as const` from `state.ts`, imported by reference.
+- **Storage injection**: never singleton — always injected from `server.ts` downward.
+- **`.js` extensions**: all relative imports use `.js` even for `.ts` source files.
+- **Slices are immutable**: delete and recreate, never edit in place.
+
+---
+
+## Implementation Order per Slice
+
+1. Update status to `"InProgress"` in `.eventmodel/.slices/index.json`
+2. Read the slice JSON; classify the pattern
+3. Create event class files (see `references/templates.md` → Event)
+4. If `specifications[]` has `given` events → create `SliceState<SliceName>` view
+5. Create any other required views
+6. Create or update stream factory `index.ts`
+7. Create outbox message producers for events with downstream automation/cross-context deps
+8. Create `command.ts`, `gwts.ts`, `commandHandler.ts`, `adapter.ts`
+9. Create endpoint (`REST/index.ts` or `pg-boss/index.ts`)
+10. Register in `server.ts` and `routes.ts`
+11. Write slice-level tests only (no integration or behaviour tests):
+    - `slices/<SliceName>/tests/command.slice.test.ts` — main flow + all GWT scenarios
+    - `swimlanes/<Stream>/views/SliceState<SliceName>/view.slice.test.ts`
+    - `swimlanes/<Stream>/views/<OtherView>/view.slice.test.ts`
+    - `slices/<ProjectionName>/projection.slice.test.ts`
+12. Update status to `"Review"` in `.eventmodel/.slices/index.json`
+
+Never skip the status updates. Never start the next slice before marking the current one `"Review"`.
+
+---
+
+## Reference Files
+
+Read these when you need the detailed templates — don't load them unless you're about to write the relevant code:
+
+- **`references/templates.md`** — TypeScript file templates for all artifact types
+  (Event, View state/handlers, Stream factory, Command, GWTS, CommandHandler, Adapter,
+  REST endpoint, pg-boss endpoint, Projection, Messages)
+- **`references/tests.md`** — Test file templates
+  (Command slice tests, View slice tests, Projection slice tests)
+
+---
+
+## `server.ts` Registration
+
+After implementing a slice:
+1. pg-boss worker → add to `PgBossEndpointFactory.startAll(boss, [...], pool, kafka)`
+2. Projection slice → add to `ProjectionFactory.startAll(kafka, pool, [...])`
+3. Router → `app.use("/api/<context>", create<Context>Router(storageAdapter))`

@@ -1,28 +1,32 @@
 {
-  "id": "3458764660904347015",
-  "status": "Planned",
-  "title": "slice: Withdraw Funds",
+  "id": "3458764665346461849",
+  "status": "Done",
+  "title": "slice: Withdrawal Decline Notified",
   "context": "Funds",
   "sliceType": "STATE_CHANGE",
   "commands": [
     {
-      "id": "3458764660904120928",
+      "id": "3458764665346180015",
       "tags": [],
+      "elementContext": "INTERNAL",
       "modelContext": "Funds",
-      "slice": "slice: Withdraw Funds",
-      "title": "Withdraw Funds",
+      "context": "INTERNAL",
+      "slice": "slice: Withdrawal Decline Notified",
+      "title": "Notify Withdrawal Decline",
       "fields": [
         {
           "name": "Account",
           "type": "UUID",
           "example": "1234",
+          "subfields": [],
           "cardinality": "Single",
           "idAttribute": false
         },
         {
           "name": "Amount",
           "type": "Double",
-          "example": "21",
+          "example": "20",
+          "subfields": [],
           "cardinality": "Single",
           "idAttribute": false
         },
@@ -30,6 +34,15 @@
           "name": "Currency",
           "type": "String",
           "example": "USD",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "DeclinedDate",
+          "type": "DateTime",
+          "generated": true,
+          "subfields": [],
           "cardinality": "Single",
           "idAttribute": false
         },
@@ -37,27 +50,16 @@
           "name": "Payer",
           "type": "String",
           "example": "John Doe",
+          "subfields": [],
           "cardinality": "Single",
           "idAttribute": false
         },
         {
-          "name": "source",
+          "name": "reason",
           "type": "String",
-          "example": "PayPal",
-          "cardinality": "Single",
-          "idAttribute": false
-        },
-        {
-          "name": "ApprovalDate",
-          "type": "DateTime",
-          "example": "2025-01-01 11:00",
-          "cardinality": "Single",
-          "idAttribute": false
-        },
-        {
-          "name": "commission",
-          "type": "Double",
-          "example": "0.05",
+          "example": "some reason",
+          "generated": true,
+          "subfields": [],
           "cardinality": "Single",
           "idAttribute": false
         },
@@ -65,6 +67,15 @@
           "name": "session",
           "type": "UUID",
           "example": "0011",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "source",
+          "type": "String",
+          "example": "ATM",
+          "subfields": [],
           "cardinality": "Single",
           "idAttribute": false
         },
@@ -72,6 +83,7 @@
           "name": "transactionId",
           "type": "String",
           "example": "0011",
+          "subfields": [],
           "cardinality": "Single",
           "idAttribute": false
         }
@@ -80,30 +92,17 @@
       "description": "",
       "aggregate": "funds",
       "aggregateDependencies": [
-        "funds",
-        "external events"
+        "funds"
       ],
       "dependencies": [
         {
-          "id": "3458764660914727533",
+          "id": "3458764665345874084",
           "type": "OUTBOUND",
-          "title": "Funds Withdrawal Declined",
+          "title": "Withdrawal Decline Notified",
           "elementType": "EVENT"
         },
         {
-          "id": "3458764660904120896",
-          "type": "OUTBOUND",
-          "title": "Funds Withdrawn from Account",
-          "elementType": "EVENT"
-        },
-        {
-          "id": "3458764660904120876",
-          "type": "OUTBOUND",
-          "title": "Funds Withdrawn",
-          "elementType": "EVENT"
-        },
-        {
-          "id": "3458764660904120816",
+          "id": "3458764665346180005",
           "type": "INBOUND",
           "title": "processor",
           "elementType": "AUTOMATION"
@@ -119,13 +118,13 @@
   ],
   "events": [
     {
-      "id": "3458764660914727533",
+      "id": "3458764665345874084",
       "tags": [],
       "elementContext": "INTERNAL",
       "modelContext": "Funds",
       "context": "INTERNAL",
-      "slice": "slice: Withdraw Funds",
-      "title": "Funds Withdrawal Declined",
+      "slice": "slice: Withdrawal Decline Notified",
+      "title": "Withdrawal Decline Notified",
       "fields": [
         {
           "name": "Account",
@@ -205,185 +204,13 @@
       "description": "",
       "aggregate": "funds",
       "aggregateDependencies": [
-        "funds",
-        "external events"
+        "funds"
       ],
       "dependencies": [
         {
-          "id": "3458764665346180017",
-          "type": "OUTBOUND",
-          "title": "withdrawal declines",
-          "elementType": "READMODEL"
-        },
-        {
-          "id": "3458764660904120928",
+          "id": "3458764665346180015",
           "type": "INBOUND",
-          "title": "Withdraw Funds",
-          "elementType": "COMMAND"
-        }
-      ],
-      "createsAggregate": false,
-      "triggers": [],
-      "sketched": false,
-      "prototype": {
-        "activeByDefault": false
-      }
-    },
-    {
-      "id": "3458764660904120896",
-      "tags": [],
-      "elementContext": "INTERNAL",
-      "modelContext": "Funds",
-      "context": "INTERNAL",
-      "slice": "slice: Withdraw Funds",
-      "title": "Funds Withdrawn from Account",
-      "fields": [
-        {
-          "name": "Account",
-          "type": "UUID",
-          "example": "1234",
-          "cardinality": "Single",
-          "idAttribute": false
-        },
-        {
-          "name": "Amount",
-          "type": "Double",
-          "example": "21",
-          "cardinality": "Single",
-          "idAttribute": false
-        },
-        {
-          "name": "Currency",
-          "type": "String",
-          "example": "USD",
-          "cardinality": "Single",
-          "idAttribute": false
-        },
-        {
-          "name": "source",
-          "type": "String",
-          "example": "PayPal",
-          "cardinality": "Single",
-          "idAttribute": false
-        },
-        {
-          "name": "Payer",
-          "type": "String",
-          "example": "John Doe",
-          "cardinality": "Single",
-          "idAttribute": false
-        },
-        {
-          "name": "ApprovalDate",
-          "type": "DateTime",
-          "example": "2025-01-01 11:00",
-          "cardinality": "Single",
-          "idAttribute": false
-        },
-        {
-          "name": "commission",
-          "type": "Double",
-          "example": "0.05",
-          "cardinality": "Single",
-          "idAttribute": false
-        },
-        {
-          "name": "session",
-          "type": "UUID",
-          "example": "0011",
-          "cardinality": "Single",
-          "idAttribute": false
-        },
-        {
-          "name": "transactionId",
-          "type": "String",
-          "example": "0011",
-          "cardinality": "Single",
-          "idAttribute": false
-        }
-      ],
-      "type": "EVENT",
-      "description": "",
-      "aggregate": "funds",
-      "aggregateDependencies": [
-        "funds",
-        "external events"
-      ],
-      "dependencies": [
-        {
-          "id": "3458764660904347028",
-          "type": "OUTBOUND",
-          "title": "Account Balance (USD)",
-          "elementType": "READMODEL"
-        },
-        {
-          "id": "3458764660904120928",
-          "type": "INBOUND",
-          "title": "Withdraw Funds",
-          "elementType": "COMMAND"
-        }
-      ],
-      "createsAggregate": false,
-      "triggers": [],
-      "sketched": false,
-      "prototype": {
-        "activeByDefault": false
-      }
-    },
-    {
-      "id": "3458764660904120876",
-      "tags": [],
-      "elementContext": "EXTERNAL",
-      "modelContext": "Funds",
-      "context": "EXTERNAL",
-      "slice": "slice: Withdraw Funds",
-      "title": "Funds Withdrawn",
-      "fields": [
-        {
-          "name": "Account",
-          "type": "UUID",
-          "example": "1234",
-          "subfields": [],
-          "cardinality": "Single",
-          "idAttribute": false
-        },
-        {
-          "name": "Amount",
-          "type": "Double",
-          "example": "21",
-          "subfields": [],
-          "cardinality": "Single",
-          "idAttribute": false
-        },
-        {
-          "name": "Currency",
-          "type": "String",
-          "example": "USD",
-          "subfields": [],
-          "cardinality": "Single",
-          "idAttribute": false
-        },
-        {
-          "name": "session",
-          "type": "String",
-          "example": "0011",
-          "subfields": [],
-          "cardinality": "Single",
-          "idAttribute": false
-        }
-      ],
-      "type": "EVENT",
-      "description": "",
-      "aggregate": "external events",
-      "aggregateDependencies": [
-        "funds",
-        "external events"
-      ],
-      "dependencies": [
-        {
-          "id": "3458764660904120928",
-          "type": "INBOUND",
-          "title": "Withdraw Funds",
+          "title": "Notify Withdrawal Decline",
           "elementType": "COMMAND"
         }
       ],
@@ -395,37 +222,29 @@
       }
     }
   ],
-  "readmodels": [],
-  "screens": [],
-  "screenImages": [],
-  "screenLayouts": [],
-  "processors": [
+  "readmodels": [
     {
-      "id": "3458764660904120816",
+      "id": "3458764665346180017",
       "tags": [],
-      "groupId": "3458764660904120833",
+      "elementContext": "INTERNAL",
       "modelContext": "Funds",
-      "slice": "slice: Withdraw Funds",
-      "title": "processor",
+      "context": "INTERNAL",
+      "slice": "slice: Withdrawal Decline Notified",
+      "title": "withdrawal declines",
       "fields": [
         {
           "name": "Account",
           "type": "UUID",
           "example": "1234",
+          "subfields": [],
           "cardinality": "Single",
           "idAttribute": false
         },
         {
           "name": "Amount",
           "type": "Double",
-          "example": "100",
-          "cardinality": "Single",
-          "idAttribute": false
-        },
-        {
-          "name": "commission",
-          "type": "Double",
-          "example": "0.05",
+          "example": "20",
+          "subfields": [],
           "cardinality": "Single",
           "idAttribute": false
         },
@@ -433,6 +252,15 @@
           "name": "Currency",
           "type": "String",
           "example": "USD",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "DeclinedDate",
+          "type": "DateTime",
+          "generated": true,
+          "subfields": [],
           "cardinality": "Single",
           "idAttribute": false
         },
@@ -440,20 +268,16 @@
           "name": "Payer",
           "type": "String",
           "example": "John Doe",
+          "subfields": [],
           "cardinality": "Single",
           "idAttribute": false
         },
         {
-          "name": "source",
+          "name": "reason",
           "type": "String",
-          "example": "PayPal",
-          "cardinality": "Single",
-          "idAttribute": false
-        },
-        {
-          "name": "ApprovalDate",
-          "type": "DateTime",
-          "example": "2025-01-01 11:00",
+          "example": "some reason",
+          "generated": true,
+          "subfields": [],
           "cardinality": "Single",
           "idAttribute": false
         },
@@ -461,6 +285,15 @@
           "name": "session",
           "type": "UUID",
           "example": "0011",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "source",
+          "type": "String",
+          "example": "ATM",
+          "subfields": [],
           "cardinality": "Single",
           "idAttribute": false
         },
@@ -468,6 +301,124 @@
           "name": "transactionId",
           "type": "String",
           "example": "0011",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        }
+      ],
+      "type": "READMODEL",
+      "description": "",
+      "aggregate": "funds",
+      "aggregateDependencies": [
+        "funds"
+      ],
+      "dependencies": [
+        {
+          "id": "3458764665346180005",
+          "type": "OUTBOUND",
+          "title": "processor",
+          "elementType": "AUTOMATION"
+        },
+        {
+          "id": "3458764660914727533",
+          "type": "INBOUND",
+          "title": "Funds Withdrawal Declined",
+          "elementType": "EVENT"
+        }
+      ],
+      "listElement": true,
+      "createsAggregate": false,
+      "triggers": [],
+      "sketched": false,
+      "prototype": {
+        "activeByDefault": false
+      }
+    }
+  ],
+  "screens": [],
+  "screenImages": [],
+  "screenLayouts": [],
+  "processors": [
+    {
+      "id": "3458764665346180005",
+      "tags": [],
+      "groupId": "3458764665346180014",
+      "elementContext": "INTERNAL",
+      "modelContext": "Funds",
+      "context": "INTERNAL",
+      "slice": "slice: Withdrawal Decline Notified",
+      "title": "processor",
+      "fields": [
+        {
+          "name": "Account",
+          "type": "UUID",
+          "example": "1234",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "Amount",
+          "type": "Double",
+          "example": "20",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "Currency",
+          "type": "String",
+          "example": "USD",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "DeclinedDate",
+          "type": "DateTime",
+          "generated": true,
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "Payer",
+          "type": "String",
+          "example": "John Doe",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "reason",
+          "type": "String",
+          "example": "some reason",
+          "generated": true,
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "session",
+          "type": "UUID",
+          "example": "0011",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "source",
+          "type": "String",
+          "example": "ATM",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "transactionId",
+          "type": "String",
+          "example": "0011",
+          "subfields": [],
           "cardinality": "Single",
           "idAttribute": false
         }
@@ -476,20 +427,19 @@
       "description": "",
       "aggregate": "funds",
       "aggregateDependencies": [
-        "funds",
-        "external events"
+        "funds"
       ],
       "dependencies": [
         {
-          "id": "3458764660904120928",
+          "id": "3458764665346180015",
           "type": "OUTBOUND",
-          "title": "Withdraw Funds",
+          "title": "Notify Withdrawal Decline",
           "elementType": "COMMAND"
         },
         {
-          "id": "3458764660904120726",
+          "id": "3458764665346180017",
           "type": "INBOUND",
-          "title": "Funds to Withdraw",
+          "title": "withdrawal declines",
           "elementType": "READMODEL"
         }
       ],
@@ -505,7 +455,6 @@
   "specifications": [],
   "actors": [],
   "aggregates": [
-    "funds",
-    "external events"
+    "funds"
   ]
 }

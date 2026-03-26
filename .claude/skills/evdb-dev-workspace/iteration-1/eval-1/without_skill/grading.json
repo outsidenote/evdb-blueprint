@@ -1,0 +1,13 @@
+{
+  "expectations": [
+    {"text": "correct-status-update: index.json status set to 'Review' (not 'Done', not left as 'Planned')", "passed": false, "evidence": "Agent updated status for NotifyWithdrawalDecline (wrong slice), not for WithdrawalApproval"},
+    {"text": "event-file-created: the required event TypeScript class files exist (FundsWithdrawalApproved, FundsWithdrawalDeclined)", "passed": false, "evidence": "Agent created WithdrawalDeclineNotified.ts — a completely different event for a different slice"},
+    {"text": "command-file-created: command.ts exists for ApproveWithdrawal", "passed": false, "evidence": "Agent created NotifyWithdrawalDecline/command.ts — wrong slice entirely"},
+    {"text": "command-handler-created: commandHandler.ts for ApproveWithdrawal exists", "passed": false, "evidence": "Agent created NotifyWithdrawalDecline/commandHandler.ts — wrong slice"},
+    {"text": "tests-created: command.slice.test.ts for ApproveWithdrawal exists", "passed": false, "evidence": "Agent created tests for NotifyWithdrawalDecline, not WithdrawalApproval"},
+    {"text": "correct-slice-focus: focused on WithdrawalApproval, not a different slice", "passed": false, "evidence": "Agent completely lost context and implemented NotifyWithdrawalDecline instead"},
+    {"text": "view-created: SliceStateApproveWithdrawal view exists", "passed": false, "evidence": "No ApproveWithdrawal view was created or verified — agent worked on wrong slice"}
+  ],
+  "summary": {"passed": 0, "failed": 7, "total": 7, "pass_rate": 0.0},
+  "timing": {"total_duration_seconds": 321.7}
+}

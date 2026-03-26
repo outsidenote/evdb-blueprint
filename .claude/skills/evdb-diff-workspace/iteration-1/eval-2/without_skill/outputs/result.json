@@ -1,0 +1,61 @@
+{
+  "changed_slices": [
+    {
+      "slice": "slice: Withdrawal Decline Notified",
+      "folder": "withdrawaldeclinenotified",
+      "context": "Funds",
+      "change_type": "added",
+      "status": "Review",
+      "index": 21,
+      "actions": {
+        "commands": [
+          {
+            "title": "Notify Withdrawal Decline",
+            "type": "COMMAND",
+            "aggregate": "funds"
+          }
+        ],
+        "events": [
+          {
+            "title": "Withdrawal Decline Notified",
+            "type": "EVENT",
+            "aggregate": "funds"
+          }
+        ],
+        "readmodels": [
+          {
+            "title": "withdrawal declines",
+            "type": "READMODEL",
+            "aggregate": "funds"
+          }
+        ],
+        "processors": [
+          {
+            "title": "processor",
+            "type": "AUTOMATION",
+            "aggregate": "funds"
+          }
+        ]
+      }
+    },
+    {
+      "slice": "slice: Withdraw Funds",
+      "folder": "withdrawfunds",
+      "context": "Funds",
+      "change_type": "modified",
+      "notes": "Field ordering changes in the Funds Withdrawal Declined event (reordered: session, Amount, DeclinedDate, Payer). New outbound dependency added: 'withdrawal declines' readmodel (id: 3458764665346180017)."
+    }
+  ],
+  "index_changes": {
+    "added": [
+      {
+        "id": "3458764665346461849",
+        "slice": "slice: Withdrawal Decline Notified",
+        "index": 21,
+        "context": "Funds",
+        "folder": "withdrawaldeclinenotified",
+        "status": "Review"
+      }
+    ]
+  }
+}
