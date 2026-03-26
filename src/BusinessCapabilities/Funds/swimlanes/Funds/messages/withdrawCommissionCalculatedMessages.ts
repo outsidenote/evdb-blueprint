@@ -1,18 +1,21 @@
-import type EvDbEvent from "@eventualize/types/events/EvDbEvent";
 import type { WithdrawCommissionCalculated } from "../events/WithdrawCommissionCalculated.js";
 import { QUEUE_NAME as WITHDRAW_FUNDS_QUEUE } from "../../../endpoints/WithdrawFunds/pg-boss/index.js";
-import { createPgBossQueueMessageFromEvent } from "../../../../../types/abstractions/endpoints/queueMessage.js";
-import { createIdempotencyMessageFromEvent } from "../../../../../types/abstractions/endpoints/idempotencyMessage.js";
+import { createPgBossQueueMessage } from "../../../../../types/abstractions/endpoints/createPgBossQueueMessage.js";
+import { createIdempotencyMessageFromMetadata } from "../../../../../types/abstractions/endpoints/createIdempotencyMessageFromMetadata.js";
+import type IEvDbEventMetadata from "@eventualize/types/events/IEvDbEventMetadata";
+import type { WithdrawalsInProcessViewState } from "../views/WithdrawalsInProcess/state.js";
+import type { SliceStateApprovalWithdrawalViewState } from "../views/SliceStateApproveWithdrawal/state.js";
+import type { AccountBalanceViewState } from "../views/AccountBalance/state.js";
 
 export const withdrawCommissionCalculatedMessages = (
-  event: EvDbEvent,
-  _viewStates: Readonly<Record<string, unknown>>,
+  payload: Readonly<WithdrawCommissionCalculated>,
+  views: Readonly<Record<"WithdrawalsInProcess", WithdrawalsInProcessViewState> &
+    Record<"SliceStateApproveWithdrawal", SliceStateApprovalWithdrawalViewState> &
+    Record<"AccountBalance", AccountBalanceViewState>>,
+  metadata: IEvDbEventMetadata
 ) => {
-  const { account, amount, commission, currency, transactionId } = event.payload as WithdrawCommissionCalculated;
-  const payload = { payloadType: "WithdrawFunds", account, amount, commission, currency, transactionId };
-
   return [
-    createPgBossQueueMessageFromEvent([WITHDRAW_FUNDS_QUEUE], event, payload),
-    createIdempotencyMessageFromEvent(event, transactionId, "CalculateWithdrawCommission"),
+    createPgBossQueueMessage([WITHDRAW_FUNDS_QUEUE], metadata, payload, "WithdrawFunds"),
+    createIdempotencyMessageFromMetadata(metadata, payload.transactionId, "CalculateWithdrawCommission"),
   ];
 };

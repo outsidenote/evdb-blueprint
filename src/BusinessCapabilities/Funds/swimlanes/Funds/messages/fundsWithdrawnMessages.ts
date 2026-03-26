@@ -1,23 +1,26 @@
-import type EvDbEvent from "@eventualize/types/events/EvDbEvent";
 import type { FundsWithdrawn } from "../events/FundsWithdrawn.js";
 import EvDbMessage from "@eventualize/types/messages/EvDbMessage";
-import { createIdempotencyMessageFromEvent } from "../../../../../types/abstractions/endpoints/idempotencyMessage.js";
+import { createIdempotencyMessageFromMetadata } from "../../../../../types/abstractions/endpoints/createIdempotencyMessageFromMetadata.js";
+import type IEvDbEventMetadata from "@eventualize/types/events/IEvDbEventMetadata";
+import type { WithdrawalsInProcessViewState } from "../views/WithdrawalsInProcess/state.js";
+import type { SliceStateApprovalWithdrawalViewState } from "../views/SliceStateApproveWithdrawal/state.js";
+import type { AccountBalanceViewState } from "../views/AccountBalance/state.js";
 
 export const fundsWithdrawnMessages = (
-  event: EvDbEvent,
-  _viewStates: Readonly<Record<string, unknown>>,
+  payload: Readonly<FundsWithdrawn>,
+  views: Readonly<Record<"WithdrawalsInProcess", WithdrawalsInProcessViewState> &
+    Record<"SliceStateApproveWithdrawal", SliceStateApprovalWithdrawalViewState> &
+    Record<"AccountBalance", AccountBalanceViewState>>,
+  metadata: IEvDbEventMetadata
 ) => {
-  const payload = event.payload as FundsWithdrawn;
-
   return [
-    EvDbMessage.createFromEvent(event, {
-      payloadType: "FundsWithdrawn",
+    EvDbMessage.createFromMetadata(metadata, "FundsWithdrawn", {
       account: payload.account,
       amount: payload.amount,
       commission: payload.commission,
       currency: payload.currency,
       transactionId: payload.transactionId,
     }),
-    createIdempotencyMessageFromEvent(event, payload.transactionId, "WithdrawFunds"),
+    createIdempotencyMessageFromMetadata(metadata, payload.transactionId, "WithdrawFunds"),
   ];
 };

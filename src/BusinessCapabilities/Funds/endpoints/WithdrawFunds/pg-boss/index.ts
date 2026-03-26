@@ -2,7 +2,7 @@ import type { IEvDbStorageAdapter } from "@eventualize/core/adapters/IEvDbStorag
 import { PgBossEndpointConfig } from "../../../../../types/abstractions/endpoints/PgBossEndpointFactory.js";
 import { createWithdrawFundsAdapter } from "../../../slices/WithdrawFunds/adapter.js";
 import { WithdrawFunds } from "../../../slices/WithdrawFunds/command.js";
-import { getIdempotencyKey } from "../../../../../types/abstractions/endpoints/idempotencyMessage.js";
+import { getIdempotencyKey } from "../../../../../types/abstractions/endpoints/createIdempotencyMessageFromMetadata.js";
 
 export const CHANNEL = "pg-boss" as const;
 export const QUEUE_NAME = "event.WithdrawCommissionCalculated.WithdrawFunds";

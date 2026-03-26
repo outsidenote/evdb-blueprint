@@ -1,5 +1,3 @@
-import type IEvDbEventPayload from "@eventualize/types/events/IEvDbEventPayload";
-
 export interface FundsWithdrawalDeclinedProps {
   readonly account: string;
   readonly session: string;
@@ -11,9 +9,7 @@ export interface FundsWithdrawalDeclinedProps {
   readonly transactionId: string;
 }
 
-export class FundsWithdrawalDeclined implements IEvDbEventPayload {
-  readonly payloadType = "FundsWithdrawalDeclined" as const;
-
+export type FundsWithdrawalDeclined = {
   readonly account: string;
   readonly session: string;
   readonly currency: string;
@@ -22,15 +18,4 @@ export class FundsWithdrawalDeclined implements IEvDbEventPayload {
   readonly payer: string;
   readonly source: string;
   readonly transactionId: string;
-
-  constructor(props: FundsWithdrawalDeclinedProps) {
-    this.account = props.account;
-    this.session = props.session;
-    this.currency = props.currency;
-    this.amount = props.amount;
-    this.reason = props.reason;
-    this.payer = props.payer;
-    this.source = props.source;
-    this.transactionId = props.transactionId;
-  }
 }
