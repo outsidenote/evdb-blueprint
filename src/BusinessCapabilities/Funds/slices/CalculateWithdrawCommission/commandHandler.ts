@@ -1,7 +1,6 @@
 import type { CommandHandler } from "../../../../types/abstractions/commands/commandHandler.js";
 import type { CalculateWithdrawCommissionCommand } from "./command.js";
 import type { FundsStreamType } from "../../swimlanes/Funds/index.js";
-import { WithdrawCommissionCalculated } from "../../swimlanes/Funds/events/WithdrawCommissionCalculated.js";
 
 /**
  * Pure command handler for the CalculateWithdrawCommission command.
@@ -17,7 +16,14 @@ export const handleCalculateWithdrawCommission: CommandHandler<
   CalculateWithdrawCommissionCommand
 > = (stream, command) => {
   console.log(`Calculating withdraw commission for account ${command.account} and amount ${command.amount}...`);
-  stream.appendEventWithdrawCommissionCalculated(
-    new WithdrawCommissionCalculated(command)
-  );
+  stream.appendEventWithdrawCommissionCalculated({
+    account: command.account,
+    amount: command.amount,
+    commission: command.commission,
+    currency: command.currency,
+    session: command.session,
+    source: command.source,
+    transactionId: command.transactionId,
+    transactionTime: command.transactionTime,
+  });
 };

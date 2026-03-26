@@ -44,7 +44,7 @@ export const createApproveWithdrawalRestAdapter = (storageAdapter: IEvDbStorageA
 
             res.json({
                 streamId: result.streamId,
-                emittedEventTypes: result.events.map(e => e.payload.payloadType),
+                emittedEventTypes: result.events.map(e => e.eventType),
             });
         } catch (err: unknown) {
             const message = err instanceof Error ? err.message : String(err);

@@ -15,7 +15,8 @@ ViewSliceTester.run(withdrawalsInProcessView, [
     description: "FundsWithdrawalApproved adds entry with approval date from metadata",
     given: [
       {
-        payload: { payloadType: "FundsWithdrawalApproved", account: "acc-1", amount: 250, currency: "USD", session: "sess-1" },
+        eventType: "FundsWithdrawalApproved",
+        payload: { account: "acc-1", amount: 250, currency: "USD", session: "sess-1" },
         meta: { capturedAt: approvalDate },
       },
     ],
@@ -27,11 +28,13 @@ ViewSliceTester.run(withdrawalsInProcessView, [
     description: "multiple approvals accumulate in array",
     given: [
       {
-        payload: { payloadType: "FundsWithdrawalApproved", account: "acc-1", amount: 100, currency: "USD", session: "sess-1" },
+        eventType: "FundsWithdrawalApproved",
+        payload: { account: "acc-1", amount: 100, currency: "USD", session: "sess-1" },
         meta: { capturedAt: approvalDate },
       },
       {
-        payload: { payloadType: "FundsWithdrawalApproved", account: "acc-2", amount: 200, currency: "EUR", session: "sess-2" },
+        eventType: "FundsWithdrawalApproved",
+        payload: { account: "acc-2", amount: 200, currency: "EUR", session: "sess-2" },
         meta: { capturedAt: new Date("2026-01-16T14:00:00Z") },
       },
     ],
@@ -43,10 +46,10 @@ ViewSliceTester.run(withdrawalsInProcessView, [
   {
     description: "declined and no-op events do not change state",
     given: [
-      { payload: { payloadType: "FundsWithdrawalDeclined" } },
-      { payload: { payloadType: "FundsDepositApproved" } },
-      { payload: { payloadType: "WithdrawCommissionCalculated" } },
-      { payload: { payloadType: "FundsWithdrawn" } },
+      { eventType: "FundsWithdrawalDeclined", payload: {} },
+      { eventType: "FundsDepositApproved", payload: {} },
+      { eventType: "WithdrawCommissionCalculated", payload: {} },
+      { eventType: "FundsWithdrawn", payload: {} },
     ],
     then: [],
   },

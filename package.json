@@ -25,7 +25,7 @@
     "@eventualize/core": "^6.0.0",
     "@eventualize/postgres-storage-adapter": "^6.0.0",
     "@eventualize/relational-storage-adapter": "^6.0.0",
-    "@eventualize/types": "^4.4.0",
+    "@eventualize/types": "^6.0.0",
     "@prisma/adapter-pg": "7.3.0",
     "@prisma/client": "7.3.0",
     "express": "^4.21.0",

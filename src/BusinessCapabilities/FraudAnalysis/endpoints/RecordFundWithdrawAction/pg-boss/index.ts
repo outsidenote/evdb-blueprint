@@ -54,7 +54,7 @@ export function createFundsWithdrawnWorker(
 
       console.log(
         `[OutboxWorker] FundsWithdrawn → RecordFundWithdrawAction ` +
-        `account=${payload.account} events=[${result.events.map(e => e.payload.payloadType).join(", ")}]`,
+        `account=${payload.account} events=[${result.events.map(e => e.eventType).join(", ")}]`,
       );
     },
   });

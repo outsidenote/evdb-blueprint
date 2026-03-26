@@ -5,8 +5,8 @@ import type { FundsStreamType } from "../BusinessCapabilities/Funds/swimlanes/Fu
 import FundsStreamFactory from "../BusinessCapabilities/Funds/swimlanes/Funds/index.js";
 import type { ApproveWithdrawal } from "../BusinessCapabilities/Funds/slices/ApproveWithdrawal/command.js";
 import { handleApproveWithdrawal } from "../BusinessCapabilities/Funds/slices/ApproveWithdrawal/commandHandler.js";
-import type { FundsWithdrawalApproved } from "../BusinessCapabilities/Funds/swimlanes/Funds/events/FundsWithdrawalApproved.js";
-import type { FundsWithdrawalDeclined } from "../BusinessCapabilities/Funds/swimlanes/Funds/events/FundsWithdrawalDeclined.js";
+import type { IFundsWithdrawalApproved } from "../BusinessCapabilities/Funds/swimlanes/Funds/events/FundsWithdrawalApproved.js";
+import type { IFundsWithdrawalDeclined } from "../BusinessCapabilities/Funds/swimlanes/Funds/events/FundsWithdrawalDeclined.js";
 import type { IEvDbStorageAdapter } from "@eventualize/core/adapters/IEvDbStorageAdapter";
 
 export default class Steps {
@@ -65,8 +65,8 @@ export default class Steps {
     const events = stream.getEvents();
     assert.strictEqual(events.length, 1, "Expected exactly 1 event");
 
-    const payload = events[0].payload as FundsWithdrawalApproved;
-    assert.strictEqual(payload.payloadType, "FundsWithdrawalApproved");
+    assert.strictEqual(events[0].eventType, "FundsWithdrawalApproved");
+    const payload = events[0].payload as unknown as IFundsWithdrawalApproved;
     assert.strictEqual(payload.amount, 20);
     assert.strictEqual(payload.account, "1234");
     assert.strictEqual(payload.currency, "USD");
@@ -79,8 +79,8 @@ export default class Steps {
     const events = stream.getEvents();
     assert.strictEqual(events.length, 1, "Expected exactly 1 event");
 
-    const payload = events[0].payload as FundsWithdrawalDeclined;
-    assert.strictEqual(payload.payloadType, "FundsWithdrawalDeclined");
+    assert.strictEqual(events[0].eventType, "FundsWithdrawalDeclined");
+    const payload = events[0].payload as unknown as IFundsWithdrawalDeclined;
     assert.strictEqual(payload.amount, 20);
     assert.strictEqual(payload.account, "1234");
     assert.strictEqual(payload.currency, "USD");

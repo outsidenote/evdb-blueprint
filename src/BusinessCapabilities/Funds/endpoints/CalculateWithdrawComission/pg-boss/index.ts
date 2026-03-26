@@ -61,7 +61,7 @@ export function createFundsWithdrawalApprovedWorker(
 
       console.log(
         `[OutboxWorker] FundsWithdrawalApproved → commission=${command.commission} ` +
-        `account=${payload.account} events=[${result.events.map(e => e.payload.payloadType).join(", ")}]`,
+        `account=${payload.account} events=[${result.events.map(e => e.eventType).join(", ")}]`,
       );
     },
   });
