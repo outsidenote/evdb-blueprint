@@ -89,7 +89,7 @@ No `ProjectionConfig` or Kafka projection is created for these — the read mode
 
 | `sliceType` | Pattern | Code artifacts |
 |---|---|---|
-| `STATE_CHANGE` | Command handler | `command.ts`, `gwts.ts`, `commandHandler.ts`, `adapter.ts` + endpoint |
+| `STATE_CHANGE` | Command handler | `command.ts`, `commandHandler.ts`, `adapter.ts` + endpoint; `gwts.ts` only if `specifications[]` is non-empty |
 | `STATE_VIEW` | Kafka projection | `slices/<Name>/index.ts` with `ProjectionConfig` |
 | `UNDEFINED` | Pure processor | pg-boss endpoint only |
 
@@ -164,7 +164,7 @@ src/BusinessCapabilities/<context>/
 ├── slices/
 │   ├── <SliceName>/
 │   │   ├── command.ts
-│   │   ├── gwts.ts
+│   │   ├── gwts.ts          ← only when specifications[] is non-empty
 │   │   ├── commandHandler.ts
 │   │   ├── adapter.ts
 │   │   └── tests/command.slice.test.ts
@@ -187,11 +187,12 @@ src/BusinessCapabilities/<context>/
 ## Key Conventions
 
 - **Pure handlers**: `commandHandler.ts` never imports storage, I/O, or time. Only `stream.appendEvent*()`.
-- **GWTS predicates**: every branch in a handler has a named predicate in `gwts.ts` matching `spec.comments[0].description`.
-- **Generated fields**: computed in endpoints only — never in the pure handler.
+- **GWTS predicates**: only create `gwts.ts` when `specifications[]` is non-empty; each spec branch gets a named predicate matching `spec.comments[0].description`.
+- **Generated fields**: computed in endpoints only — never in the pure handler. In a pg-boss automation worker, `generated: true` fields that are present in the source event payload (e.g. `reason` copied from `FundsWithdrawalDeclined`) are read from the queue payload, not regenerated. Only truly computed values (e.g. `declinedDate: new Date()`) are generated fresh.
 - **Stream ID**: derived from `aggregate` in slice JSON (e.g. `command.account` for `aggregate: "funds"`).
 - **Idempotency**: every pg-boss worker uses `getIdempotencyKey(transactionId, "<SliceName>")`.
 - **Outbox triple**: when *creating a new messages file* for an event introduced by the current slice, include all three: pg-boss message + Kafka message + idempotency marker. When *updating an existing messages file* (the event belongs to a previously implemented slice), only add `createPgBossQueueMessageFromEvent` — the Kafka message and idempotency marker already exist and must not be duplicated.
+- **Messages import QUEUE_NAME from the endpoint**: always create the endpoint file before updating the messages file that imports its `QUEUE_NAME`. Doing it the other way round causes a TS "cannot find module" error.
 - **View names**: always `const viewName = "..." as const` from `state.ts`, imported by reference.
 - **Storage injection**: never singleton — always injected from `server.ts` downward.
 - **`.js` extensions**: all relative imports use `.js` even for `.ts` source files.
@@ -207,9 +208,13 @@ src/BusinessCapabilities/<context>/
 4. If `specifications[]` has `given` events → create `SliceState<SliceName>` view
 5. Create any other required views
 6. Create or update stream factory `index.ts`
-7. Create outbox message producers for events with downstream automation/cross-context deps
-8. Create `command.ts`, `gwts.ts`, `commandHandler.ts`, `adapter.ts`
-9. Create endpoint (`REST/index.ts` or `pg-boss/index.ts`)
+7. Create `command.ts`, `commandHandler.ts`, `adapter.ts` (and `gwts.ts` only if `specifications[]` is non-empty)
+8. Create endpoint (`REST/index.ts` or `pg-boss/index.ts`)
+   - **Do this before step 9.** The endpoint file defines `QUEUE_NAME`, which messages files import.
+     If you update an existing messages file before the endpoint exists, TypeScript will error on the import.
+9. Create or update outbox message producers for events with downstream automation/cross-context deps
+   - **New messages file** (event introduced by this slice): include all three — pg-boss message + Kafka message + idempotency marker.
+   - **Updating an existing messages file** (event from a prior slice): add only `createPgBossQueueMessageFromEvent` — the Kafka message and idempotency marker already exist.
 10. Register in `server.ts` and `routes.ts`
 11. Write slice-level tests only (no integration or behaviour tests):
     - `slices/<SliceName>/tests/command.slice.test.ts` — main flow + all GWT scenarios
