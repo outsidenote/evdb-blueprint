@@ -20,25 +20,27 @@ against the latest commit on the current branch (HEAD) and produce a precise act
 
 ### 1. Get the diff
 
-Run:
+First try the working-tree diff:
 ```
 git diff HEAD -- .eventmodel/.slices/index.json
 ```
 
-This compares the locally modified (or unmodified) file against `HEAD` — the latest commit
-on the current branch. It captures any local edits that have not yet been committed.
+This compares the locally modified (or unmodified) file against `HEAD`.
 
-If the output is empty, the file has not changed since the last commit. Check whether the
-file exists at HEAD:
+**If the output is non-empty** → proceed to Step 2 with this diff.
+
+**If the output is empty**, the file has no local edits. Fall back to the last commit:
 ```
-git show HEAD:.eventmodel/.slices/index.json 2>/dev/null
+git diff HEAD~1 HEAD -- .eventmodel/.slices/index.json
 ```
-- If it exists at HEAD and the diff is empty → no changes, return `[]`.
-- If it does **not** exist at HEAD (file is untracked/new) → read the current
+This shows what changed in the most recent commit. Use this diff for Step 2.
+
+Edge cases:
+- If the file does **not** exist at HEAD (untracked/new) → read the current
   `.eventmodel/.slices/index.json` and treat every slice as `"implement"`.
-
-If there is no commit at all in the repo, read the current `.eventmodel/.slices/index.json`
-and treat every slice as `"implement"`.
+- If there is only one commit (no `HEAD~1`) or no commits at all → read the current
+  `.eventmodel/.slices/index.json` and treat every slice as `"implement"`.
+- If both diffs are empty → return `[]`.
 
 ### 2. Parse the diff
 
