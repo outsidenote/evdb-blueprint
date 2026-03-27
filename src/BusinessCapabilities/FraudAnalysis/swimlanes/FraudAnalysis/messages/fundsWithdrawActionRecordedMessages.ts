@@ -1,10 +1,11 @@
 import type { IFundsWithdrawActionRecorded } from "../events/FundsWithdrawActionRecorded.js";
 import type IEvDbEventMetadata from "@eventualize/types/events/IEvDbEventMetadata";
 import { createIdempotencyMessageFromMetadata } from "../../../../../types/abstractions/endpoints/idempotencyMessage.js";
+import type { FraudAnalysisViews } from "../views/FraudAbalysisViews.js";
 
 export const fundsWithdrawActionRecordedMessages = (
   payload: Readonly<IFundsWithdrawActionRecorded>,
-  _views: Readonly<Record<string, never>>,
+  _views: FraudAnalysisViews,
   metadata: IEvDbEventMetadata,
 ) => {
   const { transactionId } = payload;

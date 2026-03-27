@@ -1,17 +1,11 @@
 import type { IFundsWithdrawalDeclined } from "../events/FundsWithdrawalDeclined.js";
 import type IEvDbEventMetadata from "@eventualize/types/events/IEvDbEventMetadata";
 import EvDbMessage from "@eventualize/types/messages/EvDbMessage";
-import type { WithdrawalsInProcessViewState } from "../views/WithdrawalsInProcess/state.js";
-import type { SliceStateApprovalWithdrawalViewState } from "../views/SliceStateApproveWithdrawal/state.js";
-import type { AccountBalanceViewState } from "../views/AccountBalance/state.js";
+import type { FundsViews } from "../views/FundsViews.js";
 
 export const withdrawalDeclinedMessages = (
   payload: Readonly<IFundsWithdrawalDeclined>,
-  _views: Readonly<
-    Record<"WithdrawalsInProcess", WithdrawalsInProcessViewState> &
-    Record<"SliceStateApproveWithdrawal", SliceStateApprovalWithdrawalViewState> &
-    Record<"AccountBalance", AccountBalanceViewState>
-  >,
+  _views: FundsViews,
   metadata: IEvDbEventMetadata,
 ) => {
   return [
