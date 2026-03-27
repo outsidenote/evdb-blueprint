@@ -174,6 +174,7 @@ src/BusinessCapabilities/<context>/
 └── swimlanes/<StreamName>/
     ├── events/<EventName>.ts
     ├── views/
+    │   ├── <StreamName>Views.ts      ← typed union of all view states (imported by messages)
     │   ├── SliceState<SliceName>/
     │   │   ├── state.ts, handlers.ts, view.slice.test.ts
     │   └── <OtherViewName>/
@@ -186,12 +187,17 @@ src/BusinessCapabilities/<context>/
 
 ## Key Conventions
 
+- **Events are interfaces, not classes**: define events as `export interface IEventName { ... }` (prefixed with `I`). No class, no constructor, no `payloadType` property.
+- **appendEvent syntax**: use the generated method `stream.appendEvent${EventName}({ ...fields })` — pass a plain payload object, never `new EventName(...)`.
+- **Event type on result**: use `result.events.map(e => e.eventType)` — the event type is a top-level field, not `e.payload.payloadType`.
+- **Messages signature**: `(payload: Readonly<IEventName>, _views: <Stream>Views, metadata: IEvDbEventMetadata) => [...]`. Use `createPgBossQueueMessageFromMetadata`, `EvDbMessage.createFromMetadata`, and `createIdempotencyMessageFromMetadata` — all `*FromEvent` helpers are gone in v6.
+- **Stream Views type**: each stream has a `views/<Stream>Views.ts` that is a `Readonly<Record<"ViewName", ViewState> & ...>` union of all registered views. Message handlers import this type.
 - **Pure handlers**: `commandHandler.ts` never imports storage, I/O, or time. Only `stream.appendEvent*()`.
 - **GWTS predicates**: only create `gwts.ts` when `specifications[]` is non-empty; each spec branch gets a named predicate matching `spec.comments[0].description`.
 - **Generated fields**: computed in endpoints only — never in the pure handler. In a pg-boss automation worker, `generated: true` fields that are present in the source event payload (e.g. `reason` copied from `FundsWithdrawalDeclined`) are read from the queue payload, not regenerated. Only truly computed values (e.g. `declinedDate: new Date()`) are generated fresh.
 - **Stream ID**: derived from `aggregate` in slice JSON (e.g. `command.account` for `aggregate: "funds"`).
 - **Idempotency**: every pg-boss worker uses `getIdempotencyKey(transactionId, "<SliceName>")`.
-- **Outbox triple**: when *creating a new messages file* for an event introduced by the current slice, include all three: pg-boss message + Kafka message + idempotency marker. When *updating an existing messages file* (the event belongs to a previously implemented slice), only add `createPgBossQueueMessageFromEvent` — the Kafka message and idempotency marker already exist and must not be duplicated.
+- **Outbox triple**: when *creating a new messages file* for an event introduced by the current slice, include all three: pg-boss message + Kafka message + idempotency marker. When *updating an existing messages file* (the event belongs to a previously implemented slice), only add `createPgBossQueueMessageFromMetadata` — the Kafka message and idempotency marker already exist and must not be duplicated.
 - **Messages import QUEUE_NAME from the endpoint**: always create the endpoint file before updating the messages file that imports its `QUEUE_NAME`. Doing it the other way round causes a TS "cannot find module" error.
 - **View names**: always `const viewName = "..." as const` from `state.ts`, imported by reference.
 - **Storage injection**: never singleton — always injected from `server.ts` downward.
@@ -204,24 +210,25 @@ src/BusinessCapabilities/<context>/
 
 1. Update status to `"InProgress"` in `.eventmodel/.slices/index.json`
 2. Read the slice JSON; classify the pattern
-3. Create event class files (see `references/templates.md` → Event)
+3. Create event interface files (see `references/templates.md` → Event)
 4. If `specifications[]` has `given` events → create `SliceState<SliceName>` view
 5. Create any other required views
-6. Create or update stream factory `index.ts`
-7. Create `command.ts`, `commandHandler.ts`, `adapter.ts` (and `gwts.ts` only if `specifications[]` is non-empty)
-8. Create endpoint (`REST/index.ts` or `pg-boss/index.ts`)
-   - **Do this before step 9.** The endpoint file defines `QUEUE_NAME`, which messages files import.
+6. Create or update `views/<Stream>Views.ts` to include all registered views for this stream
+7. Create or update stream factory `index.ts`
+8. Create `command.ts`, `commandHandler.ts`, `adapter.ts` (and `gwts.ts` only if `specifications[]` is non-empty)
+9. Create endpoint (`REST/index.ts` or `pg-boss/index.ts`)
+   - **Do this before step 10.** The endpoint file defines `QUEUE_NAME`, which messages files import.
      If you update an existing messages file before the endpoint exists, TypeScript will error on the import.
-9. Create or update outbox message producers for events with downstream automation/cross-context deps
-   - **New messages file** (event introduced by this slice): include all three — pg-boss message + Kafka message + idempotency marker.
-   - **Updating an existing messages file** (event from a prior slice): add only `createPgBossQueueMessageFromEvent` — the Kafka message and idempotency marker already exist.
-10. Register in `server.ts` and `routes.ts`
-11. Write slice-level tests only (no integration or behaviour tests):
+10. Create or update outbox message producers for events with downstream automation/cross-context deps
+    - **New messages file** (event introduced by this slice): include all three — pg-boss message + Kafka message + idempotency marker.
+    - **Updating an existing messages file** (event from a prior slice): add only `createPgBossQueueMessageFromMetadata` — the Kafka message and idempotency marker already exist.
+11. Register in `server.ts` and `routes.ts`
+12. Write slice-level tests only (no integration or behaviour tests):
     - `slices/<SliceName>/tests/command.slice.test.ts` — main flow + all GWT scenarios
     - `swimlanes/<Stream>/views/SliceState<SliceName>/view.slice.test.ts`
     - `swimlanes/<Stream>/views/<OtherView>/view.slice.test.ts`
     - `slices/<ProjectionName>/projection.slice.test.ts`
-12. Update status to `"Review"` in `.eventmodel/.slices/index.json`
+13. Update status to `"Review"` in `.eventmodel/.slices/index.json`
 
 Never skip the status updates. Never start the next slice before marking the current one `"Review"`.
 

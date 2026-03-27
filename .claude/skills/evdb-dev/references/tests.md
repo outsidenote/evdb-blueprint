@@ -9,26 +9,33 @@ Only slice-level test files. No integration tests, no behaviour tests.
 One `test("main flow")` for the happy path plus one `test()` per `specifications[]` entry.
 Use `example` values from the event model JSON as test data.
 
+Events in `givenEvents` and `expectedEvents` are plain objects `{ eventType, payload }` —
+no event class imports, no `new EventName(...)`.
+
+Always import `type TestEvent` from `SliceTester` and annotate both arrays as `TestEvent[]`.
+This avoids TypeScript's `TS7034`/`TS7005` implicit-`any[]` errors that arise when the array
+starts empty and TypeScript cannot infer its element type.
+
 ```typescript
 import { test, describe } from "node:test";
 import type { <SliceName> } from "../command.js";
 import { handle<SliceName> } from "../commandHandler.js";
-import { <EventName> } from "../../../swimlanes/<Stream>/events/<EventName>.js";
-import { SliceTester } from "../../../../../types/abstractions/slices/SliceTester.js";
+import { SliceTester, type TestEvent } from "../../../../../types/abstractions/slices/SliceTester.js";
 import <Stream>StreamFactory from "../../../swimlanes/<Stream>/index.js";
 
 describe("<SliceName> Slice - Unit Tests", () => {
   test("main flow", async () => {
-    const givenEvents = [
+    const givenEvents: TestEvent[] = [
       // events needed to set up SliceState<SliceName> for the happy path
-      // use [] if the happy path requires no prior state
+      // leave empty [] if the happy path requires no prior state
+      { eventType: "<GivenEventName>", payload: { <field>: <value> } },
     ];
     const command: <SliceName> = {
       commandType: "<SliceName>",
       // field values from spec.when[0].fields[].example
     };
     const expectedEvents = [
-      new <PositiveEvent>({ /* field values from spec.then[0].fields[].example */ }),
+      { eventType: "<PositiveEventName>", payload: { <field>: <value> } },
     ];
     return SliceTester.testCommandHandler(
       handle<SliceName>,
@@ -41,15 +48,15 @@ describe("<SliceName> Slice - Unit Tests", () => {
 
   // One test() per specifications[] entry
   test("<spec.comments[0].description>", async () => {
-    const givenEvents = [
-      new <GivenEvent>({ /* spec.given[0].fields[].example */ }),
+    const givenEvents: TestEvent[] = [
+      { eventType: "<GivenEventName>", payload: { <field>: <value> } },
     ];
     const command: <SliceName> = {
       commandType: "<SliceName>",
       // spec.when[0].fields[].example
     };
     const expectedEvents = [
-      new <EventName>({ /* spec.then[0].fields[].example */ }),
+      { eventType: "<EventName>", payload: { <field>: <value> } },
       // use [] if spec.then is empty (idempotent / ignore path)
     ];
     return SliceTester.testCommandHandler(
@@ -70,6 +77,9 @@ describe("<SliceName> Slice - Unit Tests", () => {
 Cover: each event that mutates the view, accumulation, no-op events, and partitioning.
 For `SliceState<SliceName>`, derive scenarios from `given` events in the specifications.
 
+Events in `given` are `{ eventType, payload }` objects — only include the fields the handler
+actually uses (sparse payloads are fine for tests).
+
 ```typescript
 import { ViewSliceTester, type ViewConfig } from "../../../../../../types/abstractions/slices/ViewSliceTester.js";
 import { handlers } from "./handlers.js";
@@ -85,27 +95,27 @@ ViewSliceTester.run(<viewName>View, [
   {
     description: "<EventName> mutates state correctly",
     given: [
-      { payload: { payloadType: "<EventName>", <field>: <value> } },
+      { eventType: "<EventName>", payload: { <field>: <value> } },
     ],
     then: { <field>: <expectedValue> },
   },
   {
     description: "multiple events accumulate correctly",
     given: [
-      { payload: { payloadType: "<EventName>", <field>: <value1> } },
-      { payload: { payloadType: "<EventName>", <field>: <value2> } },
+      { eventType: "<EventName>", payload: { <field>: <value1> } },
+      { eventType: "<EventName>", payload: { <field>: <value2> } },
     ],
     then: { <field>: <combinedValue> },
   },
   {
     description: "unrelated events do not change state",
     given: [
-      { payload: { payloadType: "<UnrelatedEvent>" } },
+      { eventType: "<UnrelatedEvent>", payload: {} },
     ],
     then: defaultState,
   },
   // Include meta when the handler uses event metadata:
-  // { payload: { payloadType: "...", ... }, meta: { capturedAt: new Date("...") } }
+  // { eventType: "...", payload: { ... }, meta: { capturedAt: new Date("...") } }
 ]);
 ```
 

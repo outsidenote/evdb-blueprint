@@ -2,14 +2,30 @@
 
 ## Event — `swimlanes/<Stream>/events/<EventName>.ts`
 ```typescript
-export class <EventName> {
-  readonly payloadType = "<EventName>" as const;
-
-  constructor(
-    public readonly <field>: <type>,
-    // all fields from events[].fields (camelCase)
-  ) {}
+export interface I<EventName> {
+  readonly <field>: <type>;
+  // all fields from events[].fields (camelCase)
 }
+```
+
+No class, no `payloadType` property — just a plain interface prefixed with `I`.
+
+---
+
+## Views Type — `swimlanes/<Stream>/views/<Stream>Views.ts`
+
+Create this file once per stream (or update it when adding new views). It is imported by message handler files.
+
+```typescript
+import type { <ViewName>State } from "./<ViewName>/state.js";
+import type { SliceState<SliceName>ViewState } from "./SliceState<SliceName>/state.js";
+// ... all views in this stream
+
+export type <Stream>Views = Readonly<
+  Record<"<ViewName>", <ViewName>State> &
+  Record<"SliceState<SliceName>", SliceState<SliceName>ViewState>
+  // one Record<> per registered view
+>;
 ```
 
 ---
@@ -44,16 +60,18 @@ export const defaultState: SliceState<SliceName>ViewState = {
 
 ## View Handlers — `swimlanes/<Stream>/views/<ViewName>/handlers.ts`
 ```typescript
-import type { <EventName> } from "../../events/<EventName>.js";
+import type { I<EventName> } from "../../events/<EventName>.js";
 import type { <ViewName>State } from "./state.js";
 
 export const handlers = {
-  <EventName>: (state: <ViewName>State, event: <EventName>): <ViewName>State => ({
+  <EventName>: (state: <ViewName>State, event: I<EventName>): <ViewName>State => ({
     ...state,
     <field>: <derivedValue>,
   }),
 };
 ```
+
+Handler signature is `(state, event: IPayload): State`. The optional third `metadata` parameter (`IEvDbEventMetadata`) is available if the handler needs event timing or correlation info.
 
 For `SliceState<SliceName>` handlers: only include event types that appear in `spec.given[]`.
 
@@ -62,7 +80,12 @@ For `SliceState<SliceName>` handlers: only include event types that appear in `s
 ## Messages — `swimlanes/<Stream>/messages/<eventName>Messages.ts`
 
 Only add a message producer for events that have an `OUTBOUND AUTOMATION` or cross-context
-dependency. Events with no downstream consumers omit the second argument to `.withEventType()`.
+dependency. Events with no downstream consumers need no messages file.
+
+Message handler signature: `(payload, views, metadata) => EvDbMessage[]`
+- `payload` — the event payload interface
+- `views` — the stream's typed views (use `_views` if unused)
+- `metadata` — `IEvDbEventMetadata` for correlation/envelope data
 
 **Two cases — pick the right one:**
 
@@ -70,38 +93,44 @@ dependency. Events with no downstream consumers omit the second argument to `.wi
 Use the full outbox triple: pg-boss queue message + Kafka message + idempotency marker.
 
 ```typescript
-import type EvDbEvent from "@eventualize/types/events/EvDbEvent";
-import type { <EventName> } from "../events/<EventName>.js";
+import type { I<EventName> } from "../events/<EventName>.js";
+import type IEvDbEventMetadata from "@eventualize/types/events/IEvDbEventMetadata";
 import EvDbMessage from "@eventualize/types/messages/EvDbMessage";
 import { QUEUE_NAME as <TARGET>_QUEUE } from "../../../endpoints/<TargetSlice>/pg-boss/index.js";
-import { createPgBossQueueMessageFromEvent } from "../../../../../types/abstractions/endpoints/queueMessage.js";
-import { createIdempotencyMessageFromEvent } from "../../../../../types/abstractions/endpoints/idempotencyMessage.js";
+import { createPgBossQueueMessageFromMetadata } from "../../../../../types/abstractions/endpoints/queueMessage.js";
+import { createIdempotencyMessageFromMetadata } from "../../../../../types/abstractions/endpoints/idempotencyMessage.js";
+import type { <Stream>Views } from "../views/<Stream>Views.js";
 
 export const <eventName>Messages = (
-  event: EvDbEvent,
-  _viewStates: Readonly<Record<string, unknown>>,
+  payload: Readonly<I<EventName>>,
+  _views: <Stream>Views,
+  metadata: IEvDbEventMetadata,
 ) => {
-  const { <fields> } = event.payload as <EventName>;
-  const payload = { payloadType: "<TargetCommandType>", <fields> };
+  const { <fields>, transactionId } = payload;
   return [
-    createPgBossQueueMessageFromEvent([<TARGET>_QUEUE], event, payload),
-    EvDbMessage.createFromEvent(event, { payloadType: "<EventName>", <fields> }),
-    createIdempotencyMessageFromEvent(event, transactionId, "<SliceName>"),
+    createPgBossQueueMessageFromMetadata(
+      [<TARGET>_QUEUE],
+      metadata,
+      "<TargetCommandType>",
+      { <fields>, transactionId },
+    ),
+    EvDbMessage.createFromMetadata(metadata, "<EventName>", { <fields>, transactionId }),
+    createIdempotencyMessageFromMetadata(metadata, transactionId, "<SliceName>"),
   ];
 };
 ```
 
 **Case B: Updating an existing messages file** (event belongs to a previously implemented slice)
-Only add `createPgBossQueueMessageFromEvent` to the existing return array. The Kafka message
+Only add `createPgBossQueueMessageFromMetadata` to the existing return array. The Kafka message
 and idempotency marker are already present — do not add them again.
 
 ```typescript
 // existing imports stay; add only what's new:
 import { QUEUE_NAME as <TARGET>_QUEUE } from "../../../endpoints/<TargetSlice>/pg-boss/index.js";
-import { createPgBossQueueMessageFromEvent } from "../../../../../types/abstractions/endpoints/queueMessage.js";
+import { createPgBossQueueMessageFromMetadata } from "../../../../../types/abstractions/endpoints/queueMessage.js";
 
 // inside the existing messages function, add to the return array:
-createPgBossQueueMessageFromEvent([<TARGET>_QUEUE], event, payload),
+createPgBossQueueMessageFromMetadata([<TARGET>_QUEUE], metadata, "<TargetCommandType>", { <fields> }),
 ```
 
 ---
@@ -109,20 +138,24 @@ createPgBossQueueMessageFromEvent([<TARGET>_QUEUE], event, payload),
 ## Stream Factory — `swimlanes/<Stream>/index.ts`
 ```typescript
 import { StreamFactoryBuilder } from "@eventualize/core/factories/StreamFactoryBuilder";
-import { <EventName> } from "./events/<EventName>.js";
+import type { I<EventName> } from "./events/<EventName>.js";
 import { <eventName>Messages } from "./messages/<eventName>Messages.js";
 import { defaultState as sliceStateDefaultState, viewName as sliceStateViewName } from "./views/SliceState<SliceName>/state.js";
 import { handlers as sliceStateHandlers } from "./views/SliceState<SliceName>/handlers.js";
 // ... other view imports
 
 const <Stream>StreamFactory = new StreamFactoryBuilder("<StreamName>")
-  .withEventType(<EventName>, <eventName>Messages)  // omit 2nd arg if no messages
+  .withEvent("<EventName>").asType<I<EventName>>()               // no messages
+  .withEvent("<OtherEventName>").asType<I<OtherEventName>>()     // add more events
+  .withMessages("<EventName>", <eventName>Messages)              // only for events that have downstream deps
   .withView(sliceStateViewName, sliceStateDefaultState, sliceStateHandlers)
   .build();
 
 export default <Stream>StreamFactory;
 export type <Stream>StreamType = typeof <Stream>StreamFactory.StreamType;
 ```
+
+Register events with `.withEvent("Name").asType<IPayload>()`. Add `.withMessages("Name", fn)` separately only for events with downstream consumers. Order: all `.withEvent()` calls, then `.withMessages()`, then `.withView()`, then `.build()`.
 
 ---
 
@@ -164,7 +197,6 @@ export const <predicateName> = (<viewStateField>: <type>, command: <SliceName>):
 ```typescript
 import type { CommandHandler } from "../../../../types/abstractions/commands/commandHandler.js";
 import type { <SliceName> } from "./command.js";
-import { <EventName> } from "../../swimlanes/<Stream>/events/<EventName>.js";
 import type { <Stream>StreamType } from "../../swimlanes/<Stream>/index.js";
 import { <predicateName> } from "./gwts.js";
 
@@ -176,13 +208,22 @@ export const handle<SliceName>: CommandHandler<<Stream>StreamType, <SliceName>> 
   const { <field> } = stream.views.SliceState<SliceName>;
 
   if (<predicateName>(<field>, command)) {
-    stream.appendEvent<NegativeEvent>(new <NegativeEvent>({ /* fields */ }));
+    stream.appendEvent<NegativeEvent>({
+      <field>: command.<field>,
+      // all fields for the negative event payload
+    });
   } else {
-    stream.appendEvent<PositiveEvent>(new <PositiveEvent>({ /* fields */ }));
+    stream.appendEvent<PositiveEvent>({
+      <field>: command.<field>,
+      // all fields for the positive event payload
+    });
   }
   // spec with empty then[] → no appendEvent call (idempotent ignore)
 };
 ```
+
+`appendEvent` is a generated method per event type: `stream.appendEvent${EventName}({...})`.
+Never instantiate event classes — pass plain payload objects.
 
 ---
 
@@ -233,7 +274,7 @@ export const create<SliceName>RestAdapter = (storageAdapter: IEvDbStorageAdapter
       const result = await <sliceName>(command);
       res.json({
         streamId: result.streamId,
-        emittedEventTypes: result.events.map(e => e.payload.payloadType),
+        emittedEventTypes: result.events.map(e => e.eventType),
       });
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
@@ -271,9 +312,9 @@ export function create<TriggerEvent>Worker(
   const <sliceName> = create<SliceName>Adapter(storageAdapter);
 
   return new PgBossEndpointConfig({
-    eventType: "<TriggerEvent>",
+    eventType: "<TriggerEventName>",
     handlerName: "<SliceName>",
-    source: "event",
+    source: "event",   // "event" for internal trigger; "message" + kafkaTopic for external Kafka
     getIdempotencyKey: (payload, _context) =>
       getIdempotencyKey(payload.transactionId, "<SliceName>"),
     handler: async (payload) => {
@@ -282,11 +323,13 @@ export function create<TriggerEvent>Worker(
         // map payload fields; compute "generated": true fields here
       };
       const result = await <sliceName>(command);
-      console.log(`[OutboxWorker] <TriggerEvent> → <SliceName> events=[${result.events.map(e => e.payload.payloadType).join(", ")}]`);
+      console.log(`[OutboxWorker] <TriggerEventName> → <SliceName> events=[${result.events.map(e => e.eventType).join(", ")}]`);
     },
   });
 }
 ```
+
+`QUEUE_NAME` follows the formula `"event.<TriggerEventName>.<SliceName>"`. It is exported so messages files can import it. The `PgBossEndpointConfig` auto-derives the queue name from `source`, `eventType`, and `handlerName` — keep `QUEUE_NAME` in sync.
 
 ---
 
@@ -295,13 +338,20 @@ export function create<TriggerEvent>Worker(
 import type { ProjectionConfig } from "../../../../types/abstractions/projections/ProjectionFactory.js";
 // import ProjectionMode
 
-export const <projectionName>Slice: ProjectionConfig<...> = {
+export const <projectionName>Slice: ProjectionConfig = {
   projectionName: "<ProjectionName>",
-  mode: ProjectionMode.Idempotent,  // or Query or Transaction
+  mode: { type: ProjectionModeType.Idempotent, getIdempotencyKey: (payload, meta) => `...` },
+  // or { type: ProjectionModeType.Query }
+  // or { type: ProjectionModeType.Transaction }
   handlers: {
     // one handler per INBOUND EVENT in readmodels[].dependencies
-    <EventName>: (payload: <EventName>, meta) => [
+    <EventName>: (payload, { projectionName }) => [
       // SqlStatement[] — SQL that materialises this event into the projection table
+      {
+        sql: `INSERT INTO projections (name, key, payload) VALUES ($1, $2, $3::jsonb)
+              ON CONFLICT (name, key) DO UPDATE SET payload = EXCLUDED.payload`,
+        params: [projectionName, payload.<keyField>, JSON.stringify(payload)],
+      },
     ],
   },
 };
