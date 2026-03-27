@@ -1,19 +1,25 @@
-import type EvDbEvent from "@eventualize/types/events/EvDbEvent";
-import type { WithdrawCommissionCalculated } from "../events/WithdrawCommissionCalculated.js";
+import type { IWithdrawCommissionCalculated } from "../events/WithdrawCommissionCalculated.js";
+import type IEvDbEventMetadata from "@eventualize/types/events/IEvDbEventMetadata";
 import { buildQueueName } from "../../../../../types/abstractions/endpoints/PgBossEndpointIdentity.js";
 import { endpointIdentity as withdrawFundsEndpoint } from "../../../endpoints/WithdrawFunds/pg-boss/index.js";
-import { createPgBossQueueMessageFromEvent } from "../../../../../types/abstractions/endpoints/queueMessage.js";
-import { createIdempotencyMessageFromEvent } from "../../../../../types/abstractions/endpoints/idempotencyMessage.js";
+import { createPgBossQueueMessageFromMetadata } from "../../../../../types/abstractions/endpoints/queueMessage.js";
+import { createIdempotencyMessageFromMetadata } from "../../../../../types/abstractions/endpoints/idempotencyMessage.js";
+import type { FundsViews } from "../views/FundsViews.js";
 
 export const withdrawCommissionCalculatedMessages = (
-  event: EvDbEvent,
-  _viewStates: Readonly<Record<string, unknown>>,
+  payload: Readonly<IWithdrawCommissionCalculated>,
+  _views: FundsViews,
+  metadata: IEvDbEventMetadata,
 ) => {
-  const { account, amount, commission, currency, transactionId } = event.payload as WithdrawCommissionCalculated;
-  const payload = { payloadType: "WithdrawFunds", account, amount, commission, currency, transactionId };
+  const { account, amount, commission, currency, transactionId } = payload;
 
   return [
-    createPgBossQueueMessageFromEvent([buildQueueName(withdrawFundsEndpoint)], event, payload),
-    createIdempotencyMessageFromEvent(event, transactionId, "CalculateWithdrawCommission"),
+    createPgBossQueueMessageFromMetadata(
+      [buildQueueName(withdrawFundsEndpoint)],
+      metadata,
+      "WithdrawFunds",
+      { account, amount, commission, currency, transactionId },
+    ),
+    createIdempotencyMessageFromMetadata(metadata, transactionId, "CalculateWithdrawCommission"),
   ];
 };

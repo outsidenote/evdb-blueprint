@@ -4,7 +4,6 @@ import { randomUUID } from "node:crypto";
 import { TestDatabase } from "./harness/index.js";
 import { createApproveWithdrawalAdapter } from "../BusinessCapabilities/Funds/slices/ApproveWithdrawal/adapter.js";
 import type { ApproveWithdrawal } from "../BusinessCapabilities/Funds/slices/ApproveWithdrawal/command.js";
-import { FundsDepositApproved } from "../BusinessCapabilities/Funds/swimlanes/Funds/events/FundsDepositApproved.js";
 import FundsStreamFactory from "../BusinessCapabilities/Funds/swimlanes/Funds/index.js";
 import { buildQueueName } from "../types/abstractions/endpoints/PgBossEndpointIdentity.js";
 import { endpointIdentity } from "../BusinessCapabilities/Funds/endpoints/CalculateWithdrawComission/pg-boss/index.js";
@@ -35,16 +34,14 @@ function makeCommand(overrides: Partial<ApproveWithdrawal> = {}): ApproveWithdra
  */
 async function seedDeposit(storageAdapter: IEvDbStorageAdapter, account: string, amount: number) {
   const stream = FundsStreamFactory.create(account, storageAdapter);
-  stream.appendEventFundsDepositApproved(
-    new FundsDepositApproved({
-      account,
-      amount,
-      currency: "USD",
-      source: "seed-source",
-      payer: "seed-payer",
-      transactionId: randomUUID(),
-    }),
-  );
+  stream.appendEventFundsDepositApproved({
+    account,
+    amount,
+    currency: "USD",
+    source: "seed-source",
+    payer: "seed-payer",
+    transactionId: randomUUID(),
+  });
   await stream.store();
 }
 
@@ -78,7 +75,7 @@ describe("Outbox verification: external events (CDC channel)", () => {
     const result = await adapter(command);
 
     assert.strictEqual(result.events.length, 1);
-    assert.strictEqual(result.events[0].payload.payloadType, "FundsWithdrawalDeclined");
+    assert.strictEqual(result.events[0].eventType, "FundsWithdrawalDeclined");
 
     // THEN: Outbox contains an external message (channel='default')
     const { rows } = await db.client.query(
@@ -117,7 +114,7 @@ describe("Outbox verification: external events (CDC channel)", () => {
     const result = await adapter(command);
 
     assert.strictEqual(result.events.length, 1);
-    assert.strictEqual(result.events[0].payload.payloadType, "FundsWithdrawalApproved");
+    assert.strictEqual(result.events[0].eventType, "FundsWithdrawalApproved");
 
     // THEN: Two outbox rows — one per message producer in withdrawalApprovedMessages
     const { rows } = await db.client.query(

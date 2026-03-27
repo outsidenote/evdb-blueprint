@@ -1,16 +1,15 @@
-import type { FundsWithdrawalDeclined } from "../events/FundsWithdrawalDeclined.js";
-import type EvDbEvent from "@eventualize/types/events/EvDbEvent";
+import type { IFundsWithdrawalDeclined } from "../events/FundsWithdrawalDeclined.js";
+import type IEvDbEventMetadata from "@eventualize/types/events/IEvDbEventMetadata";
 import EvDbMessage from "@eventualize/types/messages/EvDbMessage";
+import type { FundsViews } from "../views/FundsViews.js";
 
 export const withdrawalDeclinedMessages = (
-  event: EvDbEvent,
-  _viewStates: Readonly<Record<string, unknown>>,
+  payload: Readonly<IFundsWithdrawalDeclined>,
+  _views: FundsViews,
+  metadata: IEvDbEventMetadata,
 ) => {
-  const payload = event.payload as FundsWithdrawalDeclined;
-
   return [
-    EvDbMessage.createFromEvent(event, {
-      payloadType: "WithdrawalDeclinedNotification",
+    EvDbMessage.createFromMetadata(metadata, "WithdrawalDeclinedNotification", {
       account: payload.account,
       amount: payload.amount,
       reason: payload.reason,
