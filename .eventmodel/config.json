@@ -788,7 +788,7 @@
           ],
           "comments": [
             {
-              "description": "Insufficient Effective Funds  Withdrawals"
+              "description": "Insufficient Effective Funds Withdrawals"
             }
           ],
           "linkedId": "3458764661766264370"
@@ -1291,7 +1291,7 @@
           ],
           "comments": [
             {
-              "description": "Insufficient Effective Funds  Withdrawals"
+              "description": "Insufficient Effective Funds Withdrawals"
             }
           ],
           "linkedId": "3458764660904120114"
@@ -1401,7 +1401,9 @@
         {
           "id": "3458764660904120289",
           "tags": [],
+          "elementContext": "INTERNAL",
           "modelContext": "Funds",
+          "context": "INTERNAL",
           "slice": "slice: Withdrawal Pending Commission Calculation TODO",
           "title": "Todo Calculate Withdrawals Commission",
           "fields": [
@@ -1410,6 +1412,7 @@
               "type": "UUID",
               "example": "1234",
               "cardinality": "Single",
+              "subfields": [],
               "idAttribute": false
             },
             {
@@ -1417,6 +1420,7 @@
               "type": "Double",
               "example": "20",
               "cardinality": "Single",
+              "subfields": [],
               "idAttribute": false
             },
             {
@@ -1424,6 +1428,7 @@
               "type": "DateTime",
               "example": "2025-01-01 11:00",
               "cardinality": "Single",
+              "subfields": [],
               "idAttribute": false
             },
             {
@@ -1431,6 +1436,7 @@
               "type": "String",
               "example": "USD",
               "cardinality": "Single",
+              "subfields": [],
               "idAttribute": false
             },
             {
@@ -1438,6 +1444,7 @@
               "type": "UUID",
               "example": "0011",
               "cardinality": "Single",
+              "subfields": [],
               "idAttribute": false
             },
             {
@@ -1445,6 +1452,7 @@
               "type": "String",
               "example": "PayPal",
               "cardinality": "Single",
+              "subfields": [],
               "idAttribute": false
             },
             {
@@ -1452,6 +1460,7 @@
               "type": "String",
               "example": "John Doe",
               "cardinality": "Single",
+              "subfields": [],
               "idAttribute": false
             },
             {
@@ -1459,6 +1468,7 @@
               "type": "String",
               "example": "0011",
               "cardinality": "Single",
+              "subfields": [],
               "idAttribute": false
             }
           ],
@@ -1482,6 +1492,8 @@
               "elementType": "EVENT"
             }
           ],
+          "listElement": true,
+          "todoList": true,
           "createsAggregate": false,
           "triggers": [],
           "sketched": false,
@@ -2171,7 +2183,9 @@
         {
           "id": "3458764660904120726",
           "tags": [],
+          "elementContext": "INTERNAL",
           "modelContext": "Funds",
+          "context": "INTERNAL",
           "slice": "slice: Funds to Withdraw TO-DO list",
           "title": "Funds to Withdraw",
           "fields": [
@@ -2180,6 +2194,7 @@
               "type": "UUID",
               "example": "1234",
               "cardinality": "Single",
+              "subfields": [],
               "idAttribute": false
             },
             {
@@ -2187,6 +2202,7 @@
               "type": "Double",
               "example": "100",
               "cardinality": "Single",
+              "subfields": [],
               "idAttribute": false
             },
             {
@@ -2194,6 +2210,7 @@
               "type": "Double",
               "example": "0.05",
               "cardinality": "Single",
+              "subfields": [],
               "idAttribute": false
             },
             {
@@ -2201,6 +2218,7 @@
               "type": "String",
               "example": "USD",
               "cardinality": "Single",
+              "subfields": [],
               "idAttribute": false
             },
             {
@@ -2208,6 +2226,7 @@
               "type": "String",
               "example": "John Doe",
               "cardinality": "Single",
+              "subfields": [],
               "idAttribute": false
             },
             {
@@ -2215,6 +2234,7 @@
               "type": "String",
               "example": "PayPal",
               "cardinality": "Single",
+              "subfields": [],
               "idAttribute": false
             },
             {
@@ -2222,6 +2242,7 @@
               "type": "DateTime",
               "example": "2025-01-01 11:00",
               "cardinality": "Single",
+              "subfields": [],
               "idAttribute": false
             },
             {
@@ -2229,6 +2250,7 @@
               "type": "UUID",
               "example": "0011",
               "cardinality": "Single",
+              "subfields": [],
               "idAttribute": false
             },
             {
@@ -2236,6 +2258,7 @@
               "type": "String",
               "example": "0011",
               "cardinality": "Single",
+              "subfields": [],
               "idAttribute": false
             }
           ],
@@ -2259,6 +2282,8 @@
               "elementType": "EVENT"
             }
           ],
+          "listElement": true,
+          "todoList": true,
           "createsAggregate": false,
           "triggers": [],
           "sketched": false,
@@ -2417,9 +2442,9 @@
               "idAttribute": false
             },
             {
-              "name": "Amount",
-              "type": "Double",
-              "example": "20",
+              "name": "session",
+              "type": "UUID",
+              "example": "0011",
               "subfields": [],
               "cardinality": "Single",
               "idAttribute": false
@@ -2433,17 +2458,9 @@
               "idAttribute": false
             },
             {
-              "name": "DeclinedDate",
-              "type": "DateTime",
-              "generated": true,
-              "subfields": [],
-              "cardinality": "Single",
-              "idAttribute": false
-            },
-            {
-              "name": "Payer",
-              "type": "String",
-              "example": "John Doe",
+              "name": "Amount",
+              "type": "Double",
+              "example": "20",
               "subfields": [],
               "cardinality": "Single",
               "idAttribute": false
@@ -2458,9 +2475,9 @@
               "idAttribute": false
             },
             {
-              "name": "session",
-              "type": "UUID",
-              "example": "0011",
+              "name": "Payer",
+              "type": "String",
+              "example": "John Doe",
               "subfields": [],
               "cardinality": "Single",
               "idAttribute": false
@@ -2477,6 +2494,14 @@
               "name": "transactionId",
               "type": "String",
               "example": "0011",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "DeclinedDate",
+              "type": "DateTime",
+              "generated": true,
               "subfields": [],
               "cardinality": "Single",
               "idAttribute": false
@@ -3317,6 +3342,7 @@
             }
           ],
           "listElement": true,
+          "todoList": true,
           "createsAggregate": false,
           "triggers": [],
           "sketched": false,
