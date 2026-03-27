@@ -1,7 +1,8 @@
 import type EvDbEvent from "@eventualize/types/events/EvDbEvent";
 import type { FundsWithdrawalApproved } from "../events/FundsWithdrawalApproved.js";
 import EvDbMessage from "@eventualize/types/messages/EvDbMessage";
-import { QUEUE_NAME as CALCULATE_WITHDRAW_COMMISSION_QUEUE } from "../../../endpoints/CalculateWithdrawComission/pg-boss/index.js";
+import { buildQueueName } from "../../../../../types/abstractions/endpoints/PgBossEndpointIdentity.js";
+import { endpointIdentity as calculateWithdrawCommissionEndpoint } from "../../../endpoints/CalculateWithdrawComission/pg-boss/index.js";
 import { createPgBossQueueMessageFromEvent } from "../../../../../types/abstractions/endpoints/queueMessage.js";
 import { createIdempotencyMessageFromEvent } from "../../../../../types/abstractions/endpoints/idempotencyMessage.js";
 
@@ -13,7 +14,7 @@ export const withdrawalApprovedMessages = (
   const payload = { payloadType: "CalculateWithdrawCommission", account, amount, currency, transactionId };
 
   return [
-    createPgBossQueueMessageFromEvent([CALCULATE_WITHDRAW_COMMISSION_QUEUE], event, payload),
+    createPgBossQueueMessageFromEvent([buildQueueName(calculateWithdrawCommissionEndpoint)], event, payload),
     EvDbMessage.createFromEvent(event, { payloadType: "FundsWithdrawalApproved", account, amount, currency, transactionId }),
     createIdempotencyMessageFromEvent(event, transactionId, "ApproveWithdrawal"),
   ];

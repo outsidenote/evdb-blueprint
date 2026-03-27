@@ -1,6 +1,7 @@
 import type { Kafka } from "kafkajs";
 import type { PgBoss } from "pg-boss";
-import type { PgBossEndpointConfigBase } from "./PgBossEndpointFactory.js";
+import type { PgBossEndpointConfigBase } from "./PgBossEndpointConfig.js";
+import { buildQueueName } from "./PgBossEndpointIdentity.js";
 import { launchKafkaConsumer } from "./kafkaConsumerUtils.js";
 
 export interface AutomationEndpointConfig {
@@ -43,7 +44,7 @@ export class AutomationEndpointFactory {
     const factory = new AutomationEndpointFactory();
 
     for (const config of endpoints) {
-      const queueName = config.pgBossEndpoint.queueName;
+      const queueName = buildQueueName(config.pgBossEndpoint);
       const groupId = config.groupId ?? queueName;
 
       const handle = launchKafkaConsumer({

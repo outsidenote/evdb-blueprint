@@ -1,10 +1,14 @@
 import type { IEvDbStorageAdapter } from "@eventualize/core/adapters/IEvDbStorageAdapter";
-import { PgBossEndpointConfig } from "../../../../../types/abstractions/endpoints/PgBossEndpointFactory.js";
+import type { PgBossEndpointIdentity } from "../../../../../types/abstractions/endpoints/PgBossEndpointIdentity.js";
+import { createEndpointConfig, type PgBossEndpointConfigBase } from "../../../../../types/abstractions/endpoints/PgBossEndpointConfig.js";
 import { createWithdrawFundsAdapter } from "../../../slices/WithdrawFunds/adapter.js";
 import { getIdempotencyKey } from "../../../../../types/abstractions/endpoints/idempotencyMessage.js";
 
-export const CHANNEL = "pg-boss" as const;
-export const QUEUE_NAME = "event.WithdrawCommissionCalculated.WithdrawFunds";
+export const endpointIdentity: PgBossEndpointIdentity = {
+  source: "event",
+  eventType: "WithdrawCommissionCalculated",
+  handlerName: "WithdrawFunds",
+} as const;
 
 interface WithdrawCommissionCalculatedPayload {
   readonly account: string;
@@ -29,13 +33,11 @@ interface WithdrawCommissionCalculatedPayload {
  */
 export function createWithdrawCommissionCalculatedWorker(
   storageAdapter: IEvDbStorageAdapter,
-): PgBossEndpointConfig<WithdrawCommissionCalculatedPayload> {
+): PgBossEndpointConfigBase {
   const withdrawFunds = createWithdrawFundsAdapter(storageAdapter);
 
-  return new PgBossEndpointConfig({
-    eventType: "WithdrawCommissionCalculated",
-    handlerName: "WithdrawFunds",
-    source: "event",
+  return createEndpointConfig<WithdrawCommissionCalculatedPayload>({
+    ...endpointIdentity,
 
     getIdempotencyKey: (payload, _context) =>
       getIdempotencyKey(payload.transactionId, "WithdrawFunds"),

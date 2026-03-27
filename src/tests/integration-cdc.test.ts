@@ -7,6 +7,7 @@ import pg from "pg";
 import { TestCDCStack } from "./harness/TestCDCStack.js";
 import { waitFor } from "./harness/helpers.js";
 import { PgBossEndpointFactory } from "../types/abstractions/endpoints/PgBossEndpointFactory.js";
+import { OutboxIdempotencyGate } from "../types/abstractions/endpoints/IdempotencyGate.js";
 import { ProjectionFactory } from "../types/abstractions/projections/ProjectionFactory.js";
 import { createFundsWithdrawnWorker } from "../BusinessCapabilities/FraudAnalysis/endpoints/RecordFundWithdrawAction/pg-boss/index.js";
 import { pendingWithdrawalLookupSlice } from "../BusinessCapabilities/Funds/slices/PendingWithdrawalLookup/index.js";
@@ -40,10 +41,12 @@ describe("CDC pipeline: outbox → Debezium → Kafka", { timeout: 180_000 }, ()
       brokers: [stack.kafkaBootstrap],
     });
 
+    const idempotencyGate = new OutboxIdempotencyGate(pool);
+
     pgBossFactory = await PgBossEndpointFactory.startAll(
       boss,
       [createFundsWithdrawnWorker(storageAdapter)],
-      pool,
+      idempotencyGate,
       kafka,
     );
 

@@ -1,10 +1,14 @@
 import type { IEvDbStorageAdapter } from "@eventualize/core/adapters/IEvDbStorageAdapter";
-import { PgBossEndpointConfig } from "../../../../../types/abstractions/endpoints/PgBossEndpointFactory.js";
+import type { PgBossEndpointIdentity } from "../../../../../types/abstractions/endpoints/PgBossEndpointIdentity.js";
+import { createEndpointConfig, type PgBossEndpointConfigBase } from "../../../../../types/abstractions/endpoints/PgBossEndpointConfig.js";
 import { createRecordFundWithdrawActionAdapter } from "../../../slices/RecordFundWithdrawAction/adapter.js";
 import { getIdempotencyKey } from "../../../../../types/abstractions/endpoints/idempotencyMessage.js";
 
-export const CHANNEL = "pg-boss" as const;
-export const QUEUE_NAME = "message.FundsWithdrawn.RecordFundWithdrawAction";
+export const endpointIdentity: PgBossEndpointIdentity = {
+  source: "message",
+  eventType: "FundsWithdrawn",
+  handlerName: "RecordFundWithdrawAction",
+} as const;
 
 interface FundsWithdrawnPayload {
   readonly account: string;
@@ -29,13 +33,11 @@ interface FundsWithdrawnPayload {
  */
 export function createFundsWithdrawnWorker(
   storageAdapter: IEvDbStorageAdapter,
-): PgBossEndpointConfig<FundsWithdrawnPayload> {
+): PgBossEndpointConfigBase {
   const recordFundWithdrawAction = createRecordFundWithdrawActionAdapter(storageAdapter);
 
-  return new PgBossEndpointConfig({
-    eventType: "FundsWithdrawn",
-    handlerName: "RecordFundWithdrawAction",
-    source: "message",
+  return createEndpointConfig<FundsWithdrawnPayload>({
+    ...endpointIdentity,
     kafkaTopic: "events.FundsWithdrawn",
 
     getIdempotencyKey: (payload, _context) =>

@@ -6,7 +6,10 @@ import { createApproveWithdrawalAdapter } from "../BusinessCapabilities/Funds/sl
 import type { ApproveWithdrawal } from "../BusinessCapabilities/Funds/slices/ApproveWithdrawal/command.js";
 import { FundsDepositApproved } from "../BusinessCapabilities/Funds/swimlanes/Funds/events/FundsDepositApproved.js";
 import FundsStreamFactory from "../BusinessCapabilities/Funds/swimlanes/Funds/index.js";
-import { QUEUE_NAME } from "../BusinessCapabilities/Funds/endpoints/CalculateWithdrawComission/pg-boss/index.js";
+import { buildQueueName } from "../types/abstractions/endpoints/PgBossEndpointIdentity.js";
+import { endpointIdentity } from "../BusinessCapabilities/Funds/endpoints/CalculateWithdrawComission/pg-boss/index.js";
+
+const QUEUE_NAME = buildQueueName(endpointIdentity);
 import EvDbPostgresPrismaClientFactory from "@eventualize/postgres-storage-adapter/EvDbPostgresPrismaClientFactory";
 import EvDbPrismaStorageAdapter from "@eventualize/relational-storage-adapter/EvDbPrismaStorageAdapter";
 import type { IEvDbStorageAdapter } from "@eventualize/core/adapters/IEvDbStorageAdapter";
