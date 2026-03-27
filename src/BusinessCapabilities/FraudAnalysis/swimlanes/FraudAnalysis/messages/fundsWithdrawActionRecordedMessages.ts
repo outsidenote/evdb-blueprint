@@ -1,14 +1,16 @@
-import type EvDbEvent from "@eventualize/types/events/EvDbEvent";
-import type { FundsWithdrawActionRecorded } from "../events/FundsWithdrawActionRecorded.js";
-import { createIdempotencyMessageFromEvent } from "../../../../../types/abstractions/endpoints/idempotencyMessage.js";
+import type { IFundsWithdrawActionRecorded } from "../events/FundsWithdrawActionRecorded.js";
+import type IEvDbEventMetadata from "@eventualize/types/events/IEvDbEventMetadata";
+import { createIdempotencyMessageFromMetadata } from "../../../../../types/abstractions/endpoints/idempotencyMessage.js";
+import type { FraudAnalysisViews } from "../views/FraudAnalysisViews.js";
 
 export const fundsWithdrawActionRecordedMessages = (
-  event: EvDbEvent,
-  _viewStates: Readonly<Record<string, unknown>>,
+  payload: Readonly<IFundsWithdrawActionRecorded>,
+  _views: FraudAnalysisViews,
+  metadata: IEvDbEventMetadata,
 ) => {
-  const { transactionId } = event.payload as FundsWithdrawActionRecorded;
+  const { transactionId } = payload;
 
   return [
-    createIdempotencyMessageFromEvent(event, transactionId, "RecordFundWithdrawAction"),
+    createIdempotencyMessageFromMetadata(metadata, transactionId, "RecordFundWithdrawAction"),
   ];
 };

@@ -1,4 +1,4 @@
-import type EvDbEvent from "@eventualize/types/events/EvDbEvent";
+import type IEvDbEventMetadata from "@eventualize/types/events/IEvDbEventMetadata";
 import EvDbMessage from "@eventualize/types/messages/EvDbMessage";
 
 /**
@@ -12,22 +12,22 @@ export function getIdempotencyKey(idempotencyKey: string, consumerId: string): s
 }
 
 /**
- * Creates an idempotency message from the given event and keys.
- * @param event
+ * Creates an idempotency message from the given event metadata and keys.
+ * @param metadata
  * @param idempotencyKey
  * @param consumerId
  * @returns
  */
-export function createIdempotencyMessageFromEvent(
-  event: EvDbEvent,
+export function createIdempotencyMessageFromMetadata(
+  metadata: IEvDbEventMetadata,
   idempotencyKey: string,
   consumerId: string,
 ): EvDbMessage {
   const key = getIdempotencyKey(idempotencyKey, consumerId);
-  return EvDbMessage.createFromEvent(
-    event,
+  return EvDbMessage.createFromMetadata(
+    metadata,
+    `${consumerId}.IdempotencyKeyAddedForConsumer`,
     {
-      payloadType: `${consumerId}.IdempotencyKeyAddedForConsumer`,
       idempotencyKey: key,
       consumerId,
     },

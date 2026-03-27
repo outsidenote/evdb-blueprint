@@ -1,8 +1,13 @@
-import type EvDbEvent from "@eventualize/types/events/EvDbEvent";
-import type IEvDbEventPayload from "@eventualize/types/events/IEvDbEventPayload";
+import type IEvDbEventMetadata from "@eventualize/types/events/IEvDbEventMetadata";
+import type { IEvDbPayloadData } from "@eventualize/types/events/IEvDbPayloadData";
 import EvDbMessage from "@eventualize/types/messages/EvDbMessage";
 
-export function createPgBossQueueMessageFromEvent(queues: string[], event: EvDbEvent, payload: IEvDbEventPayload): EvDbMessage {
-    const queuePayload = Object.assign({ queues }, payload);
-    return EvDbMessage.createFromEvent(event, queuePayload, "pg-boss");
+export function createPgBossQueueMessageFromMetadata(
+  queues: string[],
+  metadata: IEvDbEventMetadata,
+  messageType: string,
+  payload: IEvDbPayloadData,
+): EvDbMessage {
+  const queuePayload = Object.assign({ queues }, payload);
+  return EvDbMessage.createFromMetadata(metadata, messageType, queuePayload, "pg-boss");
 }

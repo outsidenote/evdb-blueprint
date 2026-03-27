@@ -1,20 +1,26 @@
-import type EvDbEvent from "@eventualize/types/events/EvDbEvent";
-import type { FundsWithdrawalApproved } from "../events/FundsWithdrawalApproved.js";
+import type { IFundsWithdrawalApproved } from "../events/FundsWithdrawalApproved.js";
+import type IEvDbEventMetadata from "@eventualize/types/events/IEvDbEventMetadata";
 import EvDbMessage from "@eventualize/types/messages/EvDbMessage";
 import { QUEUE_NAME as CALCULATE_WITHDRAW_COMMISSION_QUEUE } from "../../../endpoints/CalculateWithdrawComission/pg-boss/index.js";
-import { createPgBossQueueMessageFromEvent } from "../../../../../types/abstractions/endpoints/queueMessage.js";
-import { createIdempotencyMessageFromEvent } from "../../../../../types/abstractions/endpoints/idempotencyMessage.js";
+import { createPgBossQueueMessageFromMetadata } from "../../../../../types/abstractions/endpoints/queueMessage.js";
+import { createIdempotencyMessageFromMetadata } from "../../../../../types/abstractions/endpoints/idempotencyMessage.js";
+import type { FundsViews } from "../views/FundsViews.js";
 
 export const withdrawalApprovedMessages = (
-  event: EvDbEvent,
-  _viewStates: Readonly<Record<string, unknown>>,
+  payload: Readonly<IFundsWithdrawalApproved>,
+  _views: FundsViews,
+  metadata: IEvDbEventMetadata,
 ) => {
-  const { account, amount, currency, transactionId } = event.payload as FundsWithdrawalApproved;
-  const payload = { payloadType: "CalculateWithdrawCommission", account, amount, currency, transactionId };
+  const { account, amount, currency, transactionId } = payload;
 
   return [
-    createPgBossQueueMessageFromEvent([CALCULATE_WITHDRAW_COMMISSION_QUEUE], event, payload),
-    EvDbMessage.createFromEvent(event, { payloadType: "FundsWithdrawalApproved", account, amount, currency, transactionId }),
-    createIdempotencyMessageFromEvent(event, transactionId, "ApproveWithdrawal"),
+    createPgBossQueueMessageFromMetadata(
+      [CALCULATE_WITHDRAW_COMMISSION_QUEUE],
+      metadata,
+      "CalculateWithdrawCommission",
+      { account, amount, currency, transactionId },
+    ),
+    EvDbMessage.createFromMetadata(metadata, "FundsWithdrawalApproved", { account, amount, currency, transactionId }),
+    createIdempotencyMessageFromMetadata(metadata, transactionId, "ApproveWithdrawal"),
   ];
 };

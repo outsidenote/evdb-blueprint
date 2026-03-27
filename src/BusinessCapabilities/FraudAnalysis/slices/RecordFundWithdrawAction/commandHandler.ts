@@ -1,6 +1,5 @@
 import type { CommandHandler } from "../../../../types/abstractions/commands/commandHandler.js";
 import type { RecordFundWithdrawAction } from "./command.js";
-import { FundsWithdrawActionRecorded } from "../../swimlanes/FraudAnalysis/events/FundsWithdrawActionRecorded.js";
 import type { FraudAnalysisStreamType } from "../../swimlanes/FraudAnalysis/index.js";
 
 /**
@@ -13,12 +12,10 @@ export const handleRecordFundWithdrawAction: CommandHandler<
   FraudAnalysisStreamType,
   RecordFundWithdrawAction
 > = (stream, command) => {
-  stream.appendEventFundsWithdrawActionRecorded(
-    new FundsWithdrawActionRecorded({
-      account: command.account,
-      amount: command.amount,
-      currency: command.currency,
-      transactionId: command.transactionId,
-    }),
-  );
+  stream.appendEventFundsWithdrawActionRecorded({
+    account: command.account,
+    amount: command.amount,
+    currency: command.currency,
+    transactionId: command.transactionId,
+  });
 };
