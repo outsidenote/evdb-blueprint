@@ -1,8 +1,8 @@
 import { test, describe } from "node:test";
 import type { RecordFundWithdrawAction } from "../command.js";
 import { handleRecordFundWithdrawAction } from "../commandHandler.js";
-import { SliceTester } from "../../../../../types/abstractions/slices/SliceTester.js";
-import FraudAnalysisStreamFactory from "../../../swimlanes/FraudAnalysis/index.js";
+import { SliceTester } from "#abstractions/slices/SliceTester.js";
+import FraudAnalysisStreamFactory from "#BusinessCapabilities/FraudAnalysis/swimlanes/FraudAnalysis/index.js";
 
 describe("Record Fund Withdraw Action Slice - Unit Tests", () => {
   test("main flow - records fund withdraw action", async () => {

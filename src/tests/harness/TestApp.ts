@@ -1,10 +1,10 @@
 import type { IEvDbStorageAdapter } from "@eventualize/core/adapters/IEvDbStorageAdapter";
-import type { PgBossEndpointConfigBase } from "../../types/abstractions/endpoints/PgBossEndpointConfig.js";
+import type { PgBossEndpointConfigBase } from "#abstractions/endpoints/PgBossEndpointConfig.js";
 import pg from "pg";
 import EvDbPostgresPrismaClientFactory from "@eventualize/postgres-storage-adapter/EvDbPostgresPrismaClientFactory";
 import EvDbPrismaStorageAdapter from "@eventualize/relational-storage-adapter/EvDbPrismaStorageAdapter";
-import { PgBossEndpointFactory } from "../../types/abstractions/endpoints/PgBossEndpointFactory.js";
-import { OutboxIdempotencyGate } from "../../types/abstractions/endpoints/IdempotencyGate.js";
+import { PgBossEndpointFactory } from "#abstractions/endpoints/PgBossEndpointFactory.js";
+import { OutboxIdempotencyGate } from "#abstractions/endpoints/IdempotencyGate.js";
 import type { TestDatabase } from "./TestDatabase.js";
 
 export interface TestAppOptions {

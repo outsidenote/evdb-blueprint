@@ -2,11 +2,11 @@ import { test, describe, before, after } from "node:test";
 import * as assert from "node:assert";
 import { randomUUID } from "node:crypto";
 import { TestDatabase } from "./harness/index.js";
-import { createApproveWithdrawalAdapter } from "../BusinessCapabilities/Funds/slices/ApproveWithdrawal/adapter.js";
-import type { ApproveWithdrawal } from "../BusinessCapabilities/Funds/slices/ApproveWithdrawal/command.js";
-import FundsStreamFactory from "../BusinessCapabilities/Funds/swimlanes/Funds/index.js";
-import { buildQueueName } from "../types/abstractions/endpoints/PgBossEndpointIdentity.js";
-import { endpointIdentity } from "../BusinessCapabilities/Funds/endpoints/CalculateWithdrawComission/pg-boss/index.js";
+import { createApproveWithdrawalAdapter } from "#BusinessCapabilities/Funds/slices/ApproveWithdrawal/adapter.js";
+import type { ApproveWithdrawal } from "#BusinessCapabilities/Funds/slices/ApproveWithdrawal/command.js";
+import FundsStreamFactory from "#BusinessCapabilities/Funds/swimlanes/Funds/index.js";
+import { buildQueueName } from "#abstractions/endpoints/PgBossEndpointIdentity.js";
+import { endpointIdentity } from "#BusinessCapabilities/Funds/endpoints/CalculateWithdrawComission/pg-boss/index.js";
 
 const QUEUE_NAME = buildQueueName(endpointIdentity);
 import EvDbPostgresPrismaClientFactory from "@eventualize/postgres-storage-adapter/EvDbPostgresPrismaClientFactory";

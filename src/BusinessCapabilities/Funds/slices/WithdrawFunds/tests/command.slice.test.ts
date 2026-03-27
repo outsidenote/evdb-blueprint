@@ -1,8 +1,8 @@
 import { test, describe } from "node:test";
 import type { WithdrawFunds } from "../command.js";
 import { handleWithdrawFunds } from "../commandHandler.js";
-import { SliceTester } from "../../../../../types/abstractions/slices/SliceTester.js";
-import FundsStreamFactory from "../../../swimlanes/Funds/index.js";
+import { SliceTester } from "#abstractions/slices/SliceTester.js";
+import FundsStreamFactory from "#BusinessCapabilities/Funds/swimlanes/Funds/index.js";
 
 describe("Withdraw Funds Slice - Unit Tests", () => {
   test("main flow - sufficient balance", async () => {

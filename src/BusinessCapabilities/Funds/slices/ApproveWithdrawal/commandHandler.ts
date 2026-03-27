@@ -1,6 +1,6 @@
-import type { CommandHandler } from "../../../../types/abstractions/commands/commandHandler.js";
+import type { CommandHandler } from "#abstractions/commands/commandHandler.js";
 import type { ApproveWithdrawal } from "./command.js";
-import type { FundsStreamType } from "../../swimlanes/Funds/index.js";
+import type { FundsStreamType } from "#BusinessCapabilities/Funds/swimlanes/Funds/index.js";
 import { hasInsufficientEffectiveFunds } from "./gwts.js";
 
 /**

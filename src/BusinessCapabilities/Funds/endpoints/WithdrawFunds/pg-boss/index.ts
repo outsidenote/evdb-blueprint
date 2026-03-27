@@ -1,5 +1,5 @@
-import { defineAutomationEndpoint } from "../../../../../types/abstractions/endpoints/defineAutomationEndpoint.js";
-import { createWithdrawFundsAdapter } from "../../../slices/WithdrawFunds/adapter.js";
+import { defineAutomationEndpoint } from "#abstractions/endpoints/defineAutomationEndpoint.js";
+import { createWithdrawFundsAdapter } from "#BusinessCapabilities/Funds/slices/WithdrawFunds/adapter.js";
 
 interface WithdrawCommissionCalculatedPayload {
   readonly account: string;

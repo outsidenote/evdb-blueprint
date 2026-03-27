@@ -1,5 +1,5 @@
-import { defineAutomationEndpoint } from "../../../../../types/abstractions/endpoints/defineAutomationEndpoint.js";
-import { createCalculateWithdrawCommissionAdapter } from "../../../slices/CalculateWithdrawCommission/adapter.js";
+import { defineAutomationEndpoint } from "#abstractions/endpoints/defineAutomationEndpoint.js";
+import { createCalculateWithdrawCommissionAdapter } from "#BusinessCapabilities/Funds/slices/CalculateWithdrawCommission/adapter.js";
 import { enrich } from "../enrichment.js";
 
 interface FundsWithdrawalApprovedPayload {

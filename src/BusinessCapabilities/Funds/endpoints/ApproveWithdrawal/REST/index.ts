@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
 import { randomUUID } from "node:crypto";
-import { createApproveWithdrawalAdapter } from "../../../slices/ApproveWithdrawal/adapter.js";
+import { createApproveWithdrawalAdapter } from "#BusinessCapabilities/Funds/slices/ApproveWithdrawal/adapter.js";
 import type { IEvDbStorageAdapter } from "@eventualize/core/adapters/IEvDbStorageAdapter";
 
 
