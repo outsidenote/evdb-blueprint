@@ -9,13 +9,13 @@ interface FundsWithdrawalApprovedPayload {
   readonly transactionId: string;
 }
 
-const worker = defineAutomationEndpoint<FundsWithdrawalApprovedPayload>({
+const worker = defineAutomationEndpoint({
   source: "event",
   eventType: "FundsWithdrawalApproved",
   handlerName: "CalculateWithdrawCommission",
   createAdapter: createCalculateWithdrawCommissionAdapter,
-  getIdempotencyKey: (payload) => payload.transactionId,
-  mapPayloadToCommand: (payload) => enrich({
+  getIdempotencyKey: (payload: FundsWithdrawalApprovedPayload) => payload.transactionId,
+  mapPayloadToCommand: (payload: FundsWithdrawalApprovedPayload) => enrich({
     account: payload.account,
     amount: payload.amount,
     currency: payload.currency,

@@ -9,14 +9,14 @@ interface FundsWithdrawnPayload {
   readonly transactionId: string;
 }
 
-const worker = defineAutomationEndpoint<FundsWithdrawnPayload>({
+const worker = defineAutomationEndpoint({
   source: "message",
   eventType: "FundsWithdrawn",
   handlerName: "RecordFundWithdrawAction",
   kafkaTopic: "events.FundsWithdrawn",
   createAdapter: createRecordFundWithdrawActionAdapter,
-  getIdempotencyKey: (payload) => payload.transactionId,
-  mapPayloadToCommand: (payload) => ({
+  getIdempotencyKey: (payload: FundsWithdrawnPayload) => payload.transactionId,
+  mapPayloadToCommand: (payload: FundsWithdrawnPayload) => ({
     commandType: "RecordFundWithdrawAction" as const,
     account: payload.account,
     amount: payload.amount + payload.commission,

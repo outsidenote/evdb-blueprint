@@ -3,13 +3,13 @@ import type { PgBossEndpointIdentity, PgBossDeliverySource } from "./PgBossEndpo
 import { createEndpointConfig, type PgBossEndpointConfigBase } from "./PgBossEndpointConfig.js";
 import type { CommandHandlerOrchestratorResult } from "../commands/commandHandler.js";
 
-interface AutomationEndpointDefinition<TPayload> {
+interface AutomationEndpointDefinition<TPayload, TCommand> {
   readonly source: PgBossDeliverySource;
   readonly eventType: string;
   readonly handlerName: string;
   readonly kafkaTopic?: string;
-  readonly createAdapter: (storageAdapter: IEvDbStorageAdapter) => (command: any) => Promise<CommandHandlerOrchestratorResult>;
-  readonly mapPayloadToCommand: (payload: TPayload) => unknown;
+  readonly createAdapter: (storageAdapter: IEvDbStorageAdapter) => (command: TCommand) => Promise<CommandHandlerOrchestratorResult>;
+  readonly mapPayloadToCommand: (payload: TPayload) => TCommand;
   readonly getIdempotencyKey: (payload: TPayload) => string;
 }
 
@@ -18,8 +18,8 @@ interface AutomationEndpoint {
   readonly create: (storageAdapter: IEvDbStorageAdapter) => PgBossEndpointConfigBase;
 }
 
-export function defineAutomationEndpoint<TPayload>(
-  definition: AutomationEndpointDefinition<TPayload>,
+export function defineAutomationEndpoint<TPayload, TCommand>(
+  definition: AutomationEndpointDefinition<TPayload, TCommand>,
 ): AutomationEndpoint {
   const endpointIdentity: PgBossEndpointIdentity = {
     source: definition.source,
@@ -46,7 +46,7 @@ export function defineAutomationEndpoint<TPayload>(
 
           console.log(
             `[OutboxWorker] ${definition.eventType} → ${definition.handlerName} ` +
-            `account=${(payload as any).account} events=[${result.events.map(e => e.eventType).join(", ")}]`,
+            `key=${definition.getIdempotencyKey(payload)} events=[${result.events.map((e: { eventType: string }) => e.eventType).join(", ")}]`,
           );
         },
       });

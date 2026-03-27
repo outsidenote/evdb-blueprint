@@ -9,13 +9,13 @@ interface WithdrawCommissionCalculatedPayload {
   readonly transactionId: string;
 }
 
-const worker = defineAutomationEndpoint<WithdrawCommissionCalculatedPayload>({
+const worker = defineAutomationEndpoint({
   source: "event",
   eventType: "WithdrawCommissionCalculated",
   handlerName: "WithdrawFunds",
   createAdapter: createWithdrawFundsAdapter,
-  getIdempotencyKey: (payload) => payload.transactionId,
-  mapPayloadToCommand: (payload) => ({
+  getIdempotencyKey: (payload: WithdrawCommissionCalculatedPayload) => payload.transactionId,
+  mapPayloadToCommand: (payload: WithdrawCommissionCalculatedPayload) => ({
     commandType: "WithdrawFunds" as const,
     account: payload.account,
     amount: payload.amount,
