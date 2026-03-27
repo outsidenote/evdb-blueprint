@@ -1,7 +1,5 @@
 import type { CommandHandler } from "../../../../types/abstractions/commands/commandHandler.js";
 import type { ApproveWithdrawal } from "./command.js";
-import { FundsWithdrawalApproved } from "../../swimlanes/Funds/events/FundsWithdrawalApproved.js";
-import { FundsWithdrawalDeclined } from "../../swimlanes/Funds/events/FundsWithdrawalDeclined.js";
 import type { FundsStreamType } from "../../swimlanes/Funds/index.js";
 import { hasInsufficientEffectiveFunds } from "./gwts.js";
 
@@ -21,29 +19,25 @@ export const handleApproveWithdrawal: CommandHandler<
 > = (stream, command) => {
   const { balance } = stream.views.SliceStateApproveWithdrawal;
   if (hasInsufficientEffectiveFunds(balance, command)) {
-    stream.appendEventFundsWithdrawalDeclined(
-      new FundsWithdrawalDeclined({
-        account: command.account,
-        session: command.session,
-        currency: command.currency,
-        amount: command.amount,
-        reason: `Insufficient funds: balance ${balance} is less than withdrawal amount ${command.amount}`,
-        payer: command.payer,
-        source: command.source,
-        transactionId: command.transactionId,
-      }),
-    );
+    stream.appendEventFundsWithdrawalDeclined({
+      account: command.account,
+      session: command.session,
+      currency: command.currency,
+      amount: command.amount,
+      reason: `Insufficient funds: balance ${balance} is less than withdrawal amount ${command.amount}`,
+      payer: command.payer,
+      source: command.source,
+      transactionId: command.transactionId,
+    });
   } else {
-    stream.appendEventFundsWithdrawalApproved(
-      new FundsWithdrawalApproved({
-        account: command.account,
-        amount: command.amount,
-        currency: command.currency,
-        session: command.session,
-        source: command.source,
-        payer: command.payer,
-        transactionId: command.transactionId,
-      }),
-    );
+    stream.appendEventFundsWithdrawalApproved({
+      account: command.account,
+      amount: command.amount,
+      currency: command.currency,
+      session: command.session,
+      source: command.source,
+      payer: command.payer,
+      transactionId: command.transactionId,
+    });
   }
 };

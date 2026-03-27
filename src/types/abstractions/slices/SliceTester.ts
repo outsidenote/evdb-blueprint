@@ -1,30 +1,30 @@
 import * as assert from "node:assert";
 import type { CommandHandler } from "../commands/commandHandler.js";
-import type IEvDbEventPayload from "@eventualize/types/events/IEvDbEventPayload";
-import type { EvDbView } from "@eventualize/core/view/EvDbView";
 import type { StreamWithEventMethods } from "@eventualize/core/factories/EvDbStreamFactory";
 import type { EvDbStreamFactory } from "@eventualize/core/factories/EvDbStreamFactory";
 import StorageAdapterStub from "../../../tests/StorageAdapterStub.js";
 import type EvDbStream from "@eventualize/core/store/EvDbStream";
 
+export type TestEvent = { eventType: string; payload: object };
+
 export class SliceTester {
     static async testCommandHandler<
         TCommand,
-        TEvents extends IEvDbEventPayload,
+        TEventMap extends Record<string, object>,
         TStreamType extends string,
-        TViews extends Record<string, EvDbView<unknown>> = {}
+        TViews extends Record<string, unknown> = {}
     >(
-        commandHandler: CommandHandler<StreamWithEventMethods<TEvents, TViews>, TCommand>,
-        streamFactory: EvDbStreamFactory<TEvents, TStreamType, TViews>,
-        givenEvents: TEvents[] = [],
+        commandHandler: CommandHandler<StreamWithEventMethods<TEventMap, TViews>, TCommand>,
+        streamFactory: EvDbStreamFactory<TEventMap, TStreamType, TViews>,
+        givenEvents: TestEvent[] = [],
         command: TCommand,
-        thenResult: TEvents[] | Error = [],
+        thenResult: TestEvent[] | Error = [],
     ) {
         const storageAdapter = new StorageAdapterStub();
         const stream = await streamFactory.create("test-stream", storageAdapter, storageAdapter);
         givenEvents.forEach(event => {
-            const methodName = `appendEvent${event.payloadType}`;
-            ((stream as unknown as Record<string, (e: TEvents) => void>)[methodName])(event)
+            const methodName = `appendEvent${event.eventType}`;
+            ((stream as unknown as Record<string, (e: object) => void>)[methodName])(event.payload)
         });
         try {
             commandHandler(stream, command);
@@ -35,7 +35,7 @@ export class SliceTester {
         }
         const streamEvents = (stream as EvDbStream).getEvents();
         const start = streamEvents.length - (thenResult instanceof Error ? 0 : thenResult.length);
-        const actualEvents = streamEvents.slice(start).map(e => e.payload as TEvents);
+        const actualEvents = streamEvents.slice(start).map(e => ({ eventType: e.eventType, payload: e.payload }));
         assert.strictEqual(
             JSON.stringify(actualEvents),
             JSON.stringify(thenResult)

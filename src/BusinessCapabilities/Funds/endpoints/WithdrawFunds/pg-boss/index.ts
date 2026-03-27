@@ -54,7 +54,7 @@ export function createWithdrawCommissionCalculatedWorker(
 
       console.log(
         `[OutboxWorker] WithdrawCommissionCalculated → WithdrawFunds ` +
-        `account=${payload.account} events=[${result.events.map(e => e.payload.payloadType).join(", ")}]`,
+        `account=${payload.account} events=[${result.events.map(e => e.eventType).join(", ")}]`,
       );
     },
   });
