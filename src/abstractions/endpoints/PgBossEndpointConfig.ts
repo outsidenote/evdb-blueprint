@@ -7,17 +7,18 @@ export interface PgBossEndpointContext {
 export interface PgBossEndpointConfigBase extends PgBossEndpointIdentity {
   readonly kafkaTopic?: string;
   readonly handler: (payload: Record<string, unknown>, context: PgBossEndpointContext) => Promise<void>;
-  readonly getIdempotencyKey: (message: Record<string, unknown>, context: PgBossEndpointContext) => string;
+  readonly getIdempotencyKey?: (message: Record<string, unknown>, context: PgBossEndpointContext) => string;
 }
 
 export function createEndpointConfig<TPayload>(
   config: {
     source: PgBossDeliverySource;
-    eventType: string;
+    messageType: string;
     handlerName: string;
+    queueName: string;
     kafkaTopic?: string;
     handler: (payload: TPayload, context: PgBossEndpointContext) => Promise<void>;
-    getIdempotencyKey: (message: TPayload, context: PgBossEndpointContext) => string;
+    getIdempotencyKey?: (message: TPayload, context: PgBossEndpointContext) => string;
   },
 ): PgBossEndpointConfigBase {
   return config as unknown as PgBossEndpointConfigBase;

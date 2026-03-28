@@ -11,7 +11,7 @@ interface WithdrawCommissionCalculatedPayload {
 
 const worker = defineAutomationEndpoint({
   source: "event",
-  eventType: "WithdrawCommissionCalculated",
+  messageType: "WithdrawCommissionCalculated",
   handlerName: "WithdrawFunds",
   createAdapter: createWithdrawFundsAdapter,
   getIdempotencyKey: (payload: WithdrawCommissionCalculatedPayload) => payload.transactionId,

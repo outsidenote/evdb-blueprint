@@ -1,10 +1,11 @@
 import type { IEvDbStorageAdapter } from "@eventualize/core/adapters/IEvDbStorageAdapter";
 import type { PgBossEndpointIdentity, PgBossDeliverySource } from "./PgBossEndpointIdentity.js";
+import { buildQueueName } from "./PgBossEndpointIdentity.js";
 import { createEndpointConfig, type PgBossEndpointConfigBase } from "./PgBossEndpointConfig.js";
 import type { CommandHandlerOrchestratorResult } from "../commands/commandHandler.js";
 
 /**
- * Configuration for an automation endpoint that bridges an event/message
+ * Configuration for an automation endpoint that bridges a message
  * to a command slice via pg-boss.
  *
  * @typeParam TPayload - Shape of the incoming message payload (from outbox or Kafka).
@@ -14,37 +15,37 @@ import type { CommandHandlerOrchestratorResult } from "../commands/commandHandle
  *                          "event"   = same-capability, outbox SQL trigger inserts pg-boss job
  *                                      transactionally with the event.
  *                          "message" = cross-capability, Kafka CDC bridges into pg-boss.
- * @property eventType   - The event that triggers this endpoint (e.g. "FundsWithdrawalApproved").
+ * @property messageType - The message that triggers this endpoint (e.g. "FundsWithdrawalApproved").
  * @property handlerName - The command slice this endpoint executes (e.g. "CalculateWithdrawCommission").
- *                          Combined with source + eventType to derive the pg-boss queue name:
- *                          `${source}.${eventType}.${handlerName}`.
- * @property kafkaTopic  - Required when source is "message". The Kafka topic to consume from.
+ *                          Combined with source + messageType to derive the pg-boss queue name:
+ *                          `${source}.${messageType}.${handlerName}`.
+ * @property kafkaTopic  - Required when source is "projection". The Kafka topic to consume from.
  * @property createAdapter - Factory that builds the command orchestrator.
  *                            Receives storageAdapter (injected at startup), returns a function
  *                            that accepts a command and persists events to the stream.
- * @property mapPayloadToCommand - Pure function that transforms the incoming payload into
- *                                  the domain command. This is where enrichment happens
- *                                  (e.g. computing commission, defaulting fields).
- * @property getIdempotencyKey   - Extracts a natural business key from the payload
+ * @property mapPayloadToCommand - Async function that transforms the incoming payload into
+ *                                  the domain command. Supports enrichment logic that may
+ *                                  fetch data from external services.
+ * @property getIdempotencyKey   - Optional. Extracts a natural business key from the payload
  *                                  (typically transactionId). The framework appends
- *                                  `:${handlerName}` automatically, so the same transactionId
- *                                  can be processed by different handlers without collision.
+ *                                  `:${handlerName}` automatically. Omit for endpoints
+ *                                  that don't require idempotency.
  */
 interface AutomationEndpointDefinition<TPayload, TCommand> {
   readonly source: PgBossDeliverySource;
-  readonly eventType: string;
+  readonly messageType: string;
   readonly handlerName: string;
   readonly kafkaTopic?: string;
   readonly createAdapter: (storageAdapter: IEvDbStorageAdapter) => (command: TCommand) => Promise<CommandHandlerOrchestratorResult>;
-  readonly mapPayloadToCommand: (payload: TPayload) => TCommand;
-  readonly getIdempotencyKey: (payload: TPayload) => string;
+  readonly mapPayloadToCommand: (payload: TPayload) => TCommand | Promise<TCommand>;
+  readonly getIdempotencyKey?: (payload: TPayload) => string;
 }
 
 /**
  * Return type of {@link defineAutomationEndpoint}.
  *
- * @property endpointIdentity - The identity (source, eventType, handlerName) used to
- *                               derive the queue name via `buildQueueName(identity)`.
+ * @property endpointIdentity - The identity (source, messageType, handlerName, queueName).
+ *                               The queueName is computed once at definition time.
  *                               Exported by the endpoint file so that message producers
  *                               can import it to route outbox jobs to the correct queue.
  * @property create           - Factory function called at startup in server.ts.
@@ -57,12 +58,12 @@ interface AutomationEndpoint {
 }
 
 /**
- * Declarative builder for automation endpoints that bridge events/messages to command slices.
+ * Declarative builder for automation endpoints that bridge messages to command slices.
  *
  * Encapsulates the boilerplate of wiring a pg-boss worker:
- * - Derives the queue name from `source.eventType.handlerName`
- * - Composes the idempotency key as `businessKey:handlerName`
- * - Logs every execution with event type, handler, key, and emitted events
+ * - Computes the queue name once as `source.messageType.handlerName`
+ * - Optionally composes the idempotency key as `businessKey:handlerName`
+ * - Logs every execution with message type, handler, key, and emitted events
  * - Injects the storage adapter at startup (never a module-level singleton)
  *
  * @example
@@ -70,7 +71,7 @@ interface AutomationEndpoint {
  * // Same-capability (outbox trigger → pg-boss):
  * const worker = defineAutomationEndpoint({
  *   source: "event",
- *   eventType: "FundsWithdrawalApproved",
+ *   messageType: "FundsWithdrawalApproved",
  *   handlerName: "CalculateWithdrawCommission",
  *   createAdapter: createCalculateWithdrawCommissionAdapter,
  *   getIdempotencyKey: (p) => p.transactionId,
@@ -80,12 +81,11 @@ interface AutomationEndpoint {
  * // Cross-capability (Kafka CDC → pg-boss):
  * const worker = defineAutomationEndpoint({
  *   source: "message",
- *   eventType: "FundsWithdrawn",
+ *   messageType: "FundsWithdrawn",
  *   handlerName: "RecordFundWithdrawAction",
  *   kafkaTopic: "events.FundsWithdrawn",
  *   createAdapter: createRecordFundWithdrawActionAdapter,
- *   getIdempotencyKey: (p) => p.transactionId,
- *   mapPayloadToCommand: (p) => ({ commandType: "RecordFundWithdrawAction" as const, ...p }),
+ *   mapPayloadToCommand: async (p) => ({ commandType: "RecordFundWithdrawAction" as const, ...p }),
  * });
  *
  * // Export for use:
@@ -96,10 +96,13 @@ interface AutomationEndpoint {
 export function defineAutomationEndpoint<TPayload, TCommand>(
   definition: AutomationEndpointDefinition<TPayload, TCommand>,
 ): AutomationEndpoint {
+  const queueName = buildQueueName(definition.source, definition.messageType, definition.handlerName);
+
   const endpointIdentity: PgBossEndpointIdentity = {
     source: definition.source,
-    eventType: definition.eventType,
+    messageType: definition.messageType,
     handlerName: definition.handlerName,
+    queueName,
   };
 
   return {
@@ -112,16 +115,18 @@ export function defineAutomationEndpoint<TPayload, TCommand>(
         ...endpointIdentity,
         kafkaTopic: definition.kafkaTopic,
 
-        getIdempotencyKey: (payload, _context) =>
-          `${definition.getIdempotencyKey(payload)}:${definition.handlerName}`,
+        getIdempotencyKey: definition.getIdempotencyKey
+          ? (payload, _context) => `${definition.getIdempotencyKey!(payload)}:${definition.handlerName}`
+          : undefined,
 
         handler: async (payload) => {
-          const command = definition.mapPayloadToCommand(payload);
+          const command = await definition.mapPayloadToCommand(payload);
           const result = await adapter(command);
 
+          const key = definition.getIdempotencyKey?.(payload) ?? "n/a";
           console.log(
-            `[OutboxWorker] ${definition.eventType} → ${definition.handlerName} ` +
-            `key=${definition.getIdempotencyKey(payload)} events=[${result.events.map((e: { eventType: string }) => e.eventType).join(", ")}]`,
+            `[OutboxWorker] ${definition.messageType} → ${definition.handlerName} ` +
+            `key=${key} events=[${result.events.map((e: { eventType: string }) => e.eventType).join(", ")}]`,
           );
         },
       });

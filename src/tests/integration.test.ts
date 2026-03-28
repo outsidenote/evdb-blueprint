@@ -5,9 +5,8 @@ import type pg from "pg";
 import { TestDatabase, createTestApp, waitFor } from "./harness/index.js";
 import { createFundsWithdrawalApprovedWorker, endpointIdentity } from "#BusinessCapabilities/Funds/endpoints/CalculateWithdrawComission/pg-boss/index.js";
 import { createWithdrawCommissionCalculatedWorker } from "#BusinessCapabilities/Funds/endpoints/WithdrawFunds/pg-boss/index.js";
-import { buildQueueName } from "#abstractions/endpoints/PgBossEndpointIdentity.js";
 
-const QUEUE_NAME = buildQueueName(endpointIdentity);
+const QUEUE_NAME = endpointIdentity.queueName;
 
 describe("E2E: CalculateWithdrawCommission automation slice", () => {
   const db = new TestDatabase();

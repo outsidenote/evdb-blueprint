@@ -3,7 +3,6 @@ import type { Kafka } from "kafkajs";
 import { AutomationEndpointFactory } from "./AutomationEndpointFactory.js";
 import type { PgBossEndpointConfigBase, PgBossEndpointContext } from "./PgBossEndpointConfig.js";
 import type { IdempotencyGate } from "./IdempotencyGate.js";
-import { buildQueueName } from "./PgBossEndpointIdentity.js";
 
 interface JobData {
   metadata: {
@@ -60,7 +59,7 @@ export class PgBossEndpointFactory {
     const factory = new PgBossEndpointFactory();
 
     for (const config of endpoints) {
-      const queueName = buildQueueName(config);
+      const { queueName } = config;
 
       await boss.createQueue(queueName);
 
@@ -68,17 +67,19 @@ export class PgBossEndpointFactory {
         const data = job.data as JobData;
         const { outboxId } = data.metadata;
         const context: PgBossEndpointContext = { outboxId };
-        const idempotencyKey = config.getIdempotencyKey(data.payload, context);
 
-        if (await idempotencyGate.isAlreadyProcessed(idempotencyKey)) {
-          console.log(`[PgBossEndpoint] Duplicate detected for ${idempotencyKey}, skipping`);
-          return;
+        if (config.getIdempotencyKey) {
+          const idempotencyKey = config.getIdempotencyKey(data.payload, context);
+          if (await idempotencyGate.isAlreadyProcessed(idempotencyKey)) {
+            console.log(`[PgBossEndpoint] Duplicate detected for ${idempotencyKey}, skipping`);
+            return;
+          }
         }
 
         await config.handler(data.payload, context);
       });
 
-      console.log(`[PgBossEndpoint] Registered ${config.handlerName} for ${config.eventType}`);
+      console.log(`[PgBossEndpoint] Registered ${config.handlerName} for ${config.messageType}`);
     }
 
     // Auto-wire Kafka consumers for endpoints that declare a kafkaTopic

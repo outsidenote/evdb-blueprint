@@ -11,7 +11,7 @@ interface FundsWithdrawnPayload {
 
 const worker = defineAutomationEndpoint({
   source: "message",
-  eventType: "FundsWithdrawn",
+  messageType: "FundsWithdrawn",
   handlerName: "RecordFundWithdrawAction",
   kafkaTopic: "events.FundsWithdrawn",
   createAdapter: createRecordFundWithdrawActionAdapter,

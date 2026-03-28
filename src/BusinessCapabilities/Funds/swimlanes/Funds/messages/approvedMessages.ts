@@ -1,7 +1,6 @@
 import type { IFundsWithdrawalApproved } from "../events/FundsWithdrawalApproved.js";
 import type IEvDbEventMetadata from "@eventualize/types/events/IEvDbEventMetadata";
 import EvDbMessage from "@eventualize/types/messages/EvDbMessage";
-import { buildQueueName } from "#abstractions/endpoints/PgBossEndpointIdentity.js";
 import { endpointIdentity as calculateWithdrawCommissionEndpoint } from "#BusinessCapabilities/Funds/endpoints/CalculateWithdrawComission/pg-boss/index.js";
 import { createPgBossQueueMessageFromMetadata } from "#abstractions/endpoints/queueMessage.js";
 import { createIdempotencyMessageFromMetadata } from "#abstractions/endpoints/idempotencyMessage.js";
@@ -16,7 +15,7 @@ export const withdrawalApprovedMessages = (
 
   return [
     createPgBossQueueMessageFromMetadata(
-      [buildQueueName(calculateWithdrawCommissionEndpoint)],
+      [calculateWithdrawCommissionEndpoint.queueName],
       metadata,
       "CalculateWithdrawCommission",
       { account, amount, currency, transactionId },

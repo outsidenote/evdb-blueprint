@@ -11,7 +11,7 @@ interface FundsWithdrawalApprovedPayload {
 
 const worker = defineAutomationEndpoint({
   source: "event",
-  eventType: "FundsWithdrawalApproved",
+  messageType: "FundsWithdrawalApproved",
   handlerName: "CalculateWithdrawCommission",
   createAdapter: createCalculateWithdrawCommissionAdapter,
   getIdempotencyKey: (payload: FundsWithdrawalApprovedPayload) => payload.transactionId,
