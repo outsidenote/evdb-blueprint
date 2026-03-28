@@ -1,4 +1,4 @@
-import type { CalculateWithdrawCommissionCommand } from "../../slices/CalculateWithdrawCommission/command.js";
+import type { CalculateWithdrawCommissionCommand } from "#BusinessCapabilities/Funds/slices/CalculateWithdrawCommission/command.js";
 
 export interface EnrichmentRequest {
     readonly account: string;

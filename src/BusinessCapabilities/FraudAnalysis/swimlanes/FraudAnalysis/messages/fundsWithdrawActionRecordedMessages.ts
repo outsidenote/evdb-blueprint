@@ -1,6 +1,6 @@
 import type { IFundsWithdrawActionRecorded } from "../events/FundsWithdrawActionRecorded.js";
 import type IEvDbEventMetadata from "@eventualize/types/events/IEvDbEventMetadata";
-import { createIdempotencyMessageFromMetadata } from "../../../../../types/abstractions/endpoints/idempotencyMessage.js";
+import { createIdempotencyMessageFromMetadata } from "#abstractions/endpoints/idempotencyMessage.js";
 import type { FraudAnalysisViews } from "../views/FraudAnalysisViews.js";
 
 export const fundsWithdrawActionRecordedMessages = (

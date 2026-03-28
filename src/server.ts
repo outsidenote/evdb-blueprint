@@ -6,11 +6,12 @@ import pg from "pg";
 import { createServer, type Server } from "node:http";
 
 import { createFundsRouter } from "./BusinessCapabilities/Funds/endpoints/routes.js";
-import { createProjectionRouter } from "./types/abstractions/router/projections.js";
-import { ProjectionRepository } from "./types/abstractions/projections/ProjectionRepository.js";
+import { createProjectionRouter } from "./abstractions/router/projections.js";
+import { ProjectionRepository } from "./abstractions/projections/ProjectionRepository.js";
 import { swaggerDocument } from "./swagger.js";
-import { PgBossEndpointFactory } from "./types/abstractions/endpoints/PgBossEndpointFactory.js";
-import { ProjectionFactory } from "./types/abstractions/projections/ProjectionFactory.js";
+import { PgBossEndpointFactory } from "./abstractions/endpoints/PgBossEndpointFactory.js";
+import { OutboxIdempotencyGate } from "./abstractions/endpoints/IdempotencyGate.js";
+import { ProjectionFactory } from "./abstractions/projections/ProjectionFactory.js";
 import { createFundsWithdrawalApprovedWorker } from "./BusinessCapabilities/Funds/endpoints/CalculateWithdrawComission/pg-boss/index.js";
 import { createWithdrawCommissionCalculatedWorker } from "./BusinessCapabilities/Funds/endpoints/WithdrawFunds/pg-boss/index.js";
 import { createFundsWithdrawnWorker } from "./BusinessCapabilities/FraudAnalysis/endpoints/RecordFundWithdrawAction/pg-boss/index.js";
@@ -61,11 +62,13 @@ async function main() {
   await boss.start();
   console.log("[Startup] pg-boss started");
 
+  const idempotencyGate = new OutboxIdempotencyGate(pool);
+
   const pgBossFactory = await PgBossEndpointFactory.startAll(boss, [
     createFundsWithdrawalApprovedWorker(storageAdapter),
     createWithdrawCommissionCalculatedWorker(storageAdapter),
     createFundsWithdrawnWorker(storageAdapter),
-  ], pool, kafka);
+  ], idempotencyGate, kafka);
   console.log("[Startup] pg-boss workers registered");
 
   const projectionSlices = [

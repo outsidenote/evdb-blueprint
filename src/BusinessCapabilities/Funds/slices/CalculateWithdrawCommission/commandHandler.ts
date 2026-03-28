@@ -1,6 +1,6 @@
-import type { CommandHandler } from "../../../../types/abstractions/commands/commandHandler.js";
+import type { CommandHandler } from "#abstractions/commands/commandHandler.js";
 import type { CalculateWithdrawCommissionCommand } from "./command.js";
-import type { FundsStreamType } from "../../swimlanes/Funds/index.js";
+import type { FundsStreamType } from "#BusinessCapabilities/Funds/swimlanes/Funds/index.js";
 
 /**
  * Pure command handler for the CalculateWithdrawCommission command.

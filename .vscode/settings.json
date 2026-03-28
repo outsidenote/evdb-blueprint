@@ -4,5 +4,6 @@
   },
   "eslint.validate": [
     "typescript"
-  ]
+  ],
+  "js/ts.tsdk.path": "node_modules/typescript/lib"
 }
