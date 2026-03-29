@@ -334,25 +334,58 @@ export function create<TriggerEvent>Worker(
 ---
 
 ## Projection — `slices/<ProjectionName>/index.ts`
+
+> **Handler keys are message type strings, not event type names.**
+> The stream publishes messages whose type is set by `EvDbMessage.createFromMetadata(metadata, "<messageType>", ...)` in the
+> messages function — this string is what the projection framework routes to the right handler.
+> The message type and the event type can differ (e.g. an event registered as `FundsWithdrawnFromAccount` may
+> publish a message called `FundsWithdrawn`). Always read the messages file for the relevant event first to
+> find the correct key to use in the `handlers` object.
+>
+> **Idempotency**: if the messages file uses `createIdempotencyMessageFromMetadata`, the projection must use
+> `ProjectionModeType.Idempotent`. The `getIdempotencyKey` function should reconstruct the same logical key
+> used in the messages file (typically `transactionId` combined with a currency or other discriminator, matching
+> how the idempotency message was created).
+
 ```typescript
 import type { ProjectionConfig } from "../../../../types/abstractions/projections/ProjectionFactory.js";
-// import ProjectionMode
+import { ProjectionModeType } from "../../../../types/abstractions/projections/ProjectionFactory.js";
 
 export const <projectionName>Slice: ProjectionConfig = {
   projectionName: "<ProjectionName>",
-  mode: { type: ProjectionModeType.Idempotent, getIdempotencyKey: (payload, meta) => `...` },
-  // or { type: ProjectionModeType.Query }
-  // or { type: ProjectionModeType.Transaction }
+
+  // Use Idempotent when the messages file uses createIdempotencyMessageFromMetadata
+  mode: {
+    type: ProjectionModeType.Idempotent,
+    getIdempotencyKey: (payload) => {
+      const p = payload as { transactionId: string; /* other discriminator fields */ };
+      return `${p.transactionId}:<discriminator>`;
+    },
+  },
+  // Alternative modes when no idempotency message is used:
+  // mode: { type: ProjectionModeType.Query }
+  // mode: { type: ProjectionModeType.Transaction }
+
   handlers: {
-    // one handler per INBOUND EVENT in readmodels[].dependencies
-    <EventName>: (payload, { projectionName }) => [
-      // SqlStatement[] — SQL that materialises this event into the projection table
-      {
-        sql: `INSERT INTO projections (name, key, payload) VALUES ($1, $2, $3::jsonb)
-              ON CONFLICT (name, key) DO UPDATE SET payload = EXCLUDED.payload`,
-        params: [projectionName, payload.<keyField>, JSON.stringify(payload)],
-      },
-    ],
+    // Keys are the MESSAGE TYPE strings from EvDbMessage.createFromMetadata() in the messages file,
+    // not the event type names. Check the messages file for each inbound event to get the right key.
+    <MessageType>: (payload, { projectionName }) => {
+      const p = payload as { <field>: <type>; };
+      const key = `${p.<keyField1>}:${p.<keyField2>}`;
+      return [
+        {
+          sql: `
+            INSERT INTO projections (name, key, payload)
+            VALUES ($1, $2, $3::jsonb)
+            ON CONFLICT (name, key) DO UPDATE
+              SET payload = jsonb_build_object(
+                '<field>', <expression>
+              )
+          `,
+          params: [projectionName, key, JSON.stringify({ <field>: <value> }), /* upsert params */],
+        },
+      ];
+    },
   },
 };
 ```

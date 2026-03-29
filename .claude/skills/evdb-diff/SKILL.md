@@ -19,11 +19,39 @@ You are a status auditor for an event-sourced system built with the
 corresponding implementation in `src/BusinessCapabilities/`, and update the
 `status` field of every slice accordingly — then write the updated file back.
 
-There are three passes: a **direct scan** (does a code directory exist?), a
+There are five passes: a **direct scan** (does a code directory exist?), a
 **todo-list scan** (is the slice implicitly satisfied by a message producer
-elsewhere?), and an **automation-processor scan** (is the slice implicitly
-wired by a pg-boss endpoint for the command it delegates to?). All passes
-respect the "Done" invariant — never touch those.
+elsewhere?), an **automation-processor scan** (is the slice implicitly wired
+by a pg-boss endpoint for the command it delegates to?), a **hash integrity
+check** (has the spec changed since the slice was last implemented?), and a
+**blocked slice review** (did originally-Blocked slices get resolved, do they
+still have the same problem, or has a different problem emerged?).
+All passes respect the "Done" invariant — never touch those.
+
+---
+
+## Pre-pass — Record Blocked slices
+
+Each invocation of this skill is a fresh audit. Even if this is the second or
+third time the skill has run in the same conversation, always re-read every
+file and re-execute every grep/ls command from scratch. Prior results in
+context may reflect a different point in time and must not be reused — files
+change between runs, and stale data leads to wrong verdicts (especially for
+Blocked slices that may have just been fixed).
+
+Before running any pass, collect the IDs and folders of every slice whose
+current `status` in `index.json` is `"Blocked"`. Store this as
+`originallyBlocked`.
+
+You will use this list after all four main passes complete to produce the
+Blocked review report (Pass 5). The key information to note for each:
+
+- **Has a stored hash in `implementation-hashes.json`?**
+  - Yes → original problem was *spec drift*: the spec changed after the slice
+    was implemented and the hash no longer matched.
+  - No → original problem was *missing identifiers*: key code identifiers
+    expected by the spec were absent from the codebase (or the block was set
+    manually).
 
 ---
 
@@ -250,11 +278,162 @@ Slice `withdrawfundsprocessor` has:
 
 ---
 
+## Pass 4 — Hash integrity check
+
+After Passes 1–3, run a hash check against `.eventmodel/implementation-hashes.json` to detect spec drift and catch unverified implementations.
+
+### What is the implementation hash?
+
+Every time a slice is implemented, evdb-dev records an MD5 fingerprint of its specification (its entry in `config.json`, with the volatile `status` and `index` fields stripped) in `.eventmodel/implementation-hashes.json`:
+
+```json
+{
+  "3458764660904120114": "a7f3c9...",
+  "3458764660904347015": "d2e18b..."
+}
+```
+
+If the spec later changes but the code is not updated, the stored hash will no longer match the current config — which is exactly what Pass 4 detects.
+
+### Hash computation
+
+For each slice, compute its current config hash with:
+
+```bash
+python3 -c "
+import json, hashlib
+
+slice_id = '<slice_id>'
+EXCLUDED = {'status', 'index'}
+
+with open('.eventmodel/config.json') as f:
+    config = json.load(f)
+
+spec = next(s for s in config['slices'] if s['id'] == slice_id)
+spec = {k: v for k, v in spec.items() if k not in EXCLUDED}
+print(hashlib.md5(json.dumps(spec, sort_keys=True, separators=(',',':')).encode()).hexdigest())
+"
+```
+
+Run this once per slice; batch multiple slices in one Python invocation if possible to avoid repeated I/O.
+
+### Pass 4 algorithm
+
+1. **Read `.eventmodel/implementation-hashes.json`** (treat as `{}` if the file doesn't exist).
+2. **For each non-Done slice**, check two conditions independently:
+
+   **a. Spec drift (slice HAS a stored hash):**
+   - Compute the current config hash for the slice.
+   - If current hash ≠ stored hash → the spec changed since implementation.
+     Set status to `"Blocked"`. The hash file is **not** updated — the stale hash stays until a human reimplements the slice and re-records it with evdb-dev.
+   - If hashes match → no change.
+
+   **b. Unverified implementation (slice has Review status but NO stored hash):**
+   This happens when a slice was implemented before the hashing system was in place.
+   Verify the code reflects the current spec by scanning for key identifiers:
+
+   - **STATE_CHANGE slice** (has `commands[]`): for each command, convert its `title` to PascalCase (remove spaces) and grep `src/BusinessCapabilities/<context>/slices/` for that identifier. Also check that the event type names from internal `events[].title` entries appear in the stream factory (`swimlanes/`). External events (those with `elementContext: "EXTERNAL"`) are published outside the internal stream and do not need to appear in the stream factory.
+
+   - **STATE_VIEW projection slice** (has a code directory from Pass 1): projection slices consume **messages**, not events directly. The event type name and the message type name are independent — the stream factory `withMessages("<EventType>", fn)` key tells the stream *which event* triggers the messages, but the actual message type string is set by the messages function itself via `EvDbMessage.createFromMetadata(metadata, "<messageType>", ...)`. These can differ (e.g. event `"FundsWithdrawnFromAccount"` may publish a message called `"FundsWithdrawn"`).
+
+     To verify a projection slice, for each inbound event in the spec's readmodel dependencies:
+
+     1. **Find the event type name:** convert the inbound `title` to PascalCase → e.g. `"FundsWithdrawnFromAccount"`.
+
+     2. **Find the messages function:** in the stream factory file (`swimlanes/<context>/index.ts`), locate the `.withMessages("<EventType>", <fn>)` call for that event. Note the function name (e.g. `fundsWithdrawnMessages`) and find its source file in `swimlanes/<context>/messages/`.
+
+     3. **Extract the actual message type string:** in that messages file, find the `EvDbMessage.createFromMetadata(metadata, "<messageType>", ...)` call. The second argument is the message type string the projection will receive (e.g. `"FundsWithdrawn"`).
+
+     4. **Check the projection code:** grep `src/BusinessCapabilities/<context>/slices/<folder>/` for that message type string (not the event type name). If found → message handling is wired.
+
+     5. **Check idempotency alignment:** if the messages file uses `createIdempotencyMessageFromMetadata`, verify the projection uses `ProjectionModeType.Idempotent`. If the messages file does not use it, the projection should not be in Idempotent mode (or if it is, that is a mismatch worth flagging).
+
+     If all checks pass → implementation is verified. If the messages function is absent (no `withMessages` for the event) or the message type string is not found in the projection code → identifiers are missing.
+
+   - **Implicit slice** (no code directory — Review status from Passes 2 or 3): the code scan already confirmed wiring in the earlier pass. Treat as verified.
+
+   If all key identifiers are found → the implementation aligns with the spec. Compute the current config hash and **add it to `implementation-hashes.json`**. Do not change the slice status.
+
+   If significant identifiers are missing → set status to `"Blocked"`. Do not write a hash.
+
+   **Slices with Planned status and no hash**: nothing to do — they haven't been implemented yet.
+
+3. **Write `.eventmodel/implementation-hashes.json`** back if any new hashes were added (2-space indent, keys sorted alphabetically).
+
+---
+
+## Pass 5 — Blocked slice review
+
+After Passes 1–4, revisit every slice in `originallyBlocked`. The goal is to
+explain what happened to each one: did the underlying problem get fixed, does
+it still exist, or has a different problem surfaced?
+
+### How to determine the original problem
+
+Use the presence/absence of a stored hash (recorded in the Pre-pass step):
+
+| Had stored hash? | Original problem |
+|---|---|
+| Yes | Spec drift — the spec changed after the slice was implemented |
+| No | Missing identifiers — key code identifiers were absent |
+
+### How to determine the current outcome
+
+For each originally-Blocked slice, look at what passes 1–4 did:
+
+**If the slice is now `"Review"`** (passes 1–4 upgraded it):
+- **Verdict: Resolved** — the original problem no longer exists.
+  - Explain what changed: "implementation directory now found", "hash now
+    matches and code verified", "identifiers now present and hash stamped", etc.
+
+**If the slice is now `"Planned"`** (code directory disappeared):
+- **Verdict: Regressed** — the implementation was removed entirely.
+  - Note the original problem for context, but the current state is simply
+    unimplemented.
+
+**If the slice is still `"Blocked"`**:
+- Compare the blocking reason now versus the original:
+
+  *Same original problem persists:*
+  - Was spec drift → hash still mismatches → **Verdict: Persists (spec drift)**
+  - Was missing identifiers → identifiers still absent → **Verdict: Persists
+    (identifiers missing)**; name the specific missing identifiers.
+
+  *Different problem emerged:*
+  - Was spec drift, hash now matches, but identifiers are now missing →
+    **Verdict: Changed** — run a quick identifier scan (same logic as Pass 4b)
+    to confirm and name the missing identifiers.
+  - Was missing identifiers, identifiers now present, but hash now mismatches
+    → **Verdict: Changed** — the spec drifted while the code was being fixed.
+
+  When the verdict is **Changed**, run the additional check needed to confirm
+  the new problem, and name it explicitly in the report.
+
+### When to run an extra identifier scan
+
+An extra identifier scan is needed only when a Blocked slice had a stored hash
+that NOW matches (spec drift resolved) AND the slice is still Blocked. In that
+case, check whether key identifiers are present:
+- STATE_CHANGE: grep `slices/` for command name; grep `swimlanes/` for internal
+  event type names (skip external events).
+- STATE_VIEW projection (code dir exists): follow the full projection
+  verification from Pass 4b — find the messages function for the inbound event,
+  extract the actual message type string, then grep `slices/<folder>/` for that
+  string (not the event type name). Also check idempotency alignment.
+- Implicit (Pass 2/3 wiring): already confirmed — treat as present.
+
+If identifiers are missing after the hash resolves, that is the "changed
+problem" and should be named specifically in the report.
+
+---
+
 ## Write back and report
 
-After all three passes, write the updated object back to
+After all five passes, write the updated object back to
 `.eventmodel/.slices/index.json`, preserving all other fields and the original
 JSON formatting (2-space indent, same key order).
+
+Also write `.eventmodel/implementation-hashes.json` if Pass 4 added any new entries.
 
 Then output a concise summary:
 
@@ -273,17 +452,41 @@ Pass 3 — automation-processor implicit:
   <context>/<folder>: Planned → Review   (pg-boss endpoint found for <CommandName>)
   <context>/<folder>: (skipped — not an automation-processor slice)
 
+Pass 4 — hash integrity:
+  <context>/<folder>: Review → Blocked   (spec changed — stored hash doesn't match current config)
+  <context>/<folder>: hash stamped       (no prior hash; code verified against spec)
+  <context>/<folder>: Review → Blocked   (no prior hash; key identifiers missing from code)
+  <context>/<folder>: hash matches       (no change needed)
+
+Pass 5 — Blocked slice review:
+  <context>/<folder>: Blocked → Review   ✓ Resolved
+    Was: spec drift (stored hash mismatch)
+    Now: hash matches, implementation verified
+  <context>/<folder>: still Blocked      ✗ Persists
+    Was: missing identifiers (no stored hash)
+    Now: <IdentifierName> still absent from swimlanes/
+  <context>/<folder>: still Blocked      ⚠ Changed problem
+    Was: spec drift (stored hash mismatch)
+    Now: hash matches but <IdentifierName> missing from slices/<folder>/
+  <context>/<folder>: Blocked → Planned  ↩ Regressed
+    Was: missing identifiers (no stored hash)
+    Now: implementation directory no longer found
+
+  No Blocked slices.   ← use this line when originallyBlocked is empty
+
 Unchanged (Done): <context>/<folder>, ...
 ```
 
-If nothing changed in a pass, say so.
+If nothing changed in a pass, say so. Always include the Pass 5 section.
 
 ---
 
 ## Rules
 
 - Never modify slices with `status: "Done"`.
-- Only `"Planned"` and `"Review"` are ever written by this skill.
+- `"Planned"`, `"Review"`, and `"Blocked"` are the only statuses ever written by this skill.
 - Directory matching is case-insensitive.
 - Preserve all other fields in the JSON exactly as they are.
-- Do not implement, delete, or scaffold any code — only update `index.json`.
+- Do not implement, delete, or scaffold any code — only update `index.json` and `implementation-hashes.json`.
+- Never update a stored hash when a mismatch is detected — that is evdb-dev's responsibility after reimplementation.
+- Every run is a fresh audit. Never reuse grep results, file reads, or directory listings from earlier in the conversation. Always re-execute every tool call. Stale data causes wrong verdicts — this is especially dangerous for Pass 5, where a recently-fixed issue might still appear Blocked if you rely on cached search results.

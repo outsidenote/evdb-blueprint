@@ -18,14 +18,18 @@ source of truth** — implement only what is modelled there.
 
 ## SDLC Workflow
 
-1. **Run `git diff HEAD -- .eventmodel/.slices/index.json`** to determine which slices need
-   action. Parse: lines prefixed `+` with `"id"` → `"implement"`; lines prefixed `-` with
-   `"id"` → `"delete"`. If the file is untracked at HEAD, treat every slice as `"implement"`.
-   Use only this diff — do not scan the filesystem to guess what is missing.
+1. **Invoke the `evdb-diff` skill first** and wait for it to complete before doing anything else.
+   `evdb-diff` audits the codebase against `.eventmodel/.slices/index.json` and updates every
+   slice's `status` to reflect the true implementation state. Only after it finishes will the
+   index accurately reflect what still needs to be built.
 
-2. Work through the action list in order: `"delete"` first, then `"implement"`.
-3. Work **one slice at a time**. Set status `"InProgress"` before starting, `"Review"` when done.
-4. **Slices are immutable.** To change a slice: delete it, then recreate from the event model.
+2. **Read `.eventmodel/.slices/index.json`** and collect every slice whose `status` is
+   `"Planned"`. These are the only slices to work on. Ignore slices with any other status
+   (`"InProgress"`, `"Review"`, `"Done"`, `"Blocked"`).
+
+3. Work through the `"Planned"` list in order (ascending `index`).
+4. Work **one slice at a time**. Set status `"InProgress"` before starting, `"Review"` when done.
+5. **Slices are immutable.** To change a slice: delete it, then recreate from the event model.
 
 ### Slice Status Lifecycle
 
@@ -70,6 +74,10 @@ to another screen in a different slice.
 ### Pattern 3: Kafka Projection (multiple swimlanes)
 **Signal**: A `READMODEL` with `INBOUND EVENT` deps from **different swimlanes** AND **no** `"todoList": true` field.
 **Code**: Each populating event emits a Kafka message; a projection slice consumes and writes to SQL.
+Before writing the projection, read the messages file for each inbound event to determine the **message type string**
+(the second argument of `EvDbMessage.createFromMetadata()`). This is the key used in the projection's `handlers` object
+and can differ from the event type name. Also check whether `createIdempotencyMessageFromMetadata` is used — if so,
+the projection must use `ProjectionModeType.Idempotent`.
 
 ### Pattern 4: TODO-List Read Model (pg-boss queue feed)
 **Signal**: A `READMODEL` with `"todoList": true` in the slice JSON, OR with an `OUTBOUND AUTOMATION` dependency in the graph.
@@ -187,6 +195,7 @@ src/BusinessCapabilities/<context>/
 
 ## Key Conventions
 
+- **External vs internal events**: events in `slice.json` carry an `elementContext` field. Only `"INTERNAL"` events are registered in the stream factory with `.withEvent()`. Events with `elementContext: "EXTERNAL"` are published to external systems (e.g. Kafka topic) and must NOT be added to the internal stream factory.
 - **Events are interfaces, not classes**: define events as `export interface IEventName { ... }` (prefixed with `I`). No class, no constructor, no `payloadType` property.
 - **appendEvent syntax**: use the generated method `stream.appendEvent${EventName}({ ...fields })` — pass a plain payload object, never `new EventName(...)`.
 - **Event type on result**: use `result.events.map(e => e.eventType)` — the event type is a top-level field, not `e.payload.payloadType`.
