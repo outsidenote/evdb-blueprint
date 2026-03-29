@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { ProjectionSliceTester } from "../../../../types/abstractions/slices/ProjectionSliceTester.js";
+import { ProjectionSliceTester } from "#abstractions/slices/ProjectionSliceTester.js";
 import { pendingWithdrawalLookupSlice } from "./index.js";
 
 ProjectionSliceTester.run(pendingWithdrawalLookupSlice, [

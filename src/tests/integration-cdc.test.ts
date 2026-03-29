@@ -6,11 +6,12 @@ import { PgBoss } from "pg-boss";
 import pg from "pg";
 import { TestCDCStack } from "./harness/TestCDCStack.js";
 import { waitFor } from "./harness/helpers.js";
-import { PgBossEndpointFactory } from "../types/abstractions/endpoints/PgBossEndpointFactory.js";
-import { ProjectionFactory } from "../types/abstractions/projections/ProjectionFactory.js";
-import { createFundsWithdrawnWorker } from "../BusinessCapabilities/FraudAnalysis/endpoints/RecordFundWithdrawAction/pg-boss/index.js";
-import { pendingWithdrawalLookupSlice } from "../BusinessCapabilities/Funds/slices/PendingWithdrawalLookup/index.js";
-import { accountBalanceReadModelSlice } from "../BusinessCapabilities/Funds/slices/AccountBalanceReadModel/index.js";
+import { PgBossEndpointFactory } from "#abstractions/endpoints/PgBossEndpointFactory.js";
+import { OutboxIdempotencyGate } from "#abstractions/endpoints/IdempotencyGate.js";
+import { ProjectionFactory } from "#abstractions/projections/ProjectionFactory.js";
+import { createFundsWithdrawnWorker } from "#BusinessCapabilities/FraudAnalysis/endpoints/RecordFundWithdrawAction/pg-boss/index.js";
+import { pendingWithdrawalLookupSlice } from "#BusinessCapabilities/Funds/slices/PendingWithdrawalLookup/index.js";
+import { accountBalanceReadModelSlice } from "#BusinessCapabilities/Funds/slices/AccountBalanceReadModel/index.js";
 import EvDbPostgresPrismaClientFactory from "@eventualize/postgres-storage-adapter/EvDbPostgresPrismaClientFactory";
 import EvDbPrismaStorageAdapter from "@eventualize/relational-storage-adapter/EvDbPrismaStorageAdapter";
 
@@ -40,10 +41,12 @@ describe("CDC pipeline: outbox → Debezium → Kafka", { timeout: 180_000 }, ()
       brokers: [stack.kafkaBootstrap],
     });
 
+    const idempotencyGate = new OutboxIdempotencyGate(pool);
+
     pgBossFactory = await PgBossEndpointFactory.startAll(
       boss,
       [createFundsWithdrawnWorker(storageAdapter)],
-      pool,
+      idempotencyGate,
       kafka,
     );
 

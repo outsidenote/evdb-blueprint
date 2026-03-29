@@ -1,8 +1,8 @@
 import type { CalculateWithdrawCommissionCommand } from "./command.js";
 import { handleCalculateWithdrawCommission } from "./commandHandler.js";
-import { CommandHandlerOrchestratorFactory } from "../../../../types/abstractions/commands/CommandHandlerOrchestratorFactory.js";
-import type { CommandHandlerOrchestrator } from "../../../../types/abstractions/commands/commandHandler.js";
-import FundsStreamFactory from "../../swimlanes/Funds/index.js";
+import { CommandHandlerOrchestratorFactory } from "#abstractions/commands/CommandHandlerOrchestratorFactory.js";
+import type { CommandHandlerOrchestrator } from "#abstractions/commands/commandHandler.js";
+import FundsStreamFactory from "#BusinessCapabilities/Funds/swimlanes/Funds/index.js";
 import type { IEvDbStorageAdapter } from "@eventualize/core/adapters/IEvDbStorageAdapter";
 
 /**

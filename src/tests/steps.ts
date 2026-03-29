@@ -1,12 +1,12 @@
 import * as assert from "node:assert";
 
 import StorageAdapterStub from "./StorageAdapterStub.js";
-import type { FundsStreamType } from "../BusinessCapabilities/Funds/swimlanes/Funds/index.js";
-import FundsStreamFactory from "../BusinessCapabilities/Funds/swimlanes/Funds/index.js";
-import type { ApproveWithdrawal } from "../BusinessCapabilities/Funds/slices/ApproveWithdrawal/command.js";
-import { handleApproveWithdrawal } from "../BusinessCapabilities/Funds/slices/ApproveWithdrawal/commandHandler.js";
-import type { IFundsWithdrawalApproved } from "../BusinessCapabilities/Funds/swimlanes/Funds/events/FundsWithdrawalApproved.js";
-import type { IFundsWithdrawalDeclined } from "../BusinessCapabilities/Funds/swimlanes/Funds/events/FundsWithdrawalDeclined.js";
+import type { FundsStreamType } from "#BusinessCapabilities/Funds/swimlanes/Funds/index.js";
+import FundsStreamFactory from "#BusinessCapabilities/Funds/swimlanes/Funds/index.js";
+import type { ApproveWithdrawal } from "#BusinessCapabilities/Funds/slices/ApproveWithdrawal/command.js";
+import { handleApproveWithdrawal } from "#BusinessCapabilities/Funds/slices/ApproveWithdrawal/commandHandler.js";
+import type { IFundsWithdrawalApproved } from "#BusinessCapabilities/Funds/swimlanes/Funds/events/FundsWithdrawalApproved.js";
+import type { IFundsWithdrawalDeclined } from "#BusinessCapabilities/Funds/swimlanes/Funds/events/FundsWithdrawalDeclined.js";
 import type { IEvDbStorageAdapter } from "@eventualize/core/adapters/IEvDbStorageAdapter";
 
 export default class Steps {

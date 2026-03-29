@@ -1,4 +1,4 @@
-import type { ICommand } from "../../../../types/abstractions/commands/ICommand.js";
+import type { ICommand } from "#abstractions/commands/ICommand.js";
 
 export interface ApproveWithdrawal extends ICommand {
   readonly commandType: "ApproveWithdrawal";

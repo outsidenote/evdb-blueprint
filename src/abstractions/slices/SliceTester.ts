@@ -2,7 +2,7 @@ import * as assert from "node:assert";
 import type { CommandHandler } from "../commands/commandHandler.js";
 import type { StreamWithEventMethods } from "@eventualize/core/factories/EvDbStreamFactory";
 import type { EvDbStreamFactory } from "@eventualize/core/factories/EvDbStreamFactory";
-import StorageAdapterStub from "../../../tests/StorageAdapterStub.js";
+import StorageAdapterStub from "../../tests/StorageAdapterStub.js";
 import type EvDbStream from "@eventualize/core/store/EvDbStream";
 
 export type TestEvent = { eventType: string; payload: object };
