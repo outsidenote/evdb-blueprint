@@ -1,10 +1,5 @@
-import type { IEvDbStorageAdapter } from "@eventualize/core/adapters/IEvDbStorageAdapter";
-import { PgBossEndpointConfig } from "../../../../../types/abstractions/endpoints/PgBossEndpointFactory.js";
-import { createRecordFundWithdrawActionAdapter } from "../../../slices/RecordFundWithdrawAction/adapter.js";
-import { getIdempotencyKey } from "../../../../../types/abstractions/endpoints/idempotencyMessage.js";
-
-export const CHANNEL = "pg-boss" as const;
-export const QUEUE_NAME = "message.FundsWithdrawn.RecordFundWithdrawAction";
+import { defineAutomationEndpoint } from "#abstractions/endpoints/defineAutomationEndpoint.js";
+import { createRecordFundWithdrawActionAdapter } from "#BusinessCapabilities/FraudAnalysis/slices/RecordFundWithdrawAction/adapter.js";
 
 interface FundsWithdrawnPayload {
   readonly account: string;
@@ -14,48 +9,21 @@ interface FundsWithdrawnPayload {
   readonly transactionId: string;
 }
 
-/**
- * pg-boss endpoint for the RecordFundWithdrawAction slice.
- *
- * Follows the same flow as a REST endpoint:
- *   receive input -> create command -> call adapter.
- *
- * Listens for FundsWithdrawn events in the outbox
- * and executes the RecordFundWithdrawAction command.
- *
- * Idempotent: uses the outbox row ID as a deduplication key so
- * re-deliveries produce the same command and the orchestrator
- * can detect duplicates via optimistic concurrency.
- */
-export function createFundsWithdrawnWorker(
-  storageAdapter: IEvDbStorageAdapter,
-): PgBossEndpointConfig<FundsWithdrawnPayload> {
-  const recordFundWithdrawAction = createRecordFundWithdrawActionAdapter(storageAdapter);
+const worker = defineAutomationEndpoint({
+  source: "message",
+  messageType: "FundsWithdrawn",
+  handlerName: "RecordFundWithdrawAction",
+  kafkaTopic: "events.FundsWithdrawn",
+  createAdapter: createRecordFundWithdrawActionAdapter,
+  getIdempotencyKey: (payload: FundsWithdrawnPayload) => payload.transactionId,
+  mapPayloadToCommand: (payload: FundsWithdrawnPayload) => ({
+    commandType: "RecordFundWithdrawAction" as const,
+    account: payload.account,
+    amount: payload.amount + payload.commission,
+    currency: payload.currency,
+    transactionId: payload.transactionId,
+  }),
+});
 
-  return new PgBossEndpointConfig({
-    eventType: "FundsWithdrawn",
-    handlerName: "RecordFundWithdrawAction",
-    source: "message",
-    kafkaTopic: "events.FundsWithdrawn",
-
-    getIdempotencyKey: (payload, _context) =>
-      getIdempotencyKey(payload.transactionId, "RecordFundWithdrawAction"),
-
-    handler: async (payload) => {
-      const command = {
-        commandType: "RecordFundWithdrawAction" as const,
-        account: payload.account,
-        amount: payload.amount + payload.commission,
-        currency: payload.currency,
-        transactionId: payload.transactionId,
-      };
-
-      const result = await recordFundWithdrawAction(command);
-
-      console.log(
-        `[OutboxWorker] FundsWithdrawn → RecordFundWithdrawAction ` +
-        `account=${payload.account} events=[${result.events.map(e => e.eventType).join(", ")}]`,
-      );
-    },
-  });
-}
+export const endpointIdentity = worker.endpointIdentity;
+export const createFundsWithdrawnWorker = worker.create;

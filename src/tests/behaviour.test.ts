@@ -2,7 +2,7 @@ import * as assert from "node:assert";
 import { test, describe } from "node:test";
 import express from "express";
 import request from "supertest";
-import { createFundsRouter } from "../BusinessCapabilities/Funds/endpoints/routes.js";
+import { createFundsRouter } from "#BusinessCapabilities/Funds/endpoints/routes.js";
 import InMemoryStorageAdapter from "./InMemoryStorageAdapter.js";
 
 function createTestApp() {

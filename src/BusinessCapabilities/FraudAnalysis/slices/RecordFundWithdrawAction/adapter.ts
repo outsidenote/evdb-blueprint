@@ -1,8 +1,8 @@
 import type { RecordFundWithdrawAction } from "./command.js";
 import { handleRecordFundWithdrawAction } from "./commandHandler.js";
-import { CommandHandlerOrchestratorFactory } from "../../../../types/abstractions/commands/CommandHandlerOrchestratorFactory.js";
-import type { CommandHandlerOrchestrator } from "../../../../types/abstractions/commands/commandHandler.js";
-import FraudAnalysisStreamFactory from "../../swimlanes/FraudAnalysis/index.js";
+import { CommandHandlerOrchestratorFactory } from "#abstractions/commands/CommandHandlerOrchestratorFactory.js";
+import type { CommandHandlerOrchestrator } from "#abstractions/commands/commandHandler.js";
+import FraudAnalysisStreamFactory from "#BusinessCapabilities/FraudAnalysis/swimlanes/FraudAnalysis/index.js";
 import type { IEvDbStorageAdapter } from "@eventualize/core/adapters/IEvDbStorageAdapter";
 
 /**

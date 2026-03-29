@@ -1,15 +1,14 @@
 import type { IEvDbStorageAdapter } from "@eventualize/core/adapters/IEvDbStorageAdapter";
-import type { PgBossEndpointConfig } from "../../types/abstractions/endpoints/PgBossEndpointFactory.js";
+import type { PgBossEndpointConfigBase } from "#abstractions/endpoints/PgBossEndpointConfig.js";
 import pg from "pg";
 import EvDbPostgresPrismaClientFactory from "@eventualize/postgres-storage-adapter/EvDbPostgresPrismaClientFactory";
 import EvDbPrismaStorageAdapter from "@eventualize/relational-storage-adapter/EvDbPrismaStorageAdapter";
-import { PgBossEndpointFactory } from "../../types/abstractions/endpoints/PgBossEndpointFactory.js";
+import { PgBossEndpointFactory } from "#abstractions/endpoints/PgBossEndpointFactory.js";
+import { OutboxIdempotencyGate } from "#abstractions/endpoints/IdempotencyGate.js";
 import type { TestDatabase } from "./TestDatabase.js";
 
 export interface TestAppOptions {
-  // TODO: [bnaya-eshet 2026-03-22] consider a more specific type for workers, e.g. a union of all possible worker types
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- heterogeneous payload types require type erasure
-  workers: (storageAdapter: IEvDbStorageAdapter) => PgBossEndpointConfig<any>[];
+  workers: (storageAdapter: IEvDbStorageAdapter) => PgBossEndpointConfigBase[];
 }
 
 export interface TestAppContext {
@@ -28,7 +27,8 @@ export async function createTestApp(db: TestDatabase, options: TestAppOptions): 
   const storageAdapter = new EvDbPrismaStorageAdapter(storeClient);
   const pool = new pg.Pool({ connectionString: db.connectionUri });
 
-  await PgBossEndpointFactory.startAll(db.boss, options.workers(storageAdapter), pool);
+  const idempotencyGate = new OutboxIdempotencyGate(pool);
+  await PgBossEndpointFactory.startAll(db.boss, options.workers(storageAdapter), idempotencyGate);
 
   return { storageAdapter, pool };
 }

@@ -2,7 +2,7 @@ import { test, describe, before, after, beforeEach } from "node:test";
 import * as assert from "node:assert";
 import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
-import { TestDatabase } from "../../../tests/harness/index.js";
+import { TestDatabase } from "../../tests/harness/index.js";
 import { type ProjectionConfig } from "../projections/ProjectionFactory.js";
 import { applyProjectionEvent } from "../projections/projectionUtils.js";
 import { type EventMeta } from "../endpoints/kafkaConsumerUtils.js";

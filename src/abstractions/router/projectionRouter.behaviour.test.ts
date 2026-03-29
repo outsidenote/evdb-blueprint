@@ -3,7 +3,7 @@ import * as assert from "node:assert";
 import express from "express";
 import request from "supertest";
 import { Pool } from "pg";
-import { TestDatabase } from "../../../tests/harness/index.js";
+import { TestDatabase } from "../../tests/harness/index.js";
 import { ProjectionRepository } from "../projections/ProjectionRepository.js";
 import { createProjectionRouter } from "./projections.js";
 
