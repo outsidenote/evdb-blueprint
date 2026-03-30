@@ -1,5 +1,5 @@
 {
-  "description": "Empty model — zero slices. Skill should do nothing, not crash.",
+  "description": "Empty model \u2014 zero slices. Skill should do nothing, not crash.",
   "expected_statuses": {},
   "assertions": [
     "no-crash: skill completes without errors",

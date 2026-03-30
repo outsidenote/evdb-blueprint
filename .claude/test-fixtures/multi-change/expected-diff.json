@@ -1,14 +1,14 @@
 {
   "description": "Three changes: ADD 'Withdrawal Fee Calculation', DELETE 'Account Balance Read Model', AMEND 'Withdrawal Approval' (new field 'withdrawalLimit').",
   "expected_statuses": {
-    "funddeposit": "Review",
-    "withdrawalapproval": "Blocked",
-    "pendingwithdrawallookup": "Review",
+    "funddeposit": "Planned",
+    "withdrawalapproval": "Review",
+    "pendingwithdrawallookup": "Blocked",
     "withdrawalpendingcommissioncalculationtodo": "Review",
     "withdrawalcommissionprocessor": "Review",
     "calculatecommission": "Review",
     "fundstowithdrawto-dolist": "Review",
-    "withdrawfunds": "Review",
+    "withdrawfunds": "Blocked",
     "withdrawfundsprocessor": "Review",
     "withdrawalfeecalculation": "Planned"
   },

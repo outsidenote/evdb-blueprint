@@ -1,15 +1,15 @@
 {
   "description": "Slice 'Pending Withdrawal Lookup' removed from model, but code still exists in src/. evdb-diff should detect orphaned code.",
   "expected_statuses": {
-    "funddeposit": "Review",
+    "funddeposit": "Planned",
     "withdrawalapproval": "Review",
     "withdrawalpendingcommissioncalculationtodo": "Review",
     "withdrawalcommissionprocessor": "Review",
     "calculatecommission": "Review",
     "fundstowithdrawto-dolist": "Review",
-    "withdrawfunds": "Review",
+    "withdrawfunds": "Blocked",
     "withdrawfundsprocessor": "Review",
-    "accountbalancereadmodel": "Review"
+    "accountbalancereadmodel": "Blocked"
   },
   "expected_actions": [
     {
