@@ -3,7 +3,7 @@
   "expected_statuses": {
     "funddeposit": "Planned",
     "withdrawalapproval": "Review",
-    "pendingwithdrawallookup": "Blocked",
+    "pendingwithdrawallookup": "Review",
     "withdrawalpendingcommissioncalculationtodo": "Review",
     "withdrawalcommissionprocessor": "Review",
     "calculatecommission": "Review",
