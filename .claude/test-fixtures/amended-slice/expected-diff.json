@@ -1,0 +1,32 @@
+{
+  "description": "Slice 'Fund Deposit' amended: new field 'depositChannel' added + new spec 'isDuplicateTransaction' with empty then[]. Hash drift should be detected if implementation-hashes.json exists.",
+  "expected_statuses": {
+    "funddeposit": "Blocked",
+    "withdrawalapproval": "Review",
+    "pendingwithdrawallookup": "Review",
+    "withdrawalpendingcommissioncalculationtodo": "Review",
+    "withdrawalcommissionprocessor": "Review",
+    "calculatecommission": "Review",
+    "fundstowithdrawto-dolist": "Review",
+    "withdrawfunds": "Review",
+    "withdrawfundsprocessor": "Review",
+    "accountbalancereadmodel": "Review"
+  },
+  "expected_statuses_no_hashes": {
+    "funddeposit": "Review",
+    "_note": "If no implementation-hashes.json exists, Pass 4 cannot detect drift. Fund Deposit code exists so Pass 1 sets Review. The new field/spec go undetected — this is a known limitation."
+  },
+  "expected_actions": [
+    {
+      "slice": "Fund Deposit",
+      "folder": "funddeposit",
+      "action": "re-implement",
+      "reason": "Spec hash drift: new field 'depositChannel' and new spec 'isDuplicateTransaction' added"
+    }
+  ],
+  "expected_actions_no_hashes": [
+    {
+      "_note": "Without implementation-hashes.json, no action is generated — code exists, status stays Review. The drift is invisible."
+    }
+  ]
+}

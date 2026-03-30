@@ -1,0 +1,22 @@
+{
+  "description": "Slice 'Pending Withdrawal Lookup' removed from model, but code still exists in src/. evdb-diff should detect orphaned code.",
+  "expected_statuses": {
+    "funddeposit": "Review",
+    "withdrawalapproval": "Review",
+    "withdrawalpendingcommissioncalculationtodo": "Review",
+    "withdrawalcommissionprocessor": "Review",
+    "calculatecommission": "Review",
+    "fundstowithdrawto-dolist": "Review",
+    "withdrawfunds": "Review",
+    "withdrawfundsprocessor": "Review",
+    "accountbalancereadmodel": "Review"
+  },
+  "expected_actions": [
+    {
+      "slice": "Pending Withdrawal Lookup",
+      "folder": "pendingwithdrawallookup",
+      "action": "orphaned",
+      "reason": "Code exists at slices/PendingWithdrawalLookup/ and views/WithdrawalsInProcess/ but slice is no longer in the event model"
+    }
+  ]
+}

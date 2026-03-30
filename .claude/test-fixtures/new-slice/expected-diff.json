@@ -1,0 +1,24 @@
+{
+  "description": "New slice 'Withdrawal Fee Calculation' added. No code exists for it. All existing slices should remain unchanged.",
+  "expected_statuses": {
+    "funddeposit": "Review",
+    "withdrawalapproval": "Review",
+    "pendingwithdrawallookup": "Review",
+    "withdrawalpendingcommissioncalculationtodo": "Review",
+    "withdrawalcommissionprocessor": "Review",
+    "calculatecommission": "Review",
+    "fundstowithdrawto-dolist": "Review",
+    "withdrawfunds": "Review",
+    "withdrawfundsprocessor": "Review",
+    "accountbalancereadmodel": "Review",
+    "withdrawalfeecalculation": "Planned"
+  },
+  "expected_actions": [
+    {
+      "slice": "Withdrawal Fee Calculation",
+      "folder": "withdrawalfeecalculation",
+      "action": "implement",
+      "reason": "New slice in model, no code exists"
+    }
+  ]
+}

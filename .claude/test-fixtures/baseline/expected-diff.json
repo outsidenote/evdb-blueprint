@@ -1,0 +1,16 @@
+{
+  "description": "No changes to the model. evdb-diff should classify existing code as Review and missing code as Planned.",
+  "expected_statuses": {
+    "funddeposit": "Review",
+    "withdrawalapproval": "Review",
+    "pendingwithdrawallookup": "Review",
+    "withdrawalpendingcommissioncalculationtodo": "Review",
+    "withdrawalcommissionprocessor": "Review",
+    "calculatecommission": "Review",
+    "fundstowithdrawto-dolist": "Review",
+    "withdrawfunds": "Review",
+    "withdrawfundsprocessor": "Review",
+    "accountbalancereadmodel": "Review"
+  },
+  "expected_actions": []
+}

@@ -1,0 +1,10 @@
+{
+  "description": "Empty model — zero slices. Skill should do nothing, not crash.",
+  "expected_statuses": {},
+  "assertions": [
+    "no-crash: skill completes without errors",
+    "no-code-changes: no files in src/ are created, modified, or deleted",
+    "empty-action-list: action list is empty or skill reports nothing to do"
+  ],
+  "expected_actions": []
+}

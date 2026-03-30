@@ -1,0 +1,39 @@
+{
+  "description": "Three changes: ADD 'Withdrawal Fee Calculation', DELETE 'Account Balance Read Model', AMEND 'Withdrawal Approval' (new field 'withdrawalLimit').",
+  "expected_statuses": {
+    "funddeposit": "Review",
+    "withdrawalapproval": "Blocked",
+    "pendingwithdrawallookup": "Review",
+    "withdrawalpendingcommissioncalculationtodo": "Review",
+    "withdrawalcommissionprocessor": "Review",
+    "calculatecommission": "Review",
+    "fundstowithdrawto-dolist": "Review",
+    "withdrawfunds": "Review",
+    "withdrawfundsprocessor": "Review",
+    "withdrawalfeecalculation": "Planned"
+  },
+  "expected_statuses_no_hashes": {
+    "withdrawalapproval": "Review",
+    "_note": "Without hashes, amendment to Withdrawal Approval is not detected"
+  },
+  "expected_actions": [
+    {
+      "slice": "Withdrawal Fee Calculation",
+      "folder": "withdrawalfeecalculation",
+      "action": "implement",
+      "reason": "New slice, no code exists"
+    },
+    {
+      "slice": "Account Balance Read Model",
+      "folder": "accountbalancereadmodel",
+      "action": "orphaned",
+      "reason": "Code exists at slices/AccountBalanceReadModel/ but slice removed from model"
+    },
+    {
+      "slice": "Withdrawal Approval",
+      "folder": "withdrawalapproval",
+      "action": "re-implement",
+      "reason": "Spec hash drift: new field 'withdrawalLimit' added"
+    }
+  ]
+}

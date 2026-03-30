@@ -1,0 +1,24 @@
+{
+  "description": "New slice 'Record Payment Method' with Custom type + List cardinality fields. evdb-diff only cares about status — this is primarily a test for evdb-dev.",
+  "expected_statuses": {
+    "funddeposit": "Review",
+    "withdrawalapproval": "Review",
+    "pendingwithdrawallookup": "Review",
+    "withdrawalpendingcommissioncalculationtodo": "Review",
+    "withdrawalcommissionprocessor": "Review",
+    "calculatecommission": "Review",
+    "fundstowithdrawto-dolist": "Review",
+    "withdrawfunds": "Review",
+    "withdrawfundsprocessor": "Review",
+    "accountbalancereadmodel": "Review",
+    "recordpaymentmethod": "Planned"
+  },
+  "expected_actions": [
+    {
+      "slice": "Record Payment Method",
+      "folder": "recordpaymentmethod",
+      "action": "implement",
+      "reason": "New slice, no code exists"
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "description": "New slice 'Deposit Validation' with spec having empty then[]. evdb-diff only cares about status, not GWT details — this is primarily a test for evdb-dev.",
+  "expected_statuses": {
+    "funddeposit": "Review",
+    "withdrawalapproval": "Review",
+    "pendingwithdrawallookup": "Review",
+    "withdrawalpendingcommissioncalculationtodo": "Review",
+    "withdrawalcommissionprocessor": "Review",
+    "calculatecommission": "Review",
+    "fundstowithdrawto-dolist": "Review",
+    "withdrawfunds": "Review",
+    "withdrawfundsprocessor": "Review",
+    "accountbalancereadmodel": "Review",
+    "depositvalidation": "Planned"
+  },
+  "expected_actions": [
+    {
+      "slice": "Deposit Validation",
+      "folder": "depositvalidation",
+      "action": "implement",
+      "reason": "New slice, no code exists"
+    }
+  ]
+}
