@@ -1,0 +1,399 @@
+{
+  "id": "8888888888888888001",
+  "status": "Planned",
+  "index": 25,
+  "title": "slice: Apply Account Discount",
+  "context": "Funds",
+  "sliceType": "UNDEFINED",
+  "commands": [
+    {
+      "id": "8888888888888888002",
+      "tags": [],
+      "elementContext": "INTERNAL",
+      "modelContext": "Funds",
+      "context": "INTERNAL",
+      "slice": "slice: Apply Account Discount",
+      "title": "Apply Account Discount",
+      "fields": [
+        {
+          "name": "Account",
+          "type": "UUID",
+          "example": "ACC-100",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "Amount",
+          "type": "Double",
+          "example": "100",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "discountPercentage",
+          "type": "Double",
+          "example": "15",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "Currency",
+          "type": "String",
+          "example": "USD",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "transactionId",
+          "type": "String",
+          "example": "txn-500",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "appliedAt",
+          "type": "DateTime",
+          "generated": true,
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        }
+      ],
+      "type": "COMMAND",
+      "description": "",
+      "aggregate": "funds",
+      "aggregateDependencies": ["funds"],
+      "dependencies": [
+        {
+          "id": "8888888888888888003",
+          "type": "OUTBOUND",
+          "title": "Account Discount Applied",
+          "elementType": "EVENT"
+        },
+        {
+          "id": "8888888888888888005",
+          "type": "OUTBOUND",
+          "title": "Account Discount Rejected",
+          "elementType": "EVENT"
+        }
+      ],
+      "createsAggregate": false,
+      "triggers": [],
+      "sketched": false,
+      "prototype": { "activeByDefault": false }
+    }
+  ],
+  "events": [
+    {
+      "id": "8888888888888888003",
+      "tags": [],
+      "elementContext": "INTERNAL",
+      "modelContext": "Funds",
+      "context": "INTERNAL",
+      "slice": "slice: Apply Account Discount",
+      "title": "Account Discount Applied",
+      "fields": [
+        {
+          "name": "Account",
+          "type": "UUID",
+          "example": "ACC-100",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "Amount",
+          "type": "Double",
+          "example": "100",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "discountedAmount",
+          "type": "Double",
+          "example": "85",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "discountPercentage",
+          "type": "Double",
+          "example": "15",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "Currency",
+          "type": "String",
+          "example": "USD",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "transactionId",
+          "type": "String",
+          "example": "txn-500",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        }
+      ],
+      "type": "EVENT",
+      "description": "",
+      "aggregate": "funds",
+      "aggregateDependencies": ["funds"],
+      "dependencies": [
+        {
+          "id": "8888888888888888002",
+          "type": "INBOUND",
+          "title": "Apply Account Discount",
+          "elementType": "COMMAND"
+        }
+      ],
+      "createsAggregate": false,
+      "triggers": [],
+      "sketched": false,
+      "prototype": { "activeByDefault": false }
+    },
+    {
+      "id": "8888888888888888005",
+      "tags": [],
+      "elementContext": "INTERNAL",
+      "modelContext": "Funds",
+      "context": "INTERNAL",
+      "slice": "slice: Apply Account Discount",
+      "title": "Account Discount Rejected",
+      "fields": [
+        {
+          "name": "Account",
+          "type": "UUID",
+          "example": "ACC-100",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "Amount",
+          "type": "Double",
+          "example": "100",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "discountPercentage",
+          "type": "Double",
+          "example": "75",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "reason",
+          "type": "String",
+          "example": "Exceeds maximum allowed discount of 50%",
+          "generated": true,
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "transactionId",
+          "type": "String",
+          "example": "txn-500",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        }
+      ],
+      "type": "EVENT",
+      "description": "",
+      "aggregate": "funds",
+      "aggregateDependencies": ["funds"],
+      "dependencies": [
+        {
+          "id": "8888888888888888002",
+          "type": "INBOUND",
+          "title": "Apply Account Discount",
+          "elementType": "COMMAND"
+        }
+      ],
+      "createsAggregate": false,
+      "triggers": [],
+      "sketched": false,
+      "prototype": { "activeByDefault": false }
+    }
+  ],
+  "readmodels": [],
+  "screens": [],
+  "screenImages": [],
+  "screenLayouts": [],
+  "processors": [
+    {
+      "id": "8888888888888888020",
+      "tags": [],
+      "groupId": "8888888888888888021",
+      "modelContext": "Funds",
+      "slice": "slice: Apply Account Discount",
+      "title": "Deposit Discount Processor",
+      "fields": [
+        {
+          "name": "Account",
+          "type": "UUID",
+          "example": "ACC-100",
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "Amount",
+          "type": "Double",
+          "example": "100",
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "Currency",
+          "type": "String",
+          "example": "USD",
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "transactionId",
+          "type": "String",
+          "example": "txn-500",
+          "cardinality": "Single",
+          "idAttribute": false
+        }
+      ],
+      "type": "AUTOMATION",
+      "description": "",
+      "aggregate": "default",
+      "aggregateDependencies": [],
+      "dependencies": [
+        {
+          "id": "8888888888888888002",
+          "type": "OUTBOUND",
+          "title": "Apply Account Discount",
+          "elementType": "COMMAND"
+        },
+        {
+          "id": "8888888888888888030",
+          "type": "INBOUND",
+          "title": "Deposits Pending Discount TODO",
+          "elementType": "READMODEL"
+        }
+      ],
+      "createsAggregate": false,
+      "triggers": [],
+      "sketched": false,
+      "prototype": { "activeByDefault": false }
+    }
+  ],
+  "tables": [],
+  "specifications": [
+    {
+      "vertical": false,
+      "id": "8888888888888888010",
+      "sliceName": "slice: Apply Account Discount",
+      "title": "spec: Discount exceeds maximum allowed",
+      "given": [
+        {
+          "title": "Account Discount Applied",
+          "tags": [],
+          "id": "8888888888888888011",
+          "index": 0,
+          "specRow": -1,
+          "type": "SPEC_EVENT",
+          "fields": [
+            {
+              "name": "Account",
+              "type": "UUID",
+              "example": "ACC-100",
+              "subfields": [],
+              "cardinality": "Single"
+            },
+            {
+              "name": "discountPercentage",
+              "type": "Double",
+              "example": "30",
+              "subfields": [],
+              "cardinality": "Single"
+            }
+          ],
+          "linkedId": "8888888888888888003"
+        }
+      ],
+      "when": [
+        {
+          "title": "Apply Account Discount",
+          "tags": [],
+          "examples": [],
+          "id": "8888888888888888012",
+          "index": 0,
+          "specRow": -1,
+          "type": "SPEC_COMMAND",
+          "fields": [
+            {
+              "name": "Account",
+              "type": "UUID",
+              "example": "ACC-100",
+              "subfields": [],
+              "cardinality": "Single"
+            },
+            {
+              "name": "discountPercentage",
+              "type": "Double",
+              "example": "75",
+              "subfields": [],
+              "cardinality": "Single"
+            }
+          ]
+        }
+      ],
+      "then": [
+        {
+          "title": "Account Discount Rejected",
+          "tags": [],
+          "id": "8888888888888888013",
+          "index": 0,
+          "specRow": -1,
+          "type": "SPEC_EVENT",
+          "fields": [
+            {
+              "name": "Account",
+              "type": "UUID",
+              "example": "ACC-100",
+              "subfields": [],
+              "cardinality": "Single"
+            },
+            {
+              "name": "reason",
+              "type": "String",
+              "example": "Exceeds maximum allowed discount of 50%",
+              "subfields": [],
+              "cardinality": "Single"
+            }
+          ]
+        }
+      ],
+      "comments": [
+        {
+          "description": "exceedsMaximumDiscount"
+        }
+      ],
+      "linkedId": "8888888888888888001"
+    }
+  ],
+  "actors": [],
+  "aggregates": ["funds"]
+}

@@ -1,0 +1,29 @@
+{
+  "description": "Code exists for 3 slices (pendingwithdrawallookup, accountbalancereadmodel, withdrawfunds) but no implementation-hashes.json exists. Tests the 'unverified implementation' path in Pass 4: verify code against spec, stamp hash if it matches, block if it doesn't.",
+  "expected_statuses": {
+    "funddeposit": "Planned",
+    "withdrawalapproval": "Planned",
+    "pendingwithdrawallookup": "Review",
+    "withdrawalpendingcommissioncalculationtodo": "Review",
+    "withdrawalcommissionprocessor": "Review",
+    "calculatecommission": "Planned",
+    "fundstowithdrawto-dolist": "Review",
+    "withdrawfunds": "Blocked",
+    "withdrawfundsprocessor": "Review",
+    "accountbalancereadmodel": "Review"
+  },
+  "assertions": [
+    "verify-stamp-review: pendingwithdrawallookup has code, no hash, code matches spec → verified, hash stamped, stays Review",
+    "verify-stamp-review: accountbalancereadmodel has code, no hash, code matches spec (via message chain) → verified, hash stamped, stays Review",
+    "verify-fail-blocked: withdrawfunds has code, no hash, code DOES NOT match spec (FundsWithdrawnFromAccount missing) → Blocked, hash NOT stamped",
+    "hashes-created: implementation-hashes.json is created with hashes for verified slices but NOT for blocked ones"
+  ],
+  "expected_actions": [
+    {
+      "slice": "Withdraw Funds",
+      "folder": "withdrawfunds",
+      "action": "review",
+      "reason": "Code exists but does not match spec — internal event FundsWithdrawnFromAccount missing from stream factory"
+    }
+  ]
+}
