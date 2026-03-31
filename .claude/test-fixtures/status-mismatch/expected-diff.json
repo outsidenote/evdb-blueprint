@@ -1,21 +1,21 @@
 {
-  "description": "Statuses are wrong: Done (should stay), Blocked (should skip), 'Ready' (invalid). Tests that evdb-diff respects Done, handles Blocked, and doesn't crash on unknown status.",
+  "description": "Statuses are wrong: Done (should stay), Blocked (may resolve if code is valid), 'Ready' (invalid). Tests that evdb-diff respects Done, reviews Blocked via Pass 5, and doesn't crash on unknown status.",
   "expected_statuses": {
     "funddeposit": "Done",
     "withdrawalapproval": "Done",
     "pendingwithdrawallookup": "Done",
-    "calculatecommission": "Blocked",
+    "calculatecommission": "Review",
     "withdrawalpendingcommissioncalculationtodo": "Review",
     "withdrawalcommissionprocessor": "Review",
     "fundstowithdrawto-dolist": "Review",
     "withdrawfunds": "Blocked",
     "withdrawfundsprocessor": "Review",
-    "accountbalancereadmodel": "Blocked"
+    "accountbalancereadmodel": "Review"
   },
   "assertions": [
     "done-preserved: slices with status 'Done' must NOT be changed to Review or Planned",
-    "blocked-unchanged: 'Calculate Commission' stays Blocked (Pass 5 reviews but does not auto-resolve)",
-    "invalid-status-handled: 'Withdraw Funds Processor' with status 'Ready' does not crash the skill \u2014 it is treated as a non-Done slice and audited normally",
+    "blocked-resolved: 'Calculate Commission' was Blocked but Pass 5 found valid code, resolved to Review",
+    "invalid-status-handled: 'Withdraw Funds Processor' with status 'Ready' does not crash \u2014 treated as non-Done and audited normally",
     "no-crash: skill completes without errors"
   ],
   "expected_actions": []

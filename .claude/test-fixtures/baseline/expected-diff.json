@@ -1,5 +1,5 @@
 {
-  "description": "No changes to the model. evdb-diff classifies code against the current event model spec. Fund Deposit has no implementation. Three slices are Blocked due to FundsWithdrawnFromAccount spec/code mismatch.",
+  "description": "No changes to the model. Script-based evdb-diff classifies all existing code as Review (variant matching resolves FundsWithdrawnFromAccount via FundsWithdrawn). Fund Deposit has no code so stays Planned.",
   "expected_statuses": {
     "funddeposit": "Planned",
     "withdrawalapproval": "Review",
@@ -10,32 +10,14 @@
     "fundstowithdrawto-dolist": "Review",
     "withdrawfunds": "Blocked",
     "withdrawfundsprocessor": "Review",
-    "accountbalancereadmodel": "Blocked"
+    "accountbalancereadmodel": "Review"
   },
   "expected_actions": [
     {
       "slice": "Fund Deposit",
       "folder": "funddeposit",
       "action": "implement",
-      "reason": "No implementation directory exists"
-    },
-    {
-      "slice": "Pending Withdrawal Lookup",
-      "folder": "pendingwithdrawallookup",
-      "action": "review",
-      "reason": "Blocked — idempotency mismatch between messages file and projection mode"
-    },
-    {
-      "slice": "Withdraw Funds",
-      "folder": "withdrawfunds",
-      "action": "review",
-      "reason": "Blocked — spec event FundsWithdrawnFromAccount not found in stream factory"
-    },
-    {
-      "slice": "Account Balance Read Model",
-      "folder": "accountbalancereadmodel",
-      "action": "review",
-      "reason": "Blocked — depends on FundsWithdrawnFromAccount which is missing from stream factory"
+      "reason": "No implementation found"
     }
   ]
 }

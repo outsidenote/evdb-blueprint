@@ -10,7 +10,7 @@
     "fundstowithdrawto-dolist": "Review",
     "withdrawfunds": "Blocked",
     "withdrawfundsprocessor": "Review",
-    "accountbalancereadmodel": "Blocked",
+    "accountbalancereadmodel": "Review",
     "transferfunds": "Planned"
   },
   "expected_actions": [
