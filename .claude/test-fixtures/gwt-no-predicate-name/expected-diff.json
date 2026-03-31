@@ -1,0 +1,24 @@
+{
+  "description": "New slice 'Verify Account' with spec but empty comments[]. evdb-diff only cares about status \u2014 this is primarily a test for evdb-dev.",
+  "expected_statuses": {
+    "funddeposit": "Planned",
+    "withdrawalapproval": "Planned",
+    "pendingwithdrawallookup": "Review",
+    "withdrawalpendingcommissioncalculationtodo": "Review",
+    "withdrawalcommissionprocessor": "Review",
+    "calculatecommission": "Planned",
+    "fundstowithdrawto-dolist": "Review",
+    "withdrawfunds": "Blocked",
+    "withdrawfundsprocessor": "Review",
+    "accountbalancereadmodel": "Review",
+    "verifyaccount": "Planned"
+  },
+  "expected_actions": [
+    {
+      "slice": "Verify Account",
+      "folder": "verifyaccount",
+      "action": "implement",
+      "reason": "New slice, no code exists"
+    }
+  ]
+}

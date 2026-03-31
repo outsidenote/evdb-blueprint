@@ -1,0 +1,23 @@
+{
+  "skill_name": "evdb-dev",
+  "evals": [
+    {
+      "id": 0,
+      "prompt": "implement the DepositFund slice",
+      "expected_output": "All expected files created: FundDeposited event, SliceStateFundDeposit view (state.ts + handlers.ts), FundsView view, DepositFund command/gwts/commandHandler/adapter, REST endpoint, stream factory updated, tests written, status set to 'Review'.",
+      "files": []
+    },
+    {
+      "id": 1,
+      "prompt": "implement the WithdrawalApproval slice",
+      "expected_output": "All expected files created: FundsWithdrawalApproved + FundsWithdrawalDeclined events, ApproveWithdrawal command/gwts/commandHandler/adapter, REST endpoint, message producer for FundsWithdrawalApproved (outbound automation dep), stream factory updated, tests written, status set to 'Review'.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "what do I need to code next? go ahead and do it",
+      "expected_output": "Skill runs evdb-diff first to find pending slices, then implements the first slice from the action list, following all skill conventions. Status updated correctly.",
+      "files": []
+    }
+  ]
+}

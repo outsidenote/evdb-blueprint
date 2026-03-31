@@ -1,0 +1,92 @@
+{
+  "slices": [
+    {
+      "id": "3458764661766264370",
+      "slice": "slice: Fund Deposit",
+      "index": 1,
+      "context": "Funds",
+      "folder": "funddeposit",
+      "status": "Review"
+    },
+    {
+      "id": "3458764660904120114",
+      "slice": "slice: Withdrawal Approval",
+      "index": 3,
+      "context": "Funds",
+      "folder": "withdrawalapproval",
+      "status": "Review"
+    },
+    {
+      "id": "3458764660904120191",
+      "slice": "slice: Pending Withdrawal Lookup",
+      "index": 5,
+      "context": "Funds",
+      "folder": "pendingwithdrawallookup",
+      "status": "Planned"
+    },
+    {
+      "id": "3458764660904120322",
+      "slice": "slice: Withdrawal Pending Commission Calculation TODO",
+      "index": 7,
+      "context": "Funds",
+      "folder": "withdrawalpendingcommissioncalculationtodo",
+      "status": "Planned"
+    },
+    {
+      "id": "3458764660904120506",
+      "slice": "slice: Withdrawal Commission Processor",
+      "index": 9,
+      "context": "Funds",
+      "folder": "withdrawalcommissionprocessor",
+      "status": "Planned"
+    },
+    {
+      "id": "3458764660904120703",
+      "slice": "slice: Calculate Commission",
+      "index": 11,
+      "context": "Funds",
+      "folder": "calculatecommission",
+      "status": "Planned"
+    },
+    {
+      "id": "3458764660904120751",
+      "slice": "slice: Funds to Withdraw TO-DO list",
+      "index": 13,
+      "context": "Funds",
+      "folder": "fundstowithdrawto-dolist",
+      "status": "Planned"
+    },
+    {
+      "id": "3458764660904347015",
+      "slice": "slice: Withdraw Funds",
+      "index": 15,
+      "context": "Funds",
+      "folder": "withdrawfunds",
+      "status": "Planned"
+    },
+    {
+      "id": "3458764660904120863",
+      "slice": "slice: Withdraw Funds Processor",
+      "index": 17,
+      "context": "Funds",
+      "folder": "withdrawfundsprocessor",
+      "status": "Planned"
+    },
+    {
+      "id": "3458764660904347056",
+      "slice": "slice: Account Balance Read Model",
+      "index": 19,
+      "context": "Funds",
+      "folder": "accountbalancereadmodel",
+      "status": "Planned"
+    },
+    {
+      "id": "5555555555555555001",
+      "slice": "slice: Verify Account",
+      "index": 27,
+      "context": "Funds",
+      "folder": "verifyaccount",
+      "status": "Planned"
+    }
+  ]
+}

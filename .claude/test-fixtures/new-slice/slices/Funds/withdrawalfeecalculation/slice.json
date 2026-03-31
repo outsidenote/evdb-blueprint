@@ -1,0 +1,354 @@
+{
+  "id": "9999999999999999001",
+  "status": "Planned",
+  "index": 21,
+  "title": "slice: Withdrawal Fee Calculation",
+  "context": "Funds",
+  "sliceType": "STATE_CHANGE",
+  "commands": [
+    {
+      "id": "9999999999999999002",
+      "tags": [],
+      "elementContext": "INTERNAL",
+      "modelContext": "Funds",
+      "context": "INTERNAL",
+      "slice": "slice: Withdrawal Fee Calculation",
+      "title": "Calculate Withdrawal Fee",
+      "fields": [
+        {
+          "name": "Account",
+          "type": "UUID",
+          "example": "1234",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "Amount",
+          "type": "Double",
+          "example": "100",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "Currency",
+          "type": "String",
+          "example": "USD",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "transactionId",
+          "type": "String",
+          "example": "txn-001",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "feeRate",
+          "type": "Double",
+          "example": "0.02",
+          "generated": true,
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "feeAmount",
+          "type": "Double",
+          "example": "2.00",
+          "generated": true,
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        }
+      ],
+      "type": "COMMAND",
+      "description": "",
+      "aggregate": "funds",
+      "aggregateDependencies": [
+        "funds"
+      ],
+      "dependencies": [
+        {
+          "id": "9999999999999999003",
+          "type": "OUTBOUND",
+          "title": "Withdrawal Fee Calculated",
+          "elementType": "EVENT"
+        },
+        {
+          "id": "9999999999999999005",
+          "type": "OUTBOUND",
+          "title": "Withdrawal Fee Waived",
+          "elementType": "EVENT"
+        }
+      ],
+      "createsAggregate": false,
+      "triggers": [],
+      "sketched": false,
+      "prototype": {
+        "activeByDefault": false
+      }
+    }
+  ],
+  "events": [
+    {
+      "id": "9999999999999999003",
+      "tags": [],
+      "elementContext": "INTERNAL",
+      "modelContext": "Funds",
+      "context": "INTERNAL",
+      "slice": "slice: Withdrawal Fee Calculation",
+      "title": "Withdrawal Fee Calculated",
+      "fields": [
+        {
+          "name": "Account",
+          "type": "UUID",
+          "example": "1234",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "Amount",
+          "type": "Double",
+          "example": "100",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "Currency",
+          "type": "String",
+          "example": "USD",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "transactionId",
+          "type": "String",
+          "example": "txn-001",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "feeRate",
+          "type": "Double",
+          "example": "0.02",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "feeAmount",
+          "type": "Double",
+          "example": "2.00",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        }
+      ],
+      "type": "EVENT",
+      "description": "",
+      "aggregate": "funds",
+      "aggregateDependencies": [
+        "funds"
+      ],
+      "dependencies": [
+        {
+          "id": "9999999999999999002",
+          "type": "INBOUND",
+          "title": "Calculate Withdrawal Fee",
+          "elementType": "COMMAND"
+        }
+      ],
+      "createsAggregate": false,
+      "triggers": [],
+      "sketched": false,
+      "prototype": {
+        "activeByDefault": false
+      }
+    },
+    {
+      "id": "9999999999999999005",
+      "tags": [],
+      "elementContext": "INTERNAL",
+      "modelContext": "Funds",
+      "context": "INTERNAL",
+      "slice": "slice: Withdrawal Fee Calculation",
+      "title": "Withdrawal Fee Waived",
+      "fields": [
+        {
+          "name": "Account",
+          "type": "UUID",
+          "example": "1234",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "Amount",
+          "type": "Double",
+          "example": "100",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "Currency",
+          "type": "String",
+          "example": "USD",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "transactionId",
+          "type": "String",
+          "example": "txn-001",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "reason",
+          "type": "String",
+          "example": "VIP customer",
+          "generated": true,
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        }
+      ],
+      "type": "EVENT",
+      "description": "",
+      "aggregate": "funds",
+      "aggregateDependencies": [
+        "funds"
+      ],
+      "dependencies": [
+        {
+          "id": "9999999999999999002",
+          "type": "INBOUND",
+          "title": "Calculate Withdrawal Fee",
+          "elementType": "COMMAND"
+        }
+      ],
+      "createsAggregate": false,
+      "triggers": [],
+      "sketched": false,
+      "prototype": {
+        "activeByDefault": false
+      }
+    }
+  ],
+  "readmodels": [],
+  "screens": [],
+  "screenImages": [],
+  "screenLayouts": [],
+  "processors": [],
+  "tables": [],
+  "specifications": [
+    {
+      "vertical": false,
+      "id": "9999999999999999004",
+      "sliceName": "slice: Withdrawal Fee Calculation",
+      "title": "spec: VIP customers get fee waived",
+      "given": [
+        {
+          "title": "Fund Deposited",
+          "tags": [],
+          "id": "9999999999999999010",
+          "index": 0,
+          "specRow": -1,
+          "type": "SPEC_EVENT",
+          "fields": [
+            {
+              "name": "Account",
+              "type": "UUID",
+              "example": "1234",
+              "subfields": [],
+              "cardinality": "Single"
+            },
+            {
+              "name": "Amount",
+              "type": "Double",
+              "example": "10000",
+              "subfields": [],
+              "cardinality": "Single"
+            }
+          ],
+          "linkedId": "3458764661766418399"
+        }
+      ],
+      "when": [
+        {
+          "title": "Calculate Withdrawal Fee",
+          "tags": [],
+          "examples": [],
+          "id": "9999999999999999011",
+          "index": 0,
+          "specRow": -1,
+          "type": "SPEC_COMMAND",
+          "fields": [
+            {
+              "name": "Account",
+              "type": "UUID",
+              "example": "1234",
+              "subfields": [],
+              "cardinality": "Single"
+            },
+            {
+              "name": "Amount",
+              "type": "Double",
+              "example": "50",
+              "subfields": [],
+              "cardinality": "Single"
+            }
+          ]
+        }
+      ],
+      "then": [
+        {
+          "title": "Withdrawal Fee Waived",
+          "tags": [],
+          "id": "9999999999999999012",
+          "index": 0,
+          "specRow": -1,
+          "type": "SPEC_EVENT",
+          "fields": [
+            {
+              "name": "Account",
+              "type": "UUID",
+              "example": "1234",
+              "subfields": [],
+              "cardinality": "Single"
+            },
+            {
+              "name": "reason",
+              "type": "String",
+              "example": "VIP customer",
+              "subfields": [],
+              "cardinality": "Single"
+            }
+          ]
+        }
+      ],
+      "comments": [
+        {
+          "description": "isVipCustomer"
+        }
+      ],
+      "linkedId": "9999999999999999001"
+    }
+  ],
+  "actors": [],
+  "aggregates": [
+    "funds"
+  ]
+}

@@ -1,0 +1,480 @@
+{
+  "id": "6666666666666666001",
+  "status": "Planned",
+  "index": 25,
+  "title": "slice: Transfer Funds",
+  "context": "Funds",
+  "sliceType": "STATE_CHANGE",
+  "commands": [
+    {
+      "id": "6666666666666666002",
+      "tags": [],
+      "elementContext": "INTERNAL",
+      "modelContext": "Funds",
+      "context": "INTERNAL",
+      "slice": "slice: Transfer Funds",
+      "title": "Transfer Funds",
+      "fields": [
+        {
+          "name": "fromAccount",
+          "type": "UUID",
+          "example": "ACC-001",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "toAccount",
+          "type": "UUID",
+          "example": "ACC-002",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "Amount",
+          "type": "Double",
+          "example": "50",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "Currency",
+          "type": "String",
+          "example": "USD",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "transactionId",
+          "type": "String",
+          "example": "txn-001",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "transferDate",
+          "type": "DateTime",
+          "generated": true,
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        }
+      ],
+      "type": "COMMAND",
+      "description": "",
+      "aggregate": "funds",
+      "aggregateDependencies": [
+        "funds"
+      ],
+      "dependencies": [
+        {
+          "id": "6666666666666666003",
+          "type": "OUTBOUND",
+          "title": "Funds Transferred",
+          "elementType": "EVENT"
+        },
+        {
+          "id": "6666666666666666004",
+          "type": "OUTBOUND",
+          "title": "Transfer Declined Insufficient Funds",
+          "elementType": "EVENT"
+        },
+        {
+          "id": "6666666666666666005",
+          "type": "OUTBOUND",
+          "title": "Transfer Declined Same Account",
+          "elementType": "EVENT"
+        }
+      ],
+      "createsAggregate": false,
+      "triggers": [],
+      "sketched": false,
+      "prototype": {
+        "activeByDefault": false
+      }
+    }
+  ],
+  "events": [
+    {
+      "id": "6666666666666666003",
+      "tags": [],
+      "elementContext": "INTERNAL",
+      "modelContext": "Funds",
+      "context": "INTERNAL",
+      "slice": "slice: Transfer Funds",
+      "title": "Funds Transferred",
+      "fields": [
+        {
+          "name": "fromAccount",
+          "type": "UUID",
+          "example": "ACC-001",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "toAccount",
+          "type": "UUID",
+          "example": "ACC-002",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "Amount",
+          "type": "Double",
+          "example": "50",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "Currency",
+          "type": "String",
+          "example": "USD",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "transactionId",
+          "type": "String",
+          "example": "txn-001",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "transferDate",
+          "type": "DateTime",
+          "generated": true,
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        }
+      ],
+      "type": "EVENT",
+      "description": "",
+      "aggregate": "funds",
+      "aggregateDependencies": [
+        "funds"
+      ],
+      "dependencies": [
+        {
+          "id": "6666666666666666002",
+          "type": "INBOUND",
+          "title": "Transfer Funds",
+          "elementType": "COMMAND"
+        }
+      ],
+      "createsAggregate": false,
+      "triggers": [],
+      "sketched": false,
+      "prototype": {
+        "activeByDefault": false
+      }
+    },
+    {
+      "id": "6666666666666666004",
+      "tags": [],
+      "elementContext": "INTERNAL",
+      "modelContext": "Funds",
+      "context": "INTERNAL",
+      "slice": "slice: Transfer Funds",
+      "title": "Transfer Declined Insufficient Funds",
+      "fields": [
+        {
+          "name": "fromAccount",
+          "type": "UUID",
+          "example": "ACC-001",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "Amount",
+          "type": "Double",
+          "example": "50",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "reason",
+          "type": "String",
+          "example": "Insufficient funds",
+          "generated": true,
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "transactionId",
+          "type": "String",
+          "example": "txn-001",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        }
+      ],
+      "type": "EVENT",
+      "description": "",
+      "aggregate": "funds",
+      "aggregateDependencies": [
+        "funds"
+      ],
+      "dependencies": [
+        {
+          "id": "6666666666666666002",
+          "type": "INBOUND",
+          "title": "Transfer Funds",
+          "elementType": "COMMAND"
+        }
+      ],
+      "createsAggregate": false,
+      "triggers": [],
+      "sketched": false,
+      "prototype": {
+        "activeByDefault": false
+      }
+    },
+    {
+      "id": "6666666666666666005",
+      "tags": [],
+      "elementContext": "INTERNAL",
+      "modelContext": "Funds",
+      "context": "INTERNAL",
+      "slice": "slice: Transfer Funds",
+      "title": "Transfer Declined Same Account",
+      "fields": [
+        {
+          "name": "fromAccount",
+          "type": "UUID",
+          "example": "ACC-001",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "toAccount",
+          "type": "UUID",
+          "example": "ACC-001",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "reason",
+          "type": "String",
+          "example": "Cannot transfer to same account",
+          "generated": true,
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "transactionId",
+          "type": "String",
+          "example": "txn-001",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        }
+      ],
+      "type": "EVENT",
+      "description": "",
+      "aggregate": "funds",
+      "aggregateDependencies": [
+        "funds"
+      ],
+      "dependencies": [
+        {
+          "id": "6666666666666666002",
+          "type": "INBOUND",
+          "title": "Transfer Funds",
+          "elementType": "COMMAND"
+        }
+      ],
+      "createsAggregate": false,
+      "triggers": [],
+      "sketched": false,
+      "prototype": {
+        "activeByDefault": false
+      }
+    }
+  ],
+  "readmodels": [],
+  "screens": [],
+  "screenImages": [],
+  "screenLayouts": [],
+  "processors": [],
+  "tables": [],
+  "specifications": [
+    {
+      "vertical": false,
+      "id": "6666666666666666010",
+      "sliceName": "slice: Transfer Funds",
+      "title": "spec: Insufficient funds for transfer",
+      "given": [
+        {
+          "title": "Fund Deposited",
+          "tags": [],
+          "id": "6666666666666666011",
+          "index": 0,
+          "specRow": -1,
+          "type": "SPEC_EVENT",
+          "fields": [
+            {
+              "name": "Account",
+              "type": "UUID",
+              "example": "ACC-001",
+              "subfields": [],
+              "cardinality": "Single"
+            },
+            {
+              "name": "Amount",
+              "type": "Double",
+              "example": "10",
+              "subfields": [],
+              "cardinality": "Single"
+            }
+          ],
+          "linkedId": "3458764661766418399"
+        }
+      ],
+      "when": [
+        {
+          "title": "Transfer Funds",
+          "tags": [],
+          "examples": [],
+          "id": "6666666666666666012",
+          "index": 0,
+          "specRow": -1,
+          "type": "SPEC_COMMAND",
+          "fields": [
+            {
+              "name": "fromAccount",
+              "type": "UUID",
+              "example": "ACC-001",
+              "subfields": [],
+              "cardinality": "Single"
+            },
+            {
+              "name": "Amount",
+              "type": "Double",
+              "example": "100",
+              "subfields": [],
+              "cardinality": "Single"
+            }
+          ]
+        }
+      ],
+      "then": [
+        {
+          "title": "Transfer Declined Insufficient Funds",
+          "tags": [],
+          "id": "6666666666666666013",
+          "index": 0,
+          "specRow": -1,
+          "type": "SPEC_EVENT",
+          "fields": [
+            {
+              "name": "fromAccount",
+              "type": "UUID",
+              "example": "ACC-001",
+              "subfields": [],
+              "cardinality": "Single"
+            },
+            {
+              "name": "reason",
+              "type": "String",
+              "example": "Insufficient funds",
+              "subfields": [],
+              "cardinality": "Single"
+            }
+          ]
+        }
+      ],
+      "comments": [
+        {
+          "description": "hasInsufficientFundsForTransfer"
+        }
+      ],
+      "linkedId": "6666666666666666001"
+    },
+    {
+      "vertical": false,
+      "id": "6666666666666666020",
+      "sliceName": "slice: Transfer Funds",
+      "title": "spec: Cannot transfer to same account",
+      "given": [],
+      "when": [
+        {
+          "title": "Transfer Funds",
+          "tags": [],
+          "examples": [],
+          "id": "6666666666666666021",
+          "index": 0,
+          "specRow": -1,
+          "type": "SPEC_COMMAND",
+          "fields": [
+            {
+              "name": "fromAccount",
+              "type": "UUID",
+              "example": "ACC-001",
+              "subfields": [],
+              "cardinality": "Single"
+            },
+            {
+              "name": "toAccount",
+              "type": "UUID",
+              "example": "ACC-001",
+              "subfields": [],
+              "cardinality": "Single"
+            }
+          ]
+        }
+      ],
+      "then": [
+        {
+          "title": "Transfer Declined Same Account",
+          "tags": [],
+          "id": "6666666666666666022",
+          "index": 0,
+          "specRow": -1,
+          "type": "SPEC_EVENT",
+          "fields": [
+            {
+              "name": "fromAccount",
+              "type": "UUID",
+              "example": "ACC-001",
+              "subfields": [],
+              "cardinality": "Single"
+            },
+            {
+              "name": "reason",
+              "type": "String",
+              "example": "Cannot transfer to same account",
+              "subfields": [],
+              "cardinality": "Single"
+            }
+          ]
+        }
+      ],
+      "comments": [
+        {
+          "description": "isSameAccount"
+        }
+      ],
+      "linkedId": "6666666666666666001"
+    }
+  ],
+  "actors": [],
+  "aggregates": [
+    "funds"
+  ]
+}

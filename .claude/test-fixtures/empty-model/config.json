@@ -1,0 +1,27 @@
+{
+  "slices": [],
+  "flows": [],
+  "aggregates": [
+    {
+      "id": "3458764660904347205",
+      "title": "funds",
+      "fields": [],
+      "type": "AGGREGATE"
+    },
+    {
+      "id": "3458764660904347313",
+      "title": "external events",
+      "fields": [],
+      "type": "AGGREGATE"
+    }
+  ],
+  "actors": [],
+  "context": "Funds",
+  "codeGen": {
+    "application": "Context"
+  },
+  "boardId": "uXjVG8ZO-4k=",
+  "sliceGroups": [],
+  "sliceImages": [],
+  "sliceLayouts": []
+}

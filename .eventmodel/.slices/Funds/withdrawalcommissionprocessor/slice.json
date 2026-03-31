@@ -1,0 +1,172 @@
+{
+  "id": "3458764660904120506",
+  "status": "Planned",
+  "title": "slice: Withdrawal Commission Processor",
+  "context": "Funds",
+  "sliceType": "STATE_VIEW",
+  "commands": [],
+  "events": [],
+  "readmodels": [
+    {
+      "id": "3458764660904120413",
+      "tags": [],
+      "modelContext": "Funds",
+      "slice": "slice: Withdrawal Commission Processor",
+      "title": "User segmentation",
+      "fields": [
+        {
+          "name": "account",
+          "type": "UUID",
+          "example": "1234",
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "segments",
+          "type": "String",
+          "example": "\"ICP\", \"VIP\"",
+          "cardinality": "List",
+          "idAttribute": false
+        }
+      ],
+      "type": "READMODEL",
+      "description": "",
+      "aggregate": "default",
+      "aggregateDependencies": [],
+      "dependencies": [],
+      "createsAggregate": false,
+      "triggers": [],
+      "sketched": false,
+      "prototype": {
+        "activeByDefault": false
+      }
+    },
+    {
+      "id": "3458764660904120369",
+      "tags": [],
+      "modelContext": "Funds",
+      "slice": "slice: Withdrawal Commission Processor",
+      "title": "Commission Lookup",
+      "fields": [
+        {
+          "name": "Mapping",
+          "type": "Custom",
+          "schema": "{\r\n    \"segment\": \"String\",\r\n    \"percent\": \"Double\"\r\n}",
+          "example": "[\n  { \"segment\":\"VIP\", \"percent\": 5},\n{ \"segment\":\"ICP\", \"percent\": 4},\n{ \"segment\":\"default\", \"percent\": 6}\n]",
+          "cardinality": "List",
+          "idAttribute": false
+        }
+      ],
+      "type": "READMODEL",
+      "description": "",
+      "aggregate": "default",
+      "aggregateDependencies": [],
+      "dependencies": [],
+      "createsAggregate": false,
+      "triggers": [],
+      "sketched": false,
+      "prototype": {
+        "activeByDefault": false
+      }
+    }
+  ],
+  "screens": [],
+  "screenImages": [],
+  "screenLayouts": [],
+  "processors": [
+    {
+      "id": "3458764660904120466",
+      "tags": [],
+      "groupId": "3458764660904120492",
+      "modelContext": "Funds",
+      "slice": "slice: Withdrawal Commission Processor",
+      "title": "Withdraw Commission Calculator",
+      "fields": [
+        {
+          "name": "Amount",
+          "type": "Double",
+          "example": "100",
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "Currency",
+          "type": "String",
+          "example": "USD",
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "Account",
+          "type": "UUID",
+          "example": "1234",
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "source",
+          "type": "String",
+          "example": "PayPal",
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "Payer",
+          "type": "String",
+          "example": "John Doe",
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "ApprovalDate",
+          "type": "DateTime",
+          "example": "2025-01-01 11:00",
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "session",
+          "type": "UUID",
+          "example": "0011",
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "transactionId",
+          "type": "String",
+          "example": "0011",
+          "cardinality": "Single",
+          "idAttribute": false
+        }
+      ],
+      "type": "AUTOMATION",
+      "description": "",
+      "aggregate": "default",
+      "aggregateDependencies": [],
+      "dependencies": [
+        {
+          "id": "3458764660904120583",
+          "type": "OUTBOUND",
+          "title": "Calculate Withdraw Commission",
+          "elementType": "COMMAND"
+        },
+        {
+          "id": "3458764660904120289",
+          "type": "INBOUND",
+          "title": "Todo Calculate Withdrawals Commission",
+          "elementType": "READMODEL"
+        }
+      ],
+      "createsAggregate": false,
+      "triggers": [],
+      "sketched": false,
+      "prototype": {
+        "activeByDefault": false
+      }
+    }
+  ],
+  "tables": [],
+  "specifications": [],
+  "actors": [],
+  "aggregates": []
+}

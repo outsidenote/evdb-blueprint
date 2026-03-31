@@ -1,0 +1,50 @@
+{
+  "skill_name": "evdb-diff",
+  "evals": [
+    {
+      "id": 0,
+      "prompt": "what do I need to implement?",
+      "expected_output": "A JSON array with one element: action=implement for the withdrawaldeclinenotified slice in the Funds context. No markdown, no prose.",
+      "files": [],
+      "assertions": [
+        {"text": "is-valid-json: output is parseable as JSON"},
+        {"text": "is-bare-json-array: output contains no markdown fences, no prose — just a raw JSON array"},
+        {"text": "correct-slice-name: output contains 'slice: Withdrawal Decline Notified'"},
+        {"text": "correct-folder: output contains 'withdrawaldeclinenotified'"},
+        {"text": "correct-action: output contains action value 'implement' (not 'delete')"},
+        {"text": "single-item: the array has exactly 1 element"},
+        {"text": "correct-context: output contains context value 'Funds'"}
+      ]
+    },
+    {
+      "id": 1,
+      "prompt": "show me the evdb-diff action list for my event model",
+      "expected_output": "A JSON array with one element: action=implement for the withdrawaldeclinenotified slice in the Funds context. No markdown, no prose.",
+      "files": [],
+      "assertions": [
+        {"text": "is-valid-json: output is parseable as JSON"},
+        {"text": "is-bare-json-array: output contains no markdown fences, no prose — just a raw JSON array"},
+        {"text": "correct-slice-name: output contains 'slice: Withdrawal Decline Notified'"},
+        {"text": "correct-folder: output contains 'withdrawaldeclinenotified'"},
+        {"text": "correct-action: output contains action value 'implement' (not 'delete')"},
+        {"text": "single-item: the array has exactly 1 element"},
+        {"text": "correct-context: output contains context value 'Funds'"}
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "I added a new slice to my event model index. What slices changed and what are the actions?",
+      "expected_output": "A JSON array with one element: action=implement for the withdrawaldeclinenotified slice. Output is pure JSON, no fences.",
+      "files": [],
+      "assertions": [
+        {"text": "is-valid-json: output is parseable as JSON"},
+        {"text": "is-bare-json-array: output contains no markdown fences, no prose — just a raw JSON array"},
+        {"text": "correct-slice-name: output contains 'slice: Withdrawal Decline Notified'"},
+        {"text": "correct-folder: output contains 'withdrawaldeclinenotified'"},
+        {"text": "correct-action: output contains action value 'implement' (not 'delete')"},
+        {"text": "single-item: the array has exactly 1 element"},
+        {"text": "correct-context: output contains context value 'Funds'"}
+      ]
+    }
+  ]
+}

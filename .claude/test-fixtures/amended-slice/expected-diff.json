@@ -1,0 +1,23 @@
+{
+  "description": "Slice 'Fund Deposit' amended: new field 'depositChannel' added + new spec 'isDuplicateTransaction' with empty then[]. Fund Deposit has no code so stays Planned regardless of amendments.",
+  "expected_statuses": {
+    "funddeposit": "Planned",
+    "withdrawalapproval": "Planned",
+    "pendingwithdrawallookup": "Review",
+    "withdrawalpendingcommissioncalculationtodo": "Review",
+    "withdrawalcommissionprocessor": "Review",
+    "calculatecommission": "Planned",
+    "fundstowithdrawto-dolist": "Review",
+    "withdrawfunds": "Blocked",
+    "withdrawfundsprocessor": "Review",
+    "accountbalancereadmodel": "Review"
+  },
+  "expected_actions": [
+    {
+      "slice": "Fund Deposit",
+      "folder": "funddeposit",
+      "action": "implement",
+      "reason": "No implementation directory exists. The amended spec (new field + new spec) will be picked up when implemented."
+    }
+  ]
+}
