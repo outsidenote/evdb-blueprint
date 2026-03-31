@@ -1,0 +1,19 @@
+{
+  "description": "Same model as baseline but with fields, events, and specs reordered. Must produce identical statuses — reordering should NOT trigger hash drift.",
+  "expected_statuses": {
+    "funddeposit": "Planned",
+    "withdrawalapproval": "Planned",
+    "pendingwithdrawallookup": "Review",
+    "withdrawalpendingcommissioncalculationtodo": "Review",
+    "withdrawalcommissionprocessor": "Review",
+    "calculatecommission": "Planned",
+    "fundstowithdrawto-dolist": "Review",
+    "withdrawfunds": "Blocked",
+    "withdrawfundsprocessor": "Review",
+    "accountbalancereadmodel": "Review"
+  },
+  "expected_actions": [],
+  "assertions": [
+    "no-false-drift: reordering fields/specs/events must NOT cause hash drift or status changes vs baseline"
+  ]
+}

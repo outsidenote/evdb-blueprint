@@ -1,0 +1,21 @@
+{
+  "description": "All slices set to Review in index.json but no implementation-hashes.json exists. Tests that Pass 4 verifies code against spec and stamps hashes without false blocking. Slices without code dirs get corrected to Planned by Pass 1.",
+  "expected_statuses": {
+    "funddeposit": "Planned",
+    "withdrawalapproval": "Planned",
+    "pendingwithdrawallookup": "Review",
+    "withdrawalpendingcommissioncalculationtodo": "Review",
+    "withdrawalcommissionprocessor": "Review",
+    "calculatecommission": "Planned",
+    "fundstowithdrawto-dolist": "Review",
+    "withdrawfunds": "Blocked",
+    "withdrawfundsprocessor": "Review",
+    "accountbalancereadmodel": "Review"
+  },
+  "assertions": [
+    "no-false-drift: without implementation-hashes.json, Pass 4 must verify code and stamp hashes, NOT trigger spec drift",
+    "pass1-corrects: slices with no code directory are corrected from Review to Planned despite index saying Review",
+    "hashes-created: implementation-hashes.json is created with hashes for all verified slices"
+  ],
+  "expected_actions": []
+}

@@ -102,6 +102,16 @@ Current model as-is. 11 slices, no changes. The control.
 
 ---
 
+## Hash Integrity Fixtures
+
+### reordered-fields/
+**Edge case:** Same model as baseline but with fields, events, and specs reordered (reversed).
+**What must happen:**
+- Statuses identical to baseline — reordering must NOT trigger false drift
+- Hash normalization sorts arrays by stable keys (name, id, title) before hashing
+
+---
+
 ## Boundary Fixtures
 
 ### empty-model/
