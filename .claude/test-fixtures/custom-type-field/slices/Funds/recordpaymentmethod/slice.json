@@ -1,0 +1,151 @@
+{
+  "id": "4444444444444444001",
+  "status": "Planned",
+  "index": 29,
+  "title": "slice: Record Payment Method",
+  "context": "Funds",
+  "sliceType": "STATE_CHANGE",
+  "commands": [
+    {
+      "id": "4444444444444444002",
+      "tags": [],
+      "elementContext": "INTERNAL",
+      "modelContext": "Funds",
+      "context": "INTERNAL",
+      "slice": "slice: Record Payment Method",
+      "title": "Record Payment Method",
+      "fields": [
+        {
+          "name": "Account",
+          "type": "UUID",
+          "example": "1234",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "transactionId",
+          "type": "String",
+          "example": "txn-001",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "paymentDetails",
+          "type": "Custom",
+          "schema": "{\r\n    \"cardType\": \"String\",\r\n    \"lastFourDigits\": \"String\",\r\n    \"expiryMonth\": \"Double\",\r\n    \"expiryYear\": \"Double\"\r\n}",
+          "example": "{ \"cardType\": \"VISA\", \"lastFourDigits\": \"4242\", \"expiryMonth\": 12, \"expiryYear\": 2027 }",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "tags",
+          "type": "String",
+          "example": "[\"primary\", \"business\"]",
+          "subfields": [],
+          "cardinality": "List",
+          "idAttribute": false
+        }
+      ],
+      "type": "COMMAND",
+      "description": "",
+      "aggregate": "funds",
+      "aggregateDependencies": [
+        "funds"
+      ],
+      "dependencies": [
+        {
+          "id": "4444444444444444003",
+          "type": "OUTBOUND",
+          "title": "Payment Method Recorded",
+          "elementType": "EVENT"
+        }
+      ],
+      "createsAggregate": false,
+      "triggers": [],
+      "sketched": false,
+      "prototype": {
+        "activeByDefault": false
+      }
+    }
+  ],
+  "events": [
+    {
+      "id": "4444444444444444003",
+      "tags": [],
+      "elementContext": "INTERNAL",
+      "modelContext": "Funds",
+      "context": "INTERNAL",
+      "slice": "slice: Record Payment Method",
+      "title": "Payment Method Recorded",
+      "fields": [
+        {
+          "name": "Account",
+          "type": "UUID",
+          "example": "1234",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "transactionId",
+          "type": "String",
+          "example": "txn-001",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "paymentDetails",
+          "type": "Custom",
+          "schema": "{\r\n    \"cardType\": \"String\",\r\n    \"lastFourDigits\": \"String\",\r\n    \"expiryMonth\": \"Double\",\r\n    \"expiryYear\": \"Double\"\r\n}",
+          "example": "{ \"cardType\": \"VISA\", \"lastFourDigits\": \"4242\", \"expiryMonth\": 12, \"expiryYear\": 2027 }",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "tags",
+          "type": "String",
+          "example": "[\"primary\", \"business\"]",
+          "subfields": [],
+          "cardinality": "List",
+          "idAttribute": false
+        }
+      ],
+      "type": "EVENT",
+      "description": "",
+      "aggregate": "funds",
+      "aggregateDependencies": [
+        "funds"
+      ],
+      "dependencies": [
+        {
+          "id": "4444444444444444002",
+          "type": "INBOUND",
+          "title": "Record Payment Method",
+          "elementType": "COMMAND"
+        }
+      ],
+      "createsAggregate": false,
+      "triggers": [],
+      "sketched": false,
+      "prototype": {
+        "activeByDefault": false
+      }
+    }
+  ],
+  "readmodels": [],
+  "screens": [],
+  "screenImages": [],
+  "screenLayouts": [],
+  "processors": [],
+  "tables": [],
+  "specifications": [],
+  "actors": [],
+  "aggregates": [
+    "funds"
+  ]
+}

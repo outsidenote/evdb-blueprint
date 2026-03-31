@@ -1,0 +1,527 @@
+{
+  "id": "3458764660904120114",
+  "status": "Planned",
+  "index": 3,
+  "title": "slice: Withdrawal Approval",
+  "context": "Funds",
+  "sliceType": "STATE_CHANGE",
+  "commands": [
+    {
+      "id": "3458764660904120010",
+      "tags": [],
+      "elementContext": "INTERNAL",
+      "modelContext": "Funds",
+      "context": "INTERNAL",
+      "slice": "slice: Withdrawal Approval",
+      "title": "Approve Withdrawal",
+      "fields": [
+        {
+          "name": "Account",
+          "type": "UUID",
+          "example": "1234",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "Amount",
+          "type": "Double",
+          "example": "20",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "ApprovalDate",
+          "type": "DateTime",
+          "example": "2025-01-01 11:00",
+          "generated": true,
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "Currency",
+          "type": "String",
+          "example": "USD",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "session",
+          "type": "UUID",
+          "example": "0011",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "source",
+          "type": "String",
+          "example": "ATM",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "Payer",
+          "type": "String",
+          "example": "John Doe",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "transactionId",
+          "type": "String",
+          "example": "0011",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "transactionTime",
+          "type": "DateTime",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "withdrawalLimit",
+          "type": "Double",
+          "example": "5000",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        }
+      ],
+      "type": "COMMAND",
+      "description": "",
+      "aggregate": "funds",
+      "aggregateDependencies": [
+        "funds"
+      ],
+      "dependencies": [
+        {
+          "id": "3458764660904119991",
+          "type": "OUTBOUND",
+          "title": "Funds Withdrawal Approved",
+          "elementType": "EVENT"
+        },
+        {
+          "id": "3458764660904119962",
+          "type": "OUTBOUND",
+          "title": "Funds Withdrawal Declined",
+          "elementType": "EVENT"
+        }
+      ],
+      "createsAggregate": false,
+      "triggers": [],
+      "sketched": false,
+      "prototype": {
+        "activeByDefault": false
+      }
+    }
+  ],
+  "events": [
+    {
+      "id": "3458764660904119991",
+      "tags": [],
+      "elementContext": "INTERNAL",
+      "modelContext": "Funds",
+      "context": "INTERNAL",
+      "slice": "slice: Withdrawal Approval",
+      "title": "Funds Withdrawal Approved",
+      "fields": [
+        {
+          "name": "Account",
+          "type": "UUID",
+          "example": "1234",
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "Amount",
+          "type": "Double",
+          "example": "20",
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "ApprovalDate",
+          "type": "DateTime",
+          "example": "2025-01-01 11:00",
+          "generated": true,
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "Currency",
+          "type": "String",
+          "example": "USD",
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "session",
+          "type": "UUID",
+          "example": "0011",
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "source",
+          "type": "String",
+          "example": "ATM",
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "Payer",
+          "type": "String",
+          "example": "John Doe",
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "transactionId",
+          "type": "String",
+          "example": "0011",
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "withdrawalLimit",
+          "type": "Double",
+          "example": "5000",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        }
+      ],
+      "type": "EVENT",
+      "description": "",
+      "aggregate": "funds",
+      "aggregateDependencies": [
+        "funds"
+      ],
+      "dependencies": [
+        {
+          "id": "3458764660904120289",
+          "type": "OUTBOUND",
+          "title": "Todo Calculate Withdrawals Commission",
+          "elementType": "READMODEL"
+        },
+        {
+          "id": "3458764660904120165",
+          "type": "OUTBOUND",
+          "title": "Withdrawals In-Process",
+          "elementType": "READMODEL"
+        },
+        {
+          "id": "3458764660904120010",
+          "type": "INBOUND",
+          "title": "Approve Withdrawal",
+          "elementType": "COMMAND"
+        }
+      ],
+      "createsAggregate": false,
+      "triggers": [],
+      "sketched": false,
+      "prototype": {
+        "activeByDefault": false
+      }
+    },
+    {
+      "id": "3458764660904119962",
+      "tags": [],
+      "elementContext": "INTERNAL",
+      "modelContext": "Funds",
+      "context": "INTERNAL",
+      "slice": "slice: Withdrawal Approval",
+      "title": "Funds Withdrawal Declined",
+      "fields": [
+        {
+          "name": "Account",
+          "type": "UUID",
+          "example": "1234",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "session",
+          "type": "UUID",
+          "example": "0011",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "Currency",
+          "type": "String",
+          "example": "USD",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "Amount",
+          "type": "Double",
+          "example": "20",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "reason",
+          "type": "String",
+          "example": "some reason",
+          "generated": true,
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "Payer",
+          "type": "String",
+          "example": "John Doe",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "source",
+          "type": "String",
+          "example": "ATM",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "transactionId",
+          "type": "String",
+          "example": "0011",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "DeclinedDate",
+          "type": "DateTime",
+          "generated": true,
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "withdrawalLimit",
+          "type": "Double",
+          "example": "5000",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        }
+      ],
+      "type": "EVENT",
+      "description": "",
+      "aggregate": "funds",
+      "aggregateDependencies": [
+        "funds"
+      ],
+      "dependencies": [
+        {
+          "id": "3458764660904120010",
+          "type": "INBOUND",
+          "title": "Approve Withdrawal",
+          "elementType": "COMMAND"
+        }
+      ],
+      "createsAggregate": false,
+      "triggers": [],
+      "sketched": false,
+      "prototype": {
+        "activeByDefault": false
+      }
+    }
+  ],
+  "readmodels": [],
+  "screens": [],
+  "screenImages": [],
+  "screenLayouts": [],
+  "processors": [],
+  "tables": [],
+  "specifications": [
+    {
+      "vertical": false,
+      "id": "3458764660914959653",
+      "sliceName": "slice: Withdrawal Approval",
+      "title": "spec: Withdrawal Approval After Commission",
+      "given": [],
+      "when": [
+        {
+          "title": "Approve Withdrawal",
+          "tags": [],
+          "examples": [],
+          "id": "3458764660914959654",
+          "specRow": -1,
+          "type": "SPEC_COMMAND",
+          "fields": [
+            {
+              "name": "Account",
+              "type": "UUID",
+              "example": "123",
+              "subfields": [],
+              "cardinality": "Single"
+            },
+            {
+              "name": "Amount",
+              "type": "Double",
+              "example": "100",
+              "subfields": [],
+              "cardinality": "Single"
+            },
+            {
+              "name": "ApprovalDate",
+              "type": "DateTime",
+              "generated": true,
+              "subfields": [],
+              "cardinality": "Single"
+            },
+            {
+              "name": "Currency",
+              "type": "String",
+              "subfields": [],
+              "cardinality": "Single"
+            },
+            {
+              "name": "session",
+              "type": "UUID",
+              "subfields": [],
+              "cardinality": "Single"
+            },
+            {
+              "name": "source",
+              "type": "String",
+              "subfields": [],
+              "cardinality": "Single"
+            },
+            {
+              "name": "Payer",
+              "type": "String",
+              "subfields": [],
+              "cardinality": "Single"
+            },
+            {
+              "name": "transactionId",
+              "type": "String",
+              "subfields": [],
+              "cardinality": "Single"
+            },
+            {
+              "name": "transactionTime",
+              "type": "DateTime",
+              "subfields": [],
+              "cardinality": "Single"
+            },
+            {
+              "name": "CurrentBalance",
+              "type": "Double",
+              "example": "50",
+              "generated": true,
+              "subfields": [],
+              "cardinality": "Single"
+            }
+          ]
+        }
+      ],
+      "then": [
+        {
+          "title": "Funds Withdrawal Declined",
+          "tags": [],
+          "examples": [],
+          "id": "3458764660914959655",
+          "specRow": -1,
+          "type": "SPEC_EVENT",
+          "fields": [
+            {
+              "name": "Account",
+              "type": "UUID",
+              "example": "1234",
+              "subfields": [],
+              "cardinality": "Single"
+            },
+            {
+              "name": "session",
+              "type": "UUID",
+              "example": "0011",
+              "subfields": [],
+              "cardinality": "Single"
+            },
+            {
+              "name": "Currency",
+              "type": "String",
+              "example": "USD",
+              "subfields": [],
+              "cardinality": "Single"
+            },
+            {
+              "name": "Amount",
+              "type": "Double",
+              "example": "20",
+              "subfields": [],
+              "cardinality": "Single"
+            },
+            {
+              "name": "reason",
+              "type": "String",
+              "example": "some reason",
+              "generated": true,
+              "subfields": [],
+              "cardinality": "Single"
+            },
+            {
+              "name": "Payer",
+              "type": "String",
+              "example": "John Doe",
+              "subfields": [],
+              "cardinality": "Single"
+            },
+            {
+              "name": "source",
+              "type": "String",
+              "example": "ATM",
+              "subfields": [],
+              "cardinality": "Single"
+            },
+            {
+              "name": "transactionId",
+              "type": "String",
+              "example": "0011",
+              "subfields": [],
+              "cardinality": "Single"
+            },
+            {
+              "name": "DeclinedDate",
+              "type": "DateTime",
+              "generated": true,
+              "subfields": [],
+              "cardinality": "Single"
+            }
+          ]
+        }
+      ],
+      "comments": [
+        {
+          "description": "Insufficient Effective Funds\u00a0Withdrawals"
+        }
+      ],
+      "linkedId": "3458764660904120114"
+    }
+  ],
+  "actors": [],
+  "aggregates": [
+    "funds"
+  ]
+}

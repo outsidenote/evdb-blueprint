@@ -1,0 +1,24 @@
+{
+  "description": "New slice 'Transfer Funds' with 2 specs + 3 event outcomes. evdb-diff only cares about status \u2014 this is primarily a test for evdb-dev.",
+  "expected_statuses": {
+    "funddeposit": "Planned",
+    "withdrawalapproval": "Planned",
+    "pendingwithdrawallookup": "Review",
+    "withdrawalpendingcommissioncalculationtodo": "Review",
+    "withdrawalcommissionprocessor": "Review",
+    "calculatecommission": "Planned",
+    "fundstowithdrawto-dolist": "Review",
+    "withdrawfunds": "Blocked",
+    "withdrawfundsprocessor": "Review",
+    "accountbalancereadmodel": "Review",
+    "transferfunds": "Planned"
+  },
+  "expected_actions": [
+    {
+      "slice": "Transfer Funds",
+      "folder": "transferfunds",
+      "action": "implement",
+      "reason": "New slice, no code exists"
+    }
+  ]
+}
