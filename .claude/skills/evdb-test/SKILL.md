@@ -93,6 +93,16 @@ Present to user:
 - AI fill: which files were filled
 - Tests: pass count / fail count
 - Scan violations: count
+- **Performance & cost summary** (ALWAYS include):
+
+| Metric | Value |
+|---|---|
+| Scaffold duration | from Python script output |
+| AI fill duration | `<end_time - start_time>` seconds (record `date +%s` before/after Agent call) |
+| AI fill tokens | `<total_tokens>` from Agent tool usage metadata |
+| AI fill tool calls | `<tool_uses>` from Agent tool usage metadata |
+| Est. cost | Compute: `(total_tokens * 0.8 * 3 + total_tokens * 0.2 * 15) / 1_000_000` |
+
 - Overall: PASS or FAIL
 
 **PASS criteria**: all scaffolds succeeded, all tests pass, 0 scan violations.

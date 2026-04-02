@@ -1573,10 +1573,13 @@ def scaffold_slice(root: Path, folder: str, dry_run: bool = False) -> dict:
             if not view_test_path.exists():
                 write_file(view_test_path, gen_view_test(slice_data, event_id_map))
 
-        # 3. Command
-        cmd_path = paths.slice_dir / "command.ts"
-        if not cmd_path.exists():
-            write_file(cmd_path, gen_command(slice_data))
+        has_commands = bool(slice_data.get("commands"))
+
+        # 3. Command (only if slice has commands)
+        if has_commands:
+            cmd_path = paths.slice_dir / "command.ts"
+            if not cmd_path.exists():
+                write_file(cmd_path, gen_command(slice_data))
 
         # 4. GWTS (only if specs)
         if has_specs:
@@ -1584,31 +1587,35 @@ def scaffold_slice(root: Path, folder: str, dry_run: bool = False) -> dict:
             if not gwts_path.exists():
                 write_file(gwts_path, gen_gwts(slice_data))
 
-        # 5. Command handler
-        handler_path = paths.slice_dir / "commandHandler.ts"
-        if not handler_path.exists():
-            write_file(handler_path, gen_command_handler(slice_data))
+        # 5. Command handler (only if slice has commands)
+        if has_commands:
+            handler_path = paths.slice_dir / "commandHandler.ts"
+            if not handler_path.exists():
+                write_file(handler_path, gen_command_handler(slice_data))
 
-        # 6. Adapter
-        adapter_path = paths.slice_dir / "adapter.ts"
-        if not adapter_path.exists():
-            write_file(adapter_path, gen_adapter(slice_data))
+        # 6. Adapter (only if slice has commands)
+        if has_commands:
+            adapter_path = paths.slice_dir / "adapter.ts"
+            if not adapter_path.exists():
+                write_file(adapter_path, gen_adapter(slice_data))
 
-        # 7. Endpoint (REST or pg-boss depending on pattern)
-        is_automation = is_automation_slice(slice_data)
-        if is_automation:
-            endpoint_path = paths.pgboss_endpoint_dir / "index.ts"
-            if not endpoint_path.exists():
-                write_file(endpoint_path, gen_pgboss_endpoint(slice_data))
-        else:
-            endpoint_path = paths.rest_endpoint_dir / "index.ts"
-            if not endpoint_path.exists():
-                write_file(endpoint_path, gen_rest_endpoint(slice_data))
+        # 7. Endpoint (REST or pg-boss depending on pattern; only if slice has commands)
+        if has_commands:
+            is_automation = is_automation_slice(slice_data)
+            if is_automation:
+                endpoint_path = paths.pgboss_endpoint_dir / "index.ts"
+                if not endpoint_path.exists():
+                    write_file(endpoint_path, gen_pgboss_endpoint(slice_data))
+            else:
+                endpoint_path = paths.rest_endpoint_dir / "index.ts"
+                if not endpoint_path.exists():
+                    write_file(endpoint_path, gen_rest_endpoint(slice_data))
 
-        # 8. Tests
-        test_path = paths.tests_dir / "command.slice.test.ts"
-        if not test_path.exists():
-            write_file(test_path, gen_test(slice_data))
+        # 8. Tests (only if slice has commands)
+        if has_commands:
+            test_path = paths.tests_dir / "command.slice.test.ts"
+            if not test_path.exists():
+                write_file(test_path, gen_test(slice_data))
 
     # 9-11: Stream factory, views type, routes (skip for enrichment-only slices)
     if not is_enrichment:
@@ -1743,9 +1750,20 @@ def _gen_todo_context(paths: SlicePaths, slice_data: dict, sn: str, stream: str,
 
         lines.append("## Patterns")
         lines.append("")
-        lines.append("- `enrichment.ts`: async function, takes input, returns input + enriched fields")
-        lines.append("- May call external APIs (use fetch)")
-        lines.append("- Must handle edge cases (e.g. same-currency shortcut)")
+        lines.append("```typescript")
+        lines.append("// enrichment.ts — async function, takes input, returns input + enriched fields")
+        lines.append("export async function enrich(input: Input): Promise<Output> {")
+        lines.append("  // May call external APIs (use fetch)")
+        lines.append("  const res = await fetch(`https://api.example.com/data?q=${input.field}`);")
+        lines.append("  const data = await res.json();")
+        lines.append("  return {")
+        lines.append("    ...input,")
+        lines.append("    computedField: Math.round(data.value * 100) / 100, // round to 2dp")
+        lines.append("  };")
+        lines.append("}")
+        lines.append("```")
+        lines.append("")
+        lines.append("- Handle edge cases (e.g. same-currency shortcut: skip API call)")
         lines.append("- Round numeric results to 2 decimal places where appropriate")
         lines.append("")
     else:
@@ -1808,8 +1826,53 @@ def _gen_todo_context(paths: SlicePaths, slice_data: dict, sn: str, stream: str,
                 lines.append(f"  - `{en}.{fn}` ({ft}) — example value: `{example}`")
             lines.append("")
 
-        lines.append("## Patterns")
+        lines.append("## API Patterns (exact syntax — do NOT deviate)")
         lines.append("")
+        lines.append("### Command handler — append events")
+        lines.append("```typescript")
+        lines.append("// CORRECT: stream.appendEvent{EventName}({ plain payload })")
+        lines.append("stream.appendEventFundsWithdrawalApproved({")
+        lines.append("  account: command.account,")
+        lines.append("  amount: command.amount,")
+        lines.append("});")
+        lines.append("// WRONG: stream.addEvent(), stream.emit(), eventType in payload")
+        lines.append("```")
+        lines.append("")
+        lines.append("### Event interface — plain, no inheritance")
+        lines.append("```typescript")
+        lines.append("// CORRECT: plain interface, I-prefix, no eventType field")
+        lines.append("export interface IFundsWithdrawalApproved {")
+        lines.append("  readonly account: string;")
+        lines.append("  readonly amount: number;")
+        lines.append("}")
+        lines.append("// WRONG: extends IEvDbEvent, eventType field")
+        lines.append("```")
+        lines.append("")
+        lines.append("### Stream factory — register events")
+        lines.append("```typescript")
+        lines.append("// CORRECT: .withEvent(\"Name\").asType<IType>()")
+        lines.append("new StreamFactoryBuilder(\"FundsStream\")")
+        lines.append("  .withEvent(\"FundsWithdrawalApproved\").asType<IFundsWithdrawalApproved>()")
+        lines.append("  .build();")
+        lines.append("// WRONG: .addEventType<T>(), .registerEvent()")
+        lines.append("```")
+        lines.append("")
+        lines.append("### Test events — envelope format")
+        lines.append("```typescript")
+        lines.append("// CORRECT: { eventType, payload: { ...fields } }")
+        lines.append("const expectedEvents: TestEvent[] = [")
+        lines.append("  {")
+        lines.append("    eventType: \"FundsWithdrawalApproved\",")
+        lines.append("    payload: {")
+        lines.append("      account: \"1234\",")
+        lines.append("      amount: 20,")
+        lines.append("    },")
+        lines.append("  },")
+        lines.append("];")
+        lines.append("// WRONG: flat { eventType, account, amount }")
+        lines.append("```")
+        lines.append("")
+        lines.append("### Other patterns")
         lines.append("- `commandHandler.ts`: pure function, only `stream.appendEvent*()` calls, no I/O")
         lines.append("- `gwts.ts`: `(state, command) => boolean` — compare state fields vs command fields")
         lines.append("- View handlers: `(state, event) => ({ ...state, field: event.field })`")

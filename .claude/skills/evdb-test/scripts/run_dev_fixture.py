@@ -31,6 +31,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -70,6 +71,7 @@ def main():
     worktree = Path(args.worktree) if args.worktree else Path(f"/tmp/evdb-dev-{args.fixture}")
     branch = f"evdb-test-{args.fixture}"
     started_at = datetime.now(timezone.utc).isoformat()
+    t_start = time.monotonic()
 
     # ── Validate fixture ──────────────────────────────────────────────────
     if not fix_path.exists():
@@ -245,6 +247,8 @@ def main():
         print(f"\nStep 8: Keeping worktree at {worktree} (--keep-worktree)")
 
     # ── Step 10: Write report ─────────────────────────────────────────────
+    t_end = time.monotonic()
+    scaffold_duration_s = round(t_end - t_start, 1)
     overall = "PASS" if (scaffold_ok and tests_ok) else "FAIL"
     rpt = report_path(root)
     rpt.parent.mkdir(parents=True, exist_ok=True)
@@ -279,6 +283,16 @@ def main():
         scan_output,
         f"```",
         f"",
+        f"## Performance (scaffold layer only)",
+        f"",
+        f"| Metric | Value |",
+        f"|---|---|",
+        f"| Scaffold + tests duration | {scaffold_duration_s}s |",
+        f"| Slices scaffolded | {len(planned)} |",
+        f"| Files generated | {sum(len(sr.get('stdout', '').split('+')) - 1 for sr in scaffold_results.values() if sr.get('returncode') == 0)} |",
+        f"| AI fill tokens | _(reported by Claude after evdb-dev-v2 invocation)_ |",
+        f"| AI fill cost | _(reported by Claude after evdb-dev-v2 invocation)_ |",
+        f"",
         f"## Notes",
         f"",
         f"- Scaffold only (deterministic). AI fill step runs separately via evdb-dev-v2.",
@@ -293,6 +307,7 @@ def main():
     print(f"  Scaffold:  {'OK' if scaffold_ok else 'FAILED'}")
     print(f"  Tests:     {test_results['pass']} pass / {test_results['fail']} fail")
     print(f"  Scan:      {scan_violations} violations")
+    print(f"  Duration:  {scaffold_duration_s}s (scaffold + tests)")
     print(f"  Report:    {rpt.relative_to(root)}")
     print(f"{'='*60}\n")
 
