@@ -152,9 +152,10 @@ def main():
 
     scaffold_ok = all(v["returncode"] == 0 for v in scaffold_results.values())
 
-    # ── Step 5: Find generated test files ────────────────────────────────
-    print("\nStep 4: Collecting test files...")
-    test_files = []
+    # ── Step 4b: Detect slices needing AI fill (have TODO files) ─────────
+    print("\nStep 4: Detecting slices needing AI fill...")
+    fillable_slices = []
+    noop_slices = []
     for sl in planned:
         context = sl["context"]
         folder = sl["folder"]
@@ -172,12 +173,61 @@ def main():
             except Exception:
                 pass
 
+        # Check for TODO_CONTEXT.md (standard slice or enrichment processor)
+        todo_ctx_standard = worktree / "src" / "BusinessCapabilities" / context / "slices" / cmd_class / "TODO_CONTEXT.md"
+        todo_ctx_enrichment = worktree / "src" / "BusinessCapabilities" / context / "endpoints" / cmd_class / "TODO_CONTEXT.md"
+
+        todo_ctx_path = None
+        if todo_ctx_standard.exists():
+            todo_ctx_path = str(todo_ctx_standard.relative_to(worktree))
+        elif todo_ctx_enrichment.exists():
+            todo_ctx_path = str(todo_ctx_enrichment.relative_to(worktree))
+
+        # Also scan for any // TODO markers in generated files
+        has_todos = False
+        if todo_ctx_path:
+            src_dir = worktree / "src" / "BusinessCapabilities" / context
+            for ts_file in src_dir.rglob("*.ts"):
+                rel = str(ts_file.relative_to(worktree))
+                if cmd_class.lower() in rel.lower() or cmd_class in rel:
+                    try:
+                        content = ts_file.read_text()
+                        if "// TODO" in content:
+                            has_todos = True
+                            break
+                    except Exception:
+                        pass
+
+        if has_todos and todo_ctx_path:
+            fillable_slices.append({
+                **sl,
+                "cmd_class": cmd_class,
+                "todo_context_path": todo_ctx_path,
+            })
+            print(f"  ✓ {folder} → needs AI fill ({todo_ctx_path})")
+        else:
+            noop_slices.append({**sl, "cmd_class": cmd_class})
+            print(f"  ⊘ {folder} → no TODOs, skipping AI fill")
+
+    # ── Step 5: Find generated test files ────────────────────────────────
+    print("\nStep 5: Collecting test files...")
+    test_files = []
+    all_slices_with_class = fillable_slices + noop_slices
+    for sl in all_slices_with_class:
+        context = sl["context"]
+        cmd_class = sl["cmd_class"]
+
         test_file = worktree / "src" / "BusinessCapabilities" / context / "slices" / cmd_class / "tests" / "command.slice.test.ts"
+        enrichment_test = worktree / "src" / "BusinessCapabilities" / context / "endpoints" / cmd_class / "tests" / "enrichment.test.ts"
         view_test_pattern = worktree / "src" / "BusinessCapabilities" / context / "swimlanes" / context / "views"
 
         if test_file.exists():
             test_files.append(test_file)
             print(f"  Found: {test_file.relative_to(worktree)}")
+
+        if enrichment_test.exists():
+            test_files.append(enrichment_test)
+            print(f"  Found: {enrichment_test.relative_to(worktree)}")
 
         # Find view tests
         if view_test_pattern.exists():
@@ -186,11 +236,32 @@ def main():
                     test_files.append(vt)
                     print(f"  Found: {vt.relative_to(worktree)}")
 
+    # ── Step 5b: Write AI fill manifest for Claude ─────────────────────────
+    fill_manifest_path = worktree / ".ai-fill-manifest.json"
+    fill_manifest = {
+        "fillable_slices": [
+            {
+                "folder": s["folder"],
+                "context": s["context"],
+                "cmd_class": s["cmd_class"],
+                "todo_context_path": s["todo_context_path"],
+            }
+            for s in fillable_slices
+        ],
+        "noop_slices": [s["folder"] for s in noop_slices],
+        "learned_hints_path": ".claude/skills/evdb-dev-v2/learned_hints.md",
+    }
+    fill_manifest_path.write_text(json.dumps(fill_manifest, indent=2))
+    print(f"\nStep 5b: Wrote AI fill manifest → .ai-fill-manifest.json")
+    print(f"  Fillable: {[s['folder'] for s in fillable_slices]}")
+    print(f"  No-ops:   {[s['folder'] for s in noop_slices]}")
+
     # ── Step 6: Note — AI fill step is separate ───────────────────────────
-    print("\nStep 5: NOTE — AI fill step (gwts.ts / commandHandler.ts TODOs)")
+    print("\nStep 6: NOTE — AI fill step (gwts.ts / commandHandler.ts TODOs)")
     print("  This script scaffolds deterministic files only.")
     print("  evdb-dev-v2 skill must be invoked separately to fill business logic.")
-    print("  Scaffold output above shows what was created.")
+    print(f"  Slices needing fill: {[s['folder'] for s in fillable_slices]}")
+    print(f"  Slices skipped (no TODOs): {[s['folder'] for s in noop_slices]}")
 
     # ── Step 7: Run tests (will likely fail without AI fill) ──────────────
     print("\nStep 6: Running tests...")
@@ -267,6 +338,12 @@ def main():
         lines.append(f"- {icon} `{sl['folder']}` ({sl['context']}) — {sr.get('stdout', 'not run')}")
 
     lines += [
+        f"",
+        f"## AI Fill Manifest",
+        f"",
+        f"Slices needing AI fill: {[s['folder'] for s in fillable_slices]}",
+        f"",
+        f"Slices skipped (no TODOs): {[s['folder'] for s in noop_slices]}",
         f"",
         f"## Tests",
         f"",

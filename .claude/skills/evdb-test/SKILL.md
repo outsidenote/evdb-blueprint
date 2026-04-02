@@ -39,25 +39,82 @@ The script:
 3. Runs `evdb-scaffold` on every Planned slice
 4. Reports scaffold results
 
-### Step 2: Invoke evdb-dev-v2 for the AI fill step (one per Planned slice)
+### Step 2: AI fill — optimized (pre-fed context, skip diff, skip no-ops)
 
 After scaffold runs, the worktree at `/tmp/evdb-dev-<fixture-name>` has boilerplate
-but TODOs in `gwts.ts` and `commandHandler.ts`. You must invoke the evdb-dev-v2 skill
-to fill in the business logic for **each** Planned slice.
+but TODOs in `gwts.ts`, `commandHandler.ts`, or `enrichment.ts`.
 
-To find all Planned slices, read the fixture index:
+**DO NOT invoke the full evdb-dev-v2 skill.** Instead, use the optimized flow below
+which skips redundant work (evdb-diff, scaffold re-run, no-op slices).
+
+#### 2a. Read the AI fill manifest
+
+The Python script wrote `.ai-fill-manifest.json` into the worktree:
 ```
-.claude/test-fixtures/<fixture-name>/eventmodel/.slices/index.json
+/tmp/evdb-dev-<fixture-name>/.ai-fill-manifest.json
 ```
 
-For each Planned slice, call `/evdb-dev-v2` with the worktree as root:
-- The skill reads `.eventmodel/.slices/index.json` in the worktree
-- It will run evdb-diff, see the Planned slice, scaffold (skip already done), and fill TODOs
-- Pass the worktree path as context so the skill operates there
+Read it. It contains:
+- `fillable_slices` — slices with TODO files (these need AI fill)
+- `noop_slices` — slices with no TODOs (skip these entirely)
+- `learned_hints_path` — path to learned_hints.md
 
-**Important**: The evdb-dev-v2 skill must be invoked with `--root /tmp/evdb-dev-<fixture-name>`
-or by setting context so it reads from the worktree. Use the Agent tool to invoke it
-with explicit worktree context.
+**If `fillable_slices` is empty, skip the entire AI fill step.**
+
+#### 2b. Pre-read context files
+
+For each fillable slice, read these files NOW (before launching the agent):
+1. The slice's `TODO_CONTEXT.md` (path is in the manifest's `todo_context_path`)
+2. `learned_hints.md` (path is in the manifest's `learned_hints_path`)
+
+Save the file contents — you will inject them into the agent prompt.
+
+#### 2c. Launch one agent with pre-fed context
+
+Launch a **single** Agent with a prompt that includes:
+1. The full text of `learned_hints.md`
+2. For each fillable slice: the full text of its `TODO_CONTEXT.md`
+3. Explicit instructions: **skip evdb-diff, skip scaffold, go straight to filling TODOs**
+
+The agent prompt should follow this template:
+
+```
+You are working in /tmp/evdb-dev-<fixture-name>.
+
+SKIP evdb-diff (already done). SKIP scaffold (already done).
+Your ONLY job: fill in // TODO placeholders in the files listed below.
+
+## Learned Hints
+<paste learned_hints.md content here>
+
+## Slices to fill
+
+### Slice: <folder> (context: <context>)
+TODO_CONTEXT:
+<paste TODO_CONTEXT.md content here>
+
+Files with TODOs to edit (read each, fill TODOs, save):
+- <list from TODO_CONTEXT.md>
+
+### Slice: <next folder> ...
+<repeat for each fillable slice>
+
+## After filling all TODOs
+
+For each slice, run the test:
+- Standard: node --import tsx --test src/BusinessCapabilities/<Context>/slices/<CmdClass>/tests/command.slice.test.ts
+- Enrichment: node --import tsx --test src/BusinessCapabilities/<Context>/endpoints/<CmdClass>/tests/enrichment.test.ts
+
+If a test fails, fix the code and re-run. Do NOT read existing blueprint slices.
+
+Also start+stop a scan session per slice:
+  python3 <root>/.claude/skills/evdb-dev-v2/scripts/scan_session.py start --slice <folder> --context <context> --root .
+  ... (do the fill work) ...
+  python3 <root>/.claude/skills/evdb-dev-v2/scripts/scan_session.py assert
+  python3 <root>/.claude/skills/evdb-dev-v2/scripts/scan_session.py stop
+```
+
+This eliminates ~15 discovery reads per slice (the agent starts editing immediately).
 
 ### Step 3: Run the tests
 
