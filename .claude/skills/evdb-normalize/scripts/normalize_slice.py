@@ -78,6 +78,18 @@ DERIVATION_RULES: dict[str, str] = {
     "REVIEW_REQUIRED":
         "Cannot be deterministically derived from structured data alone. "
         "Requires human or AI review. The hint field contains the source text as a cue.",
+
+    "PROCESSOR_FIELDS_SPLIT":
+        "Processor fields[] partitioned into inputFields (generated:false) and "
+        "enrichedFields (generated:true). Input fields come from the trigger readmodel; "
+        "enriched fields are computed by the enrichment function.",
+
+    "BACKEND_PROMPTS_PASSTHROUGH":
+        "codeGen.backendPrompts[] copied verbatim from the slice or config. "
+        "These are natural-language instructions for the AI to implement the enrichment logic.",
+
+    "PROCESSOR_DEPENDENCIES":
+        "Processor inbound/outbound dependency titles extracted from processors[].dependencies[].",
 }
 
 
@@ -95,6 +107,7 @@ TS_TYPE_MAP = {
     "Boolean": "boolean",
     "DateTime": "Date",
     "Date": "Date",
+    "Decimal": "number",
     "Object": "Record<string, unknown>",
     "Array": "unknown[]",
 }
@@ -303,6 +316,60 @@ def derive_view_info(command_class_name: str, specifications: list,
 
 
 # ---------------------------------------------------------------------------
+# Processor / enrichment normalization
+# ---------------------------------------------------------------------------
+
+def normalize_processor(proc: dict, proc_index: int, prov: Provenance) -> dict:
+    """Normalize an AUTOMATION processor into input/enriched field splits."""
+    title = proc.get("title", "")
+    proc_class = to_class_name(title)
+    fields = [
+        normalize_field(f, f"processors[{proc_index}].fields[{fi}]")
+        for fi, f in enumerate(proc.get("fields", []))
+    ]
+    input_fields = [f for f in fields if not f["generated"]]
+    enriched_fields = [f for f in fields if f["generated"]]
+
+    prov.record(f"processors[{proc_index}].inputFields",
+                source=f"processors[{proc_index}].fields[generated=false]",
+                value=[f["name"] for f in input_fields],
+                rule="PROCESSOR_FIELDS_SPLIT")
+    prov.record(f"processors[{proc_index}].enrichedFields",
+                source=f"processors[{proc_index}].fields[generated=true]",
+                value=[f["name"] for f in enriched_fields],
+                rule="PROCESSOR_FIELDS_SPLIT")
+
+    # Dependencies
+    inbound = []
+    outbound = []
+    for dep in proc.get("dependencies", []):
+        entry = {"id": dep.get("id"), "title": dep.get("title", ""),
+                 "elementType": dep.get("elementType", "")}
+        if dep.get("type") == "INBOUND":
+            inbound.append(entry)
+        elif dep.get("type") == "OUTBOUND":
+            outbound.append(entry)
+
+    prov.record(f"processors[{proc_index}].dependencies",
+                source=f"processors[{proc_index}].dependencies[]",
+                value={"inbound": [d["title"] for d in inbound],
+                       "outbound": [d["title"] for d in outbound]},
+                rule="PROCESSOR_DEPENDENCIES")
+
+    return {
+        "id": proc.get("id"),
+        "title": title,
+        "className": proc_class,
+        "type": proc.get("type", ""),
+        "fields": fields,
+        "inputFields": input_fields,
+        "enrichedFields": enriched_fields,
+        "inbound": inbound,
+        "outbound": outbound,
+    }
+
+
+# ---------------------------------------------------------------------------
 # Main normalization
 # ---------------------------------------------------------------------------
 
@@ -430,6 +497,26 @@ def normalize(slice_path: Path, source_root: Path) -> dict:
                 value=view["stateFields"],
                 rule="VIEW_FIELDS_FROM_GIVEN_EVENTS")
 
+    # ── Processors (AUTOMATION) ─────────────────────────────────────────
+    processors_raw = raw.get("processors", [])
+    processors_norm = [
+        normalize_processor(p, i, prov)
+        for i, p in enumerate(processors_raw)
+        if p.get("type") == "AUTOMATION"
+    ]
+
+    # ── Backend prompts (codeGen.backendPrompts) ────────────────────────
+    # Can live on the slice itself or on a processor's parent codeGen block
+    backend_prompts = []
+    slice_codegen = raw.get("codeGen", {})
+    if slice_codegen.get("backendPrompts"):
+        backend_prompts.extend(slice_codegen["backendPrompts"])
+    if backend_prompts:
+        prov.record("backendPrompts",
+                    source="codeGen.backendPrompts[]",
+                    value=f"{len(backend_prompts)} prompt(s)",
+                    rule="BACKEND_PROMPTS_PASSTHROUGH")
+
     # ── Source path ──────────────────────────────────────────────────────
     try:
         rel_source = str(slice_path.relative_to(source_root))
@@ -459,6 +546,8 @@ def normalize(slice_path: Path, source_root: Path) -> dict:
         "events": events_norm,
         "specifications": specs_norm,
         "view": view,
+        "processors": processors_norm,
+        "backendPrompts": backend_prompts,
         # Provenance section: maps every derived key → {source, value, rule, deterministic}
         "_provenance": prov.to_dict(),
         # Rule registry included inline so the file is self-contained

@@ -31,6 +31,9 @@ TYPE_MAP = {
     "Integer": "number",
     "Boolean": "boolean",
     "Int": "number",
+    "Decimal": "number",
+    "Date": "Date",
+    "Long": "number",
 }
 
 
@@ -704,6 +707,152 @@ def gen_pgboss_endpoint(slice_data: dict) -> str:
         "",
         "export const endpointIdentity = worker.endpointIdentity;",
         f"export const create{message_type}Worker = worker.create;",
+        "",
+    ])
+    return "\n".join(lines)
+
+
+def has_backend_prompts(slice_data: dict) -> bool:
+    """Check if this slice has codeGen.backendPrompts (enrichment slice)."""
+    return bool(slice_data.get("codeGen", {}).get("backendPrompts"))
+
+
+def get_enrichment_info(slice_data: dict) -> dict:
+    """Extract enrichment-relevant data from a processor slice with backendPrompts."""
+    processors = slice_data.get("processors", [])
+    proc = None
+    for p in processors:
+        if p.get("type") == "AUTOMATION":
+            proc = p
+            break
+    if not proc:
+        return {}
+
+    all_fields = proc.get("fields", [])
+    input_fields = [f for f in all_fields if not f.get("generated")]
+    enriched_fields = [f for f in all_fields if f.get("generated")]
+    prompts = slice_data.get("codeGen", {}).get("backendPrompts", [])
+
+    # Get outbound target (e.g. the command this enrichment feeds)
+    outbound_target = None
+    for dep in proc.get("dependencies", []):
+        if dep.get("type") == "OUTBOUND":
+            outbound_target = dep.get("title", "")
+
+    return {
+        "input_fields": input_fields,
+        "enriched_fields": enriched_fields,
+        "prompts": prompts,
+        "outbound_target": outbound_target,
+        "processor_title": proc.get("title", ""),
+    }
+
+
+def gen_enrichment(slice_data: dict) -> str:
+    """Generate enrichment.ts skeleton with input/output interfaces and a TODO body."""
+    sn = slice_name_pascal(slice_data)
+    info = get_enrichment_info(slice_data)
+    input_fields = info.get("input_fields", [])
+    enriched_fields = info.get("enriched_fields", [])
+
+    # Build input interface
+    input_lines = [f"export interface {sn}EnrichmentInput {{"]
+    for f in input_fields:
+        fn = field_name(f["name"])
+        ft = ts_type(f.get("type", "String"))
+        input_lines.append(f"  readonly {fn}: {ft};")
+    input_lines.append("}")
+
+    # Build output interface (extends input + enriched fields)
+    output_lines = [f"export interface {sn}EnrichmentOutput extends {sn}EnrichmentInput {{"]
+    for f in enriched_fields:
+        fn = field_name(f["name"])
+        ft = ts_type(f.get("type", "String"))
+        output_lines.append(f"  readonly {fn}: {ft};")
+    output_lines.append("}")
+
+    # Function skeleton with TODO
+    lines = [
+        *input_lines,
+        "",
+        *output_lines,
+        "",
+        f"export async function enrich(input: {sn}EnrichmentInput): Promise<{sn}EnrichmentOutput> {{",
+        "  // TODO: implement enrichment logic — see TODO_CONTEXT.md for backendPrompts instructions",
+        "  return {",
+        "    ...input,",
+    ]
+    for f in enriched_fields:
+        fn = field_name(f["name"])
+        ft = f.get("type", "String")
+        if ft in ("Double", "Integer", "Int", "Decimal", "Float"):
+            lines.append(f"    {fn}: 0, // TODO: compute enriched field")
+        elif ft in ("DateTime", "Date"):
+            lines.append(f"    {fn}: new Date(), // TODO: compute enriched field")
+        else:
+            lines.append(f'    {fn}: "", // TODO: compute enriched field')
+    lines.extend([
+        "  };",
+        "}",
+        "",
+    ])
+    return "\n".join(lines)
+
+
+def gen_enrichment_test(slice_data: dict) -> str:
+    """Generate enrichment.test.ts skeleton for an enrichment processor."""
+    sn = slice_name_pascal(slice_data)
+    info = get_enrichment_info(slice_data)
+    input_fields = info.get("input_fields", [])
+    enriched_fields = info.get("enriched_fields", [])
+
+    # Build sample input
+    input_entries = []
+    for f in input_fields:
+        fn = field_name(f["name"])
+        example = f.get("example", "")
+        ft = f.get("type", "String")
+        if ft in ("Double", "Integer", "Int", "Decimal", "Float"):
+            input_entries.append(f"    {fn}: {example or '0'},")
+        else:
+            input_entries.append(f'    {fn}: "{example or "test"}",')
+
+    # Build enriched field checks
+    check_lines = []
+    for f in enriched_fields:
+        fn = field_name(f["name"])
+        ft = f.get("type", "String")
+        if ft in ("Double", "Integer", "Int", "Decimal", "Float"):
+            check_lines.append(f'    assert.strictEqual(typeof result.{fn}, "number");')
+        elif ft in ("DateTime", "Date"):
+            check_lines.append(f"    assert.ok(result.{fn} instanceof Date);")
+        else:
+            check_lines.append(f'    assert.strictEqual(typeof result.{fn}, "string");')
+
+    lines = [
+        'import { describe, it } from "node:test";',
+        'import assert from "node:assert/strict";',
+        f'import {{ enrich }} from "../enrichment.js";',
+        "",
+        f'describe("{sn} Enrichment", () => {{',
+        f'  it("enriches input with computed fields", async () => {{',
+        "    const input = {",
+        *input_entries,
+        "    };",
+        "",
+        "    const result = await enrich(input);",
+        "",
+        "    // Verify input fields are passed through",
+    ]
+    for f in input_fields:
+        fn = field_name(f["name"])
+        lines.append(f"    assert.strictEqual(result.{fn}, input.{fn});")
+    lines.append("")
+    lines.append("    // Verify enriched fields are populated")
+    lines.extend(check_lines)
+    lines.extend([
+        "  });",
+        "});",
         "",
     ])
     return "\n".join(lines)
@@ -1385,85 +1534,107 @@ def scaffold_slice(root: Path, folder: str, dry_run: bool = False) -> dict:
         path.write_text(content)
         (files_updated if is_update else files_created).append(str(path.relative_to(root)))
 
-    # 1. Event interfaces
-    for event in events:
-        en = event_name_from_title(event["title"], "")
-        event_path = paths.event_file(en)
-        if not event_path.exists():
-            write_file(event_path, gen_event_interface(event))
+    # Detect enrichment-only slice (processor + backendPrompts, no commands)
+    is_enrichment = has_backend_prompts(slice_data) and not slice_data.get("commands")
 
-    # 2. SliceState view (always when has_specs — gwts.ts and commandHandler.ts always reference it)
-    view_name_str = ""
-    if has_specs:
-        view_name_str = f"SliceState{sn}"
-        state_path = paths.view_state(view_name_str)
-        handlers_path = paths.view_handlers(view_name_str)
-        if not state_path.exists():
-            write_file(state_path, gen_view_state(slice_data))
-        if not handlers_path.exists():
-            write_file(handlers_path, gen_view_handlers(slice_data))
-        # View test skeleton
-        view_test_path = paths.view_test(view_name_str)
-        if not view_test_path.exists():
-            write_file(view_test_path, gen_view_test(slice_data, event_id_map))
+    if is_enrichment:
+        # ── Enrichment-only slice: generate enrichment.ts + test ────────
+        enrichment_dir = paths.bc / "endpoints" / sn
+        enrichment_path = enrichment_dir / "enrichment.ts"
+        if not enrichment_path.exists():
+            write_file(enrichment_path, gen_enrichment(slice_data))
 
-    # 3. Command
-    cmd_path = paths.slice_dir / "command.ts"
-    if not cmd_path.exists():
-        write_file(cmd_path, gen_command(slice_data))
+        enrichment_test_path = enrichment_dir / "tests" / "enrichment.test.ts"
+        if not enrichment_test_path.exists():
+            write_file(enrichment_test_path, gen_enrichment_test(slice_data))
 
-    # 4. GWTS (only if specs)
-    if has_specs:
-        gwts_path = paths.slice_dir / "gwts.ts"
-        if not gwts_path.exists():
-            write_file(gwts_path, gen_gwts(slice_data))
-
-    # 5. Command handler
-    handler_path = paths.slice_dir / "commandHandler.ts"
-    if not handler_path.exists():
-        write_file(handler_path, gen_command_handler(slice_data))
-
-    # 6. Adapter
-    adapter_path = paths.slice_dir / "adapter.ts"
-    if not adapter_path.exists():
-        write_file(adapter_path, gen_adapter(slice_data))
-
-    # 7. Endpoint (REST or pg-boss depending on pattern)
-    is_automation = is_automation_slice(slice_data)
-    if is_automation:
-        endpoint_path = paths.pgboss_endpoint_dir / "index.ts"
-        if not endpoint_path.exists():
-            write_file(endpoint_path, gen_pgboss_endpoint(slice_data))
     else:
-        endpoint_path = paths.rest_endpoint_dir / "index.ts"
-        if not endpoint_path.exists():
-            write_file(endpoint_path, gen_rest_endpoint(slice_data))
+        # ── Standard slice: command → events → views pipeline ───────────
 
-    # 8. Tests
-    test_path = paths.tests_dir / "command.slice.test.ts"
-    if not test_path.exists():
-        write_file(test_path, gen_test(slice_data))
+        # 1. Event interfaces
+        for event in events:
+            en = event_name_from_title(event["title"], "")
+            event_path = paths.event_file(en)
+            if not event_path.exists():
+                write_file(event_path, gen_event_interface(event))
 
-    # 9. Update stream factory (create minimal one if missing)
-    if not paths.stream_factory.exists():
-        paths.stream_factory.parent.mkdir(parents=True, exist_ok=True)
-        write_file(paths.stream_factory, gen_stream_factory(slice_data))
-    updated = update_stream_factory(paths, slice_data, events, view_name_str)
-    if updated != paths.stream_factory.read_text():
-        write_file(paths.stream_factory, updated, is_update=True)
+        # 2. SliceState view (always when has_specs — gwts.ts and commandHandler.ts always reference it)
+        view_name_str = ""
+        if has_specs:
+            view_name_str = f"SliceState{sn}"
+            state_path = paths.view_state(view_name_str)
+            handlers_path = paths.view_handlers(view_name_str)
+            if not state_path.exists():
+                write_file(state_path, gen_view_state(slice_data))
+            if not handlers_path.exists():
+                write_file(handlers_path, gen_view_handlers(slice_data))
+            # View test skeleton
+            view_test_path = paths.view_test(view_name_str)
+            if not view_test_path.exists():
+                write_file(view_test_path, gen_view_test(slice_data, event_id_map))
 
-    # 10. Update views type
-    if view_name_str:
-        updated = update_views_type(paths, slice_data, view_name_str)
-        existing = paths.views_type.read_text() if paths.views_type.exists() else ""
-        if updated != existing:
-            write_file(paths.views_type, updated, is_update=True)
+        # 3. Command
+        cmd_path = paths.slice_dir / "command.ts"
+        if not cmd_path.exists():
+            write_file(cmd_path, gen_command(slice_data))
 
-    # 11. Update routes (REST only — automation slices don't have routes)
-    if not is_automation and paths.routes.exists():
-        updated = update_routes(paths, slice_data)
-        if updated != paths.routes.read_text():
-            write_file(paths.routes, updated, is_update=True)
+        # 4. GWTS (only if specs)
+        if has_specs:
+            gwts_path = paths.slice_dir / "gwts.ts"
+            if not gwts_path.exists():
+                write_file(gwts_path, gen_gwts(slice_data))
+
+        # 5. Command handler
+        handler_path = paths.slice_dir / "commandHandler.ts"
+        if not handler_path.exists():
+            write_file(handler_path, gen_command_handler(slice_data))
+
+        # 6. Adapter
+        adapter_path = paths.slice_dir / "adapter.ts"
+        if not adapter_path.exists():
+            write_file(adapter_path, gen_adapter(slice_data))
+
+        # 7. Endpoint (REST or pg-boss depending on pattern)
+        is_automation = is_automation_slice(slice_data)
+        if is_automation:
+            endpoint_path = paths.pgboss_endpoint_dir / "index.ts"
+            if not endpoint_path.exists():
+                write_file(endpoint_path, gen_pgboss_endpoint(slice_data))
+        else:
+            endpoint_path = paths.rest_endpoint_dir / "index.ts"
+            if not endpoint_path.exists():
+                write_file(endpoint_path, gen_rest_endpoint(slice_data))
+
+        # 8. Tests
+        test_path = paths.tests_dir / "command.slice.test.ts"
+        if not test_path.exists():
+            write_file(test_path, gen_test(slice_data))
+
+    # 9-11: Stream factory, views type, routes (skip for enrichment-only slices)
+    if not is_enrichment:
+        view_name_str = view_name_str if 'view_name_str' in dir() else ""
+
+        # 9. Update stream factory (create minimal one if missing)
+        if not paths.stream_factory.exists():
+            paths.stream_factory.parent.mkdir(parents=True, exist_ok=True)
+            write_file(paths.stream_factory, gen_stream_factory(slice_data))
+        updated = update_stream_factory(paths, slice_data, events, view_name_str)
+        if updated != paths.stream_factory.read_text():
+            write_file(paths.stream_factory, updated, is_update=True)
+
+        # 10. Update views type
+        if view_name_str:
+            updated = update_views_type(paths, slice_data, view_name_str)
+            existing = paths.views_type.read_text() if paths.views_type.exists() else ""
+            if updated != existing:
+                write_file(paths.views_type, updated, is_update=True)
+
+        # 11. Update routes (REST only — automation slices don't have routes)
+        is_automation = is_automation_slice(slice_data)
+        if not is_automation and paths.routes.exists():
+            updated = update_routes(paths, slice_data)
+            if updated != paths.routes.read_text():
+                write_file(paths.routes, updated, is_update=True)
 
     # 12. Update index.json status
     if not dry_run:
@@ -1498,7 +1669,7 @@ def _gen_todo_context(paths: SlicePaths, slice_data: dict, sn: str, stream: str,
                       event_id_map: dict[str, str] | None, files_created: list, files_updated: list) -> None:
     """Generate TODO_CONTEXT.md — a single file the AI reads instead of many separate reads.
 
-    Contains: slice summary, files with TODOs, spec details, and patterns to follow.
+    Contains: slice summary, files with TODOs, spec details, backend prompts, and patterns.
     This eliminates the need for the AI to read slice.json, reference files, or existing code.
     """
     specs = slice_data.get("specifications", [])
@@ -1506,94 +1677,145 @@ def _gen_todo_context(paths: SlicePaths, slice_data: dict, sn: str, stream: str,
     cmd = slice_data["commands"][0] if slice_data.get("commands") else {}
     context = slice_data["context"]
     eid_map = event_id_map or {}
+    is_enrichment = has_backend_prompts(slice_data) and not slice_data.get("commands")
+    backend_prompts = slice_data.get("codeGen", {}).get("backendPrompts", [])
 
     lines = [
         f"# TODO Context for {sn}",
         "",
         f"Slice: {sn} | Context: {context} | Stream: {stream}",
-        "",
-        "## Files with TODOs (only edit these)",
-        "",
     ]
+
+    if is_enrichment:
+        lines.append(f"Type: **Enrichment Processor** (backendPrompts-driven)")
+    lines.extend(["", "## Files with TODOs (only edit these)", ""])
 
     # List files that need AI work
     todo_files = []
-    if specs:
-        todo_files.append(f"- `slices/{sn}/gwts.ts` — fill in predicate conditions")
-    todo_files.append(f"- `slices/{sn}/commandHandler.ts` — fill in computed event fields")
-    if specs:
-        todo_files.append(f"- `slices/{sn}/tests/command.slice.test.ts` — verify test payloads match spec examples")
-        todo_files.append(f"- `swimlanes/{stream}/views/SliceState{sn}/view.slice.test.ts` — adjust accumulation logic in tests")
+    if is_enrichment:
+        todo_files.append(f"- `endpoints/{sn}/enrichment.ts` — implement enrichment logic per backendPrompts below")
+        todo_files.append(f"- `endpoints/{sn}/tests/enrichment.test.ts` — verify enrichment output")
+    else:
+        if specs:
+            todo_files.append(f"- `slices/{sn}/gwts.ts` — fill in predicate conditions")
+        todo_files.append(f"- `slices/{sn}/commandHandler.ts` — fill in computed event fields")
+        if specs:
+            todo_files.append(f"- `slices/{sn}/tests/command.slice.test.ts` — verify test payloads match spec examples")
+            todo_files.append(f"- `swimlanes/{stream}/views/SliceState{sn}/view.slice.test.ts` — adjust accumulation logic in tests")
     lines.extend(todo_files)
     lines.append("")
 
-    # Spec details — the AI needs these to fill TODOs
-    if specs:
-        lines.append("## Specifications (GWT)")
+    # Backend prompts (for any slice type that has them)
+    if backend_prompts:
+        lines.append("## Backend Prompts (implementation instructions from the event modeler)")
         lines.append("")
-        for spec in specs:
-            pred_name = "unknown"
-            comments = spec.get("comments", [])
-            if comments and comments[0].get("description"):
-                pred_name = predicate_name(comments[0]["description"])
-
-            title = spec.get("title", pred_name)
-            lines.append(f"### {title}")
-            lines.append(f"Predicate: `{pred_name}`")
-
-            # Given
-            given_list = spec.get("given", [])
-            if given_list:
-                lines.append("**Given** (prior events in stream):")
-                for g in given_list:
-                    en = resolve_given_event_name(g, eid_map)
-                    fields_str = ", ".join(f"{field_name(f['name'])}={f.get('example', '?')}" for f in g.get("fields", []))
-                    lines.append(f"  - {en}: {fields_str}")
-
-            # When
-            when_cmd = spec.get("when", [{}])[0]
-            when_fields = when_cmd.get("fields", [])
-            fields_str = ", ".join(f"{field_name(f['name'])}={f.get('example', '?')}" for f in when_fields)
-            lines.append(f"**When** command: {fields_str}")
-
-            # Then
-            then_events = spec.get("then", [])
-            if then_events:
-                for te in then_events:
-                    en = event_name_from_title(te["title"], "")
-                    fields_str = ", ".join(f"{field_name(f['name'])}={f.get('example', '?')}" for f in te.get("fields", []))
-                    lines.append(f"**Then** emit {en}: {fields_str}")
-            else:
-                lines.append("**Then** no events (idempotent)")
+        for i, prompt in enumerate(backend_prompts):
+            if len(backend_prompts) > 1:
+                lines.append(f"### Prompt {i + 1}")
+            lines.append(prompt)
             lines.append("")
 
-    # Event field details for computed fields
-    computed_fields = []
-    for event in events:
-        en = event_name_from_title(event["title"], "")
-        cmd_field_names = {field_name(f["name"]) for f in cmd.get("fields", [])}
-        for f in event.get("fields", []):
+    # Enrichment processor details
+    if is_enrichment:
+        info = get_enrichment_info(slice_data)
+        input_fields = info.get("input_fields", [])
+        enriched_fields = info.get("enriched_fields", [])
+
+        lines.append("## Processor Fields")
+        lines.append("")
+        lines.append("**Input fields** (from trigger readmodel — passed through):")
+        for f in input_fields:
             fn = field_name(f["name"])
-            if fn not in cmd_field_names:
-                computed_fields.append((en, fn, f.get("example", ""), f.get("type", "String")))
-
-    if computed_fields:
-        lines.append("## Computed event fields (not on command)")
+            ft = ts_type(f.get("type", "String"))
+            example = f.get("example", "")
+            lines.append(f"  - `{fn}`: {ft}" + (f" (example: `{example}`)" if example else ""))
         lines.append("")
-        lines.append("These must be derived from command fields in the handler:")
-        for en, fn, example, ft in computed_fields:
-            lines.append(f"  - `{en}.{fn}` ({ft}) — example value: `{example}`")
+        lines.append("**Enriched fields** (computed by your enrichment function):")
+        for f in enriched_fields:
+            fn = field_name(f["name"])
+            ft = ts_type(f.get("type", "String"))
+            lines.append(f"  - `{fn}`: {ft}")
         lines.append("")
 
-    # Patterns to follow
-    lines.append("## Patterns")
-    lines.append("")
-    lines.append("- `commandHandler.ts`: pure function, only `stream.appendEvent*()` calls, no I/O")
-    lines.append("- `gwts.ts`: `(state, command) => boolean` — compare state fields vs command fields")
-    lines.append("- View handlers: `(state, event) => ({ ...state, field: event.field })`")
-    lines.append("- Tests use `SliceTester.testCommandHandler()` and `ViewSliceTester.run()`")
-    lines.append("- All event payloads in tests must include ALL fields from the event interface")
-    lines.append("")
+        if info.get("outbound_target"):
+            lines.append(f"**Outbound**: enriched data feeds into command `{info['outbound_target']}`")
+            lines.append("")
+
+        lines.append("## Patterns")
+        lines.append("")
+        lines.append("- `enrichment.ts`: async function, takes input, returns input + enriched fields")
+        lines.append("- May call external APIs (use fetch)")
+        lines.append("- Must handle edge cases (e.g. same-currency shortcut)")
+        lines.append("- Round numeric results to 2 decimal places where appropriate")
+        lines.append("")
+    else:
+        # Standard slice patterns
+        # Spec details — the AI needs these to fill TODOs
+        if specs:
+            lines.append("## Specifications (GWT)")
+            lines.append("")
+            for spec in specs:
+                pred_name = "unknown"
+                comments = spec.get("comments", [])
+                if comments and comments[0].get("description"):
+                    pred_name = predicate_name(comments[0]["description"])
+
+                title = spec.get("title", pred_name)
+                lines.append(f"### {title}")
+                lines.append(f"Predicate: `{pred_name}`")
+
+                # Given
+                given_list = spec.get("given", [])
+                if given_list:
+                    lines.append("**Given** (prior events in stream):")
+                    for g in given_list:
+                        en = resolve_given_event_name(g, eid_map)
+                        fields_str = ", ".join(f"{field_name(f['name'])}={f.get('example', '?')}" for f in g.get("fields", []))
+                        lines.append(f"  - {en}: {fields_str}")
+
+                # When
+                when_cmd = spec.get("when", [{}])[0]
+                when_fields = when_cmd.get("fields", [])
+                fields_str = ", ".join(f"{field_name(f['name'])}={f.get('example', '?')}" for f in when_fields)
+                lines.append(f"**When** command: {fields_str}")
+
+                # Then
+                then_events = spec.get("then", [])
+                if then_events:
+                    for te in then_events:
+                        en = event_name_from_title(te["title"], "")
+                        fields_str = ", ".join(f"{field_name(f['name'])}={f.get('example', '?')}" for f in te.get("fields", []))
+                        lines.append(f"**Then** emit {en}: {fields_str}")
+                else:
+                    lines.append("**Then** no events (idempotent)")
+                lines.append("")
+
+        # Event field details for computed fields
+        computed_fields = []
+        for event in events:
+            en = event_name_from_title(event["title"], "")
+            cmd_field_names = {field_name(f["name"]) for f in cmd.get("fields", [])}
+            for f in event.get("fields", []):
+                fn = field_name(f["name"])
+                if fn not in cmd_field_names:
+                    computed_fields.append((en, fn, f.get("example", ""), f.get("type", "String")))
+
+        if computed_fields:
+            lines.append("## Computed event fields (not on command)")
+            lines.append("")
+            lines.append("These must be derived from command fields in the handler:")
+            for en, fn, example, ft in computed_fields:
+                lines.append(f"  - `{en}.{fn}` ({ft}) — example value: `{example}`")
+            lines.append("")
+
+        lines.append("## Patterns")
+        lines.append("")
+        lines.append("- `commandHandler.ts`: pure function, only `stream.appendEvent*()` calls, no I/O")
+        lines.append("- `gwts.ts`: `(state, command) => boolean` — compare state fields vs command fields")
+        lines.append("- View handlers: `(state, event) => ({ ...state, field: event.field })`")
+        lines.append("- Tests use `SliceTester.testCommandHandler()` and `ViewSliceTester.run()`")
+        lines.append("- All event payloads in tests must include ALL fields from the event interface")
+        lines.append("")
 
     # Files created/updated summary
     lines.append("## All scaffold output")
@@ -1604,7 +1826,11 @@ def _gen_todo_context(paths: SlicePaths, slice_data: dict, sn: str, stream: str,
         lines.append(f"  ~ {f}")
     lines.append("")
 
-    context_path = paths.slice_dir / "TODO_CONTEXT.md"
+    # For enrichment slices, write TODO_CONTEXT.md in the endpoint dir
+    if is_enrichment:
+        context_path = paths.bc / "endpoints" / sn / "TODO_CONTEXT.md"
+    else:
+        context_path = paths.slice_dir / "TODO_CONTEXT.md"
     context_path.parent.mkdir(parents=True, exist_ok=True)
     context_path.write_text("\n".join(lines))
 

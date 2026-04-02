@@ -1,0 +1,283 @@
+{
+  "id": "3458764666317093624",
+  "status": "Created",
+  "title": "slice: Report Daily BaseTransaction",
+  "context": "Reporting",
+  "sliceType": "STATE_CHANGE",
+  "commands": [
+    {
+      "id": "3458764666314895988",
+      "tags": [],
+      "elementContext": "INTERNAL",
+      "modelContext": "Reporting",
+      "context": "INTERNAL",
+      "slice": "slice: Report Daily BaseTransaction",
+      "title": "Report transaction in base currency",
+      "fields": [
+        {
+          "name": "Amount",
+          "type": "Double",
+          "example": "21",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "Currency",
+          "type": "String",
+          "example": "USD",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "session",
+          "type": "String",
+          "example": "0011",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "baseCurrencyAmount",
+          "type": "Double",
+          "cardinality": "Single",
+          "subfields": [],
+          "idAttribute": false
+        },
+        {
+          "name": "exchangeRate",
+          "type": "Decimal",
+          "cardinality": "Single",
+          "subfields": [],
+          "idAttribute": false
+        },
+        {
+          "name": "Account",
+          "type": "UUID",
+          "example": "1234",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "reportDate",
+          "type": "Date",
+          "cardinality": "Single",
+          "subfields": [],
+          "idAttribute": false
+        }
+      ],
+      "type": "COMMAND",
+      "description": "",
+      "aggregate": "default",
+      "aggregateDependencies": [],
+      "dependencies": [
+        {
+          "id": "3458764666315767930",
+          "type": "OUTBOUND",
+          "title": "TxnReportedInBaseCurrency",
+          "elementType": "READMODEL"
+        },
+        {
+          "id": "3458764666314638992",
+          "type": "INBOUND",
+          "title": "automation",
+          "elementType": "AUTOMATION"
+        }
+      ],
+      "createsAggregate": false,
+      "triggers": [],
+      "sketched": false,
+      "prototype": {
+        "activeByDefault": false
+      }
+    }
+  ],
+  "events": [],
+  "readmodels": [
+    {
+      "id": "3458764666315767930",
+      "tags": [],
+      "elementContext": "INTERNAL",
+      "modelContext": "Reporting",
+      "context": "INTERNAL",
+      "slice": "slice: Report Daily BaseTransaction",
+      "title": "TxnReportedInBaseCurrency",
+      "fields": [
+        {
+          "name": "Amount",
+          "type": "Double",
+          "example": "21",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "Currency",
+          "type": "String",
+          "example": "USD",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "session",
+          "type": "String",
+          "example": "0011",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "baseCurrencyAmount",
+          "type": "Double",
+          "cardinality": "Single",
+          "subfields": [],
+          "idAttribute": false
+        },
+        {
+          "name": "exchangeRate",
+          "type": "Decimal",
+          "cardinality": "Single",
+          "subfields": [],
+          "idAttribute": false
+        },
+        {
+          "name": "Account",
+          "type": "UUID",
+          "example": "1234",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "reportDate",
+          "type": "Date",
+          "cardinality": "Single",
+          "subfields": [],
+          "idAttribute": false
+        }
+      ],
+      "type": "READMODEL",
+      "description": "",
+      "aggregate": "default",
+      "aggregateDependencies": [],
+      "dependencies": [
+        {
+          "id": "3458764666314895988",
+          "type": "INBOUND",
+          "title": "Report transaction in base currency",
+          "elementType": "COMMAND"
+        }
+      ],
+      "createsAggregate": false,
+      "triggers": [],
+      "sketched": false,
+      "prototype": {
+        "activeByDefault": false
+      }
+    }
+  ],
+  "screens": [],
+  "screenImages": [],
+  "screenLayouts": [],
+  "processors": [
+    {
+      "id": "3458764666314638992",
+      "tags": [],
+      "groupId": "3458764666314638999",
+      "elementContext": "INTERNAL",
+      "modelContext": "Reporting",
+      "context": "INTERNAL",
+      "slice": "slice: Report Daily BaseTransaction",
+      "title": "automation",
+      "fields": [
+        {
+          "name": "Account",
+          "type": "UUID",
+          "example": "1234",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "Amount",
+          "type": "Double",
+          "example": "21",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "baseCurrencyAmount",
+          "type": "Double",
+          "cardinality": "Single",
+          "subfields": [],
+          "generated": true,
+          "idAttribute": false
+        },
+        {
+          "name": "Currency",
+          "type": "String",
+          "example": "USD",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "exchangeRate",
+          "type": "Decimal",
+          "cardinality": "Single",
+          "subfields": [],
+          "generated": true,
+          "idAttribute": false
+        },
+        {
+          "name": "reportDate",
+          "type": "Date",
+          "cardinality": "Single",
+          "subfields": [],
+          "generated": true,
+          "idAttribute": false
+        },
+        {
+          "name": "session",
+          "type": "String",
+          "example": "0011",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        }
+      ],
+      "type": "AUTOMATION",
+      "description": "",
+      "aggregate": "default",
+      "aggregateDependencies": [],
+      "dependencies": [
+        {
+          "id": "3458764666314895988",
+          "type": "OUTBOUND",
+          "title": "Report transaction in base currency",
+          "elementType": "COMMAND"
+        },
+        {
+          "id": "3458764666315470668",
+          "type": "INBOUND",
+          "title": "Withdrawals Reporting",
+          "elementType": "READMODEL"
+        }
+      ],
+      "createsAggregate": false,
+      "triggers": [],
+      "sketched": false,
+      "prototype": {
+        "activeByDefault": false
+      }
+    }
+  ],
+  "tables": [],
+  "specifications": [],
+  "actors": [],
+  "aggregates": []
+}

@@ -75,13 +75,19 @@ directly. Do not scan existing code to verify them.
 
 **3b. Read TODO_CONTEXT.md**
 
-Read `slices/<SliceName>/TODO_CONTEXT.md`. This single file contains everything else:
-spec details, computed field hints, file list, and structural patterns.
-Do NOT read `slice.json`, `references/templates.md`, or existing blueprint code separately.
+Read `TODO_CONTEXT.md` for the slice. Location depends on slice type:
+- **Standard slice**: `slices/<SliceName>/TODO_CONTEXT.md`
+- **Enrichment processor**: `endpoints/<SliceName>/TODO_CONTEXT.md`
+
+This single file contains everything: spec details, backend prompts, field hints, file list,
+and structural patterns. Do NOT read `slice.json`, `references/templates.md`, or existing
+blueprint code separately.
 
 **3c. Fill in TODOs**
 
 Read and edit only the files listed in `TODO_CONTEXT.md` under "Files with TODOs":
+
+**For standard (STATE_CHANGE) slices:**
 
 | File | What to fill in |
 |---|---|
@@ -90,10 +96,25 @@ Read and edit only the files listed in `TODO_CONTEXT.md` under "Files with TODOs
 | `tests/command.slice.test.ts` | Verify all event interface fields are present. Fix `expectedEvents` if needed |
 | `views/SliceState*/view.slice.test.ts` | Fix accumulation vs overwrite logic |
 
+**For enrichment processor slices** (TODO_CONTEXT.md says "Enrichment Processor"):
+
+| File | What to fill in |
+|---|---|
+| `enrichment.ts` | Implement the `enrich()` function body per the **Backend Prompts** section in TODO_CONTEXT.md. This replaces GWT predicates — the prompts are natural-language instructions from the event modeler. |
+| `tests/enrichment.test.ts` | Add meaningful assertions (e.g. verify API call results, edge cases like same-currency shortcut) |
+
+**For any slice with Backend Prompts** (even standard slices):
+
+The "Backend Prompts" section in TODO_CONTEXT.md contains natural-language instructions from
+the event modeler. Use them as implementation guidance alongside GWT specs.
+
 **3d. Run the tests**
 
 ```bash
+# Standard slice
 node --import tsx --test src/BusinessCapabilities/<Context>/slices/<SliceName>/tests/command.slice.test.ts
+# Enrichment processor
+node --import tsx --test src/BusinessCapabilities/<Context>/endpoints/<SliceName>/tests/enrichment.test.ts
 ```
 
 If tests **fail**:
@@ -150,6 +171,8 @@ python3 .claude/skills/evdb-dev-v2/scripts/scan_learn.py append \
 
 ## What the scaffold handles vs what you handle
 
+### Standard (STATE_CHANGE) slices
+
 | Artifact | Scaffold (deterministic) | You (AI) |
 |---|---|---|
 | Event interfaces | ✅ Complete | — |
@@ -166,6 +189,14 @@ python3 .claude/skills/evdb-dev-v2/scripts/scan_learn.py append \
 | Tests | Structure + some data | Fix test data, add missing scenarios |
 | View tests | Skeleton with TODOs | Fix accumulation vs overwrite logic |
 | TODO_CONTEXT.md | Complete | Read-only — your guide for Step 3 |
+
+### Enrichment processor slices (backendPrompts-driven)
+
+| Artifact | Scaffold (deterministic) | You (AI) |
+|---|---|---|
+| enrichment.ts | Input/output interfaces + function skeleton | Implement enrich() body per backendPrompts |
+| enrichment.test.ts | Passthrough + type assertions | Add edge-case tests, mock API calls |
+| TODO_CONTEXT.md | Complete (includes backendPrompts) | Read-only — your guide for Step 3 |
 
 ---
 
