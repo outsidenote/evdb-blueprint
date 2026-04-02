@@ -1297,6 +1297,44 @@ export function create{context}Router(storageAdapter: IEvDbStorageAdapter): Rout
 
 
 # ──────────────────────────────────────────────────────────────────────
+# Auto-normalize helper
+# ──────────────────────────────────────────────────────────────────────
+
+def _auto_normalize(root: Path, slice_json_path: Path) -> None:
+    """Auto-run the normalizer + planner after scaffolding.
+
+    Keeps .eventmodel/.normalized/ (IR) and .plan.json (generation plan) in sync.
+    Silently skips if either script is not present — the scaffold still works
+    without them; they are a value-add layer.
+    """
+    import subprocess
+    scripts_dir = root / ".claude" / "skills" / "evdb-normalize" / "scripts"
+    normalize_script = scripts_dir / "normalize_slice.py"
+    plan_script = scripts_dir / "plan_slice.py"
+
+    # Step 1: normalize → .normalized.json
+    if not normalize_script.exists():
+        return
+    try:
+        result = subprocess.run(
+            [sys.executable, str(normalize_script), str(slice_json_path), "--root", str(root)],
+            check=False, capture_output=True, text=True,
+        )
+        # Step 2: plan → .plan.json (only if normalize succeeded)
+        if result.returncode == 0 and plan_script.exists():
+            # Derive the normalized path from the normalize output line
+            norm_line = result.stdout.strip()
+            if norm_line.startswith("OK  "):
+                norm_path = root / norm_line[4:].strip()
+                subprocess.run(
+                    [sys.executable, str(plan_script), str(norm_path)],
+                    check=False, capture_output=True,
+                )
+    except Exception:
+        pass  # IR/plan failure never blocks scaffolding
+
+
+# ──────────────────────────────────────────────────────────────────────
 # Main scaffold function
 # ──────────────────────────────────────────────────────────────────────
 
@@ -1440,6 +1478,10 @@ def scaffold_slice(root: Path, folder: str, dry_run: bool = False) -> dict:
     # 13. Generate TODO_CONTEXT.md — single file the AI reads instead of many
     if not dry_run:
         _gen_todo_context(paths, slice_data, sn, stream, event_id_map, files_created, files_updated)
+
+    # 14. Auto-normalize: keep .eventmodel/.normalized/ in sync after scaffolding
+    if not dry_run:
+        _auto_normalize(root, slice_json_path)
 
     return {
         "slice": sn,

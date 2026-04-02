@@ -15,6 +15,87 @@ Check the ARGUMENTS passed to this skill:
 - `evdb-diff` or empty → run evdb-diff fixtures (deterministic)
 - `evdb-dev` → run evdb-dev golden reference test (scaffold + AI)
 - `all` → run both
+- **anything else** (e.g. `zero-scan`, `my-fixture`) → run that named fixture end-to-end (scaffold + AI fill)
+
+---
+
+## Testing a named fixture (e.g. `/evdb-test zero-scan`)
+
+When the argument is any fixture name that is not `evdb-diff`, `evdb-dev`, or `all`,
+run the full end-to-end test for that fixture.
+
+### Step 1: Run the deterministic scaffold layer
+
+```bash
+python3 .claude/skills/evdb-test/scripts/run_dev_fixture.py \
+  --fixture <fixture-name> --root . --keep-worktree
+```
+
+Read the report written to `.claude/test-fixtures/latest/dev-report.md`.
+
+The script:
+1. Creates a git worktree at `/tmp/evdb-dev-<fixture-name>`
+2. Swaps in the fixture event model (all slices from `eventmodel/` folder)
+3. Runs `evdb-scaffold` on every Planned slice
+4. Reports scaffold results
+
+### Step 2: Invoke evdb-dev-v2 for the AI fill step (one per Planned slice)
+
+After scaffold runs, the worktree at `/tmp/evdb-dev-<fixture-name>` has boilerplate
+but TODOs in `gwts.ts` and `commandHandler.ts`. You must invoke the evdb-dev-v2 skill
+to fill in the business logic for **each** Planned slice.
+
+To find all Planned slices, read the fixture index:
+```
+.claude/test-fixtures/<fixture-name>/eventmodel/.slices/index.json
+```
+
+For each Planned slice, call `/evdb-dev-v2` with the worktree as root:
+- The skill reads `.eventmodel/.slices/index.json` in the worktree
+- It will run evdb-diff, see the Planned slice, scaffold (skip already done), and fill TODOs
+- Pass the worktree path as context so the skill operates there
+
+**Important**: The evdb-dev-v2 skill must be invoked with `--root /tmp/evdb-dev-<fixture-name>`
+or by setting context so it reads from the worktree. Use the Agent tool to invoke it
+with explicit worktree context.
+
+### Step 3: Run the tests
+
+After AI fill, run tests in the worktree:
+
+```bash
+node --import tsx --test \
+  $(find /tmp/evdb-dev-<fixture-name>/src -name "command.slice.test.ts" -o -name "view.slice.test.ts" 2>/dev/null | tr '\n' ' ')
+```
+
+Or look up test file paths from the scaffold report.
+
+### Step 4: Check scan violations
+
+```bash
+python3 .claude/skills/evdb-dev-v2/scripts/scan_session.py report
+```
+
+Assert: 0 violations.
+
+### Step 5: Cleanup
+
+```bash
+git worktree remove /tmp/evdb-dev-<fixture-name> --force
+git branch -D evdb-test-<fixture-name>
+```
+
+### Step 6: Final report
+
+Present to user:
+- Fixture name and list of Planned slices tested
+- Scaffold: OK or FAILED (per slice)
+- AI fill: which files were filled
+- Tests: pass count / fail count
+- Scan violations: count
+- Overall: PASS or FAIL
+
+**PASS criteria**: all scaffolds succeeded, all tests pass, 0 scan violations.
 
 ---
 
