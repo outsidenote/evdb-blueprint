@@ -14,7 +14,24 @@ source of truth** — implement only what is modelled there.
 
 ---
 
-## Pipeline (3 steps — follow this order exactly)
+## Pipeline (4 steps — follow this order exactly)
+
+### Step 0: Start scan session
+
+Before doing anything else, start a scan session for the slice you are about to implement.
+This activates the zero-scan guard so every file read is logged.
+
+```bash
+python3 .claude/skills/evdb-dev-v2/scripts/scan_session.py start \
+  --slice <folderName> \
+  --context <context> \
+  --root .
+```
+
+Example: `python3 .claude/skills/evdb-dev-v2/scripts/scan_session.py start --slice funddeposit --context Funds --root .`
+
+If you do not know the slice yet, run Step 1 first to find the Planned slice, then come
+back and start the session before Step 2.
 
 ### Step 1: Invoke `evdb-diff`
 
@@ -44,26 +61,90 @@ The scaffold leaves `// TODO` placeholders in files that need business logic.
 
 ### Step 3: Fill in business logic (your job)
 
-After the scaffold runs, **read `slices/<SliceName>/TODO_CONTEXT.md`** first. This single file
-contains everything you need: spec details, computed field hints, file list, and patterns.
-Do NOT read `slice.json`, `references/templates.md`, `references/tests.md`, or existing
-blueprint code separately — `TODO_CONTEXT.md` has it all.
+**3a. Read learned hints first**
 
-Then read and edit only the files listed in `TODO_CONTEXT.md` under "Files with TODOs":
+Before reading anything else, read the learned hints file:
+
+```
+.claude/skills/evdb-dev-v2/learned_hints.md
+```
+
+This file contains domain patterns discovered from previous slice implementations —
+predicate conditions, computed field formulas, test data patterns. Apply matching hints
+directly. Do not scan existing code to verify them.
+
+**3b. Read TODO_CONTEXT.md**
+
+Read `slices/<SliceName>/TODO_CONTEXT.md`. This single file contains everything else:
+spec details, computed field hints, file list, and structural patterns.
+Do NOT read `slice.json`, `references/templates.md`, or existing blueprint code separately.
+
+**3c. Fill in TODOs**
+
+Read and edit only the files listed in `TODO_CONTEXT.md` under "Files with TODOs":
 
 | File | What to fill in |
 |---|---|
-| `gwts.ts` | Replace `return false` stubs with real predicate conditions (hints are in the TODO comments). |
-| `commandHandler.ts` | Fill in computed event fields (hints with example values are in the TODO comments). |
-| `tests/command.slice.test.ts` | Verify test payloads include ALL fields from the event interface. Fix `expectedEvents` if needed. |
-| `views/SliceState*/view.slice.test.ts` | Fix accumulation logic in the scaffold-generated test if state accumulates rather than overwrites. |
+| `gwts.ts` | Replace `return false` stubs with real predicate conditions |
+| `commandHandler.ts` | Fill in branching logic and computed field values (reason strings, formulas) |
+| `tests/command.slice.test.ts` | Verify all event interface fields are present. Fix `expectedEvents` if needed |
+| `views/SliceState*/view.slice.test.ts` | Fix accumulation vs overwrite logic |
+
+**3d. Run the tests**
+
+```bash
+node --import tsx --test src/BusinessCapabilities/<Context>/slices/<SliceName>/tests/command.slice.test.ts
+```
+
+If tests **fail**:
+1. Read the failure output — identify exactly which assertion failed and why
+2. Fix the code (do NOT scan existing slices — reason from the error + TODO_CONTEXT.md)
+3. Re-run until green
+4. For each fix that was non-obvious, encode it immediately:
+   ```bash
+   python3 .claude/skills/evdb-dev-v2/scripts/scan_learn.py from-failure \
+     --fix "<what you fixed and why>"
+   ```
 
 **Rules for Step 3:**
-- **Read `TODO_CONTEXT.md` first** — it replaces reading slice.json + reference files + existing code
+- **Read learned_hints.md first** — apply matching patterns before looking at TODO_CONTEXT.md
+- **Read TODO_CONTEXT.md second** — it replaces reading slice.json + reference files + existing code
+- DO NOT read existing blueprint code for patterns — if a hint is missing, encode it after the run
 - DO NOT recreate files the scaffold already created correctly (command.ts, adapter.ts, events, endpoint)
 - DO NOT change the file structure or naming the scaffold chose
-- DO NOT read existing blueprint code for patterns — the TODO comments and TODO_CONTEXT.md have everything
-- DO ensure the generated tests actually pass by running: `node --import tsx --test <test-file>`
+
+### Step 4: Assert zero scans and stop session
+
+After the tests pass, run the assertion and close the session:
+
+```bash
+python3 .claude/skills/evdb-dev-v2/scripts/scan_session.py assert
+python3 .claude/skills/evdb-dev-v2/scripts/scan_session.py report
+python3 .claude/skills/evdb-dev-v2/scripts/scan_session.py stop
+```
+
+**If `assert` exits with code 1 (violations found):**
+1. Run `report` to see which files were scanned
+2. For each violation: ask "what pattern was I looking for in that file?"
+3. Encode the answer:
+   ```bash
+   python3 .claude/skills/evdb-dev-v2/scripts/scan_learn.py from-violation \
+     --file "<scanned file path>" \
+     --reason "<what pattern you were looking for>"
+   ```
+4. Re-run from Step 0 — goal is zero violations on the next attempt
+
+**After every successful run (zero violations, tests green):**
+
+Reflect: was anything you figured out NOT already in `learned_hints.md` or `TODO_CONTEXT.md`?
+If yes — encode it so the next slice benefits:
+
+```bash
+python3 .claude/skills/evdb-dev-v2/scripts/scan_learn.py append \
+  --category "<Predicates | Computed fields | Test cases | View state>" \
+  --hint "<the pattern, concisely>" \
+  --slice <sliceName>
+```
 
 ---
 

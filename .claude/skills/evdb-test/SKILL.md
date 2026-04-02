@@ -140,11 +140,11 @@ Present results to the user:
 | Duration | `<end_time - start_time>` seconds |
 | Total tokens | `<total_tokens>` from agent usage |
 | Tool calls | `<tool_uses>` from agent usage |
-| Est. cost | Compute from tokens using: input @ $15/MTok, output @ $75/MTok. If breakdown unavailable, estimate 80% input / 20% output. |
+| Est. cost | Compute from tokens using: input @ $3/MTok, output @ $15/MTok (claude-sonnet-4-6). If breakdown unavailable, estimate 80% input / 20% output. |
 
 Use this formula for cost estimate:
 ```
-cost = (total_tokens * 0.8 * 15 + total_tokens * 0.2 * 75) / 1_000_000
+cost = (total_tokens * 0.8 * 3 + total_tokens * 0.2 * 15) / 1_000_000
 ```
 
 ### What constitutes a PASS

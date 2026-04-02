@@ -351,7 +351,9 @@ def gen_command_handler(slice_data: dict) -> str:
     ])
 
     if has_specs:
-        # Destructure all state fields from the view
+        # Destructure state fields from the view — only when given events exist.
+        # Slices with no given[] events need no state; skip the destructure so the
+        # handler doesn't crash if the view isn't registered in the stream factory.
         seen = set()
         state_fields = []
         for spec in specs:
@@ -361,11 +363,10 @@ def gen_command_handler(slice_data: dict) -> str:
                     if fn not in seen:
                         seen.add(fn)
                         state_fields.append(fn)
-        if not state_fields:
-            state_fields = ["initialized"]
-        destructure = ", ".join(state_fields)
-        lines.append(f"  const {{ {destructure} }} = stream.views.SliceState{sn};")
-        lines.append("")
+        if state_fields:
+            destructure = ", ".join(state_fields)
+            lines.append(f"  const {{ {destructure} }} = stream.views.SliceState{sn};")
+            lines.append("")
 
     # Generate if/else structure from specs
     if specs:
@@ -831,67 +832,53 @@ def gen_test(slice_data: dict, event_id_map: dict[str, str] | None = None) -> st
         f'describe("{sn} Slice - Unit Tests", () => {{',
     ]
 
-    # Main flow test
+    # Main flow test — use the spec with fewest given events (happy/success path).
+    # This avoids the case where the first spec is a rejection that conflicts with
+    # the expected success outcome.
+    main_spec = min(specs, key=lambda s: len(s.get("given", []))) if specs else None
+
     lines.append('  test("main flow", async () => {')
 
-    # Given events for main flow — use spec given events or empty
-    if specs and specs[0].get("given"):
+    # Given events
+    main_given = main_spec.get("given", []) if main_spec else []
+    if main_given:
         lines.append("    const givenEvents: TestEvent[] = [")
-        # Use first spec's given as a baseline
-        first_given = specs[0]["given"]
-        for g in first_given:
+        for g in main_given:
             en = event_name_from_title(g["title"], "")
             lines.append(f"      {{")
             lines.append(f'        eventType: "{en}",')
             lines.append(f"        payload: {{")
             for f in g.get("fields", []):
-                fn = field_name(f["name"])
-                example = f.get("example", "")
-                lines.append(f"          {fn}: {_format_example(f)},")
+                lines.append(f"          {field_name(f['name'])}: {_format_example(f)},")
             lines.append(f"        }},")
             lines.append(f"      }},")
         lines.append("    ];")
     else:
         lines.append("    const givenEvents: TestEvent[] = [];")
 
-    # Command — ALL fields including generated
+    # Command — use main_spec's when fields if available, else command defaults
+    main_when_fields = {}
+    if main_spec:
+        for f in main_spec.get("when", [{}])[0].get("fields", []):
+            main_when_fields[field_name(f["name"])] = f
     lines.append(f"    const command: {sn} = {{")
     lines.append(f'      commandType: "{sn}",')
     for f in cmd.get("fields", []):
         fn = field_name(f["name"])
-        ft = f.get("type", "String")
-        if f.get("generated"):
-            if ft == "DateTime":
-                lines.append(f'      {fn}: new Date("2025-01-01T11:00:00Z"),')
-            elif ft == "UUID":
-                lines.append(f'      {fn}: "generated-uuid",')
-            elif ft in ("Double", "Integer", "Int"):
-                lines.append(f"      {fn}: 0,")
-            else:
-                lines.append(f"      {fn}: {_format_example(f)},")
-        else:
-            lines.append(f"      {fn}: {_format_example(f)},")
+        src = main_when_fields.get(fn, f)
+        lines.append(f"      {fn}: {_format_example(src)},")
     lines.append("    };")
 
-    # Expected events — find the "happy path" event (not in any spec.then)
-    spec_event_titles = set()
-    for spec in specs:
-        for te in spec.get("then", []):
-            spec_event_titles.add(te["title"])
-
-    happy_events = [e for e in events if e["title"] not in spec_event_titles]
-    if not happy_events:
-        happy_events = events[:1]
-
+    # Expected events — use main_spec's then events
     lines.append("    const expectedEvents: TestEvent[] = [")
-    for he in happy_events:
-        en = event_name_from_title(he["title"], "")
+    main_then = main_spec.get("then", []) if main_spec else []
+    for te in main_then:
+        en = event_name_from_title(te["title"], "")
         lines.append(f"      {{")
         lines.append(f'        eventType: "{en}",')
         lines.append(f"        payload: {{")
-        for f in he.get("fields", []):
-            fn = field_name(f["name"])
-            lines.append(f"          {fn}: {_format_example(f)},")
+        for f in te.get("fields", []):
+            lines.append(f"          {field_name(f['name'])}: {_format_example(f)},")
         lines.append(f"        }},")
         lines.append(f"      }},")
     lines.append("    ];")
@@ -1011,7 +998,13 @@ def _format_example(f: dict) -> str:
         except (ValueError, TypeError):
             return "0"
     if ft == "DateTime":
-        return f'new Date("{example}")' if example else 'new Date("2025-01-01T11:00:00Z")'
+        if not example:
+            return 'new Date("2025-01-01T11:00:00Z")'
+        # Normalize "YYYY-MM-DD HH:MM" (space separator, no timezone) → ISO UTC
+        import re as _re
+        if _re.match(r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$", example.strip()):
+            example = example.strip().replace(" ", "T") + ":00Z"
+        return f'new Date("{example}")'
     if ft == "Boolean":
         return "true" if example.lower() in ("true", "1", "yes") else "false"
     # String / UUID
@@ -1133,14 +1126,29 @@ def gen_view_test(slice_data: dict, event_id_map: dict[str, str] | None = None) 
 # Stream factory / views type updaters
 # ──────────────────────────────────────────────────────────────────────
 
+def gen_stream_factory(slice_data: dict) -> str:
+    """Generate a minimal stream factory index.ts for a new context."""
+    stream = stream_name(slice_data["context"])
+    lines = [
+        'import { StreamFactoryBuilder } from "@eventualize/core/factories/StreamFactoryBuilder";',
+        "",
+        f'const {stream}StreamFactory = new StreamFactoryBuilder("{stream}Stream")',
+        "  .build();",
+        "",
+        f"export default {stream}StreamFactory;",
+        f"export type {stream}StreamType = typeof {stream}StreamFactory.StreamType;",
+        "",
+    ]
+    return "\n".join(lines)
+
+
 def update_stream_factory(paths: SlicePaths, slice_data: dict, events: list[dict], view_name: str) -> str:
-    """Update or create stream factory index.ts."""
+    """Update stream factory index.ts."""
     sn = slice_name_pascal(slice_data)
     stream = stream_name(slice_data["context"])
     content = paths.stream_factory.read_text() if paths.stream_factory.exists() else ""
 
     if not content:
-        # This shouldn't happen for existing projects, but handle it
         return content
 
     # Add event imports and registrations
@@ -1346,9 +1354,9 @@ def scaffold_slice(root: Path, folder: str, dry_run: bool = False) -> dict:
         if not event_path.exists():
             write_file(event_path, gen_event_interface(event))
 
-    # 2. SliceState view (if specs with given events)
+    # 2. SliceState view (always when has_specs — gwts.ts and commandHandler.ts always reference it)
     view_name_str = ""
-    if has_specs and any(spec.get("given") for spec in specs):
+    if has_specs:
         view_name_str = f"SliceState{sn}"
         state_path = paths.view_state(view_name_str)
         handlers_path = paths.view_handlers(view_name_str)
@@ -1398,11 +1406,13 @@ def scaffold_slice(root: Path, folder: str, dry_run: bool = False) -> dict:
     if not test_path.exists():
         write_file(test_path, gen_test(slice_data))
 
-    # 9. Update stream factory
-    if paths.stream_factory.exists():
-        updated = update_stream_factory(paths, slice_data, events, view_name_str)
-        if updated != paths.stream_factory.read_text():
-            write_file(paths.stream_factory, updated, is_update=True)
+    # 9. Update stream factory (create minimal one if missing)
+    if not paths.stream_factory.exists():
+        paths.stream_factory.parent.mkdir(parents=True, exist_ok=True)
+        write_file(paths.stream_factory, gen_stream_factory(slice_data))
+    updated = update_stream_factory(paths, slice_data, events, view_name_str)
+    if updated != paths.stream_factory.read_text():
+        write_file(paths.stream_factory, updated, is_update=True)
 
     # 10. Update views type
     if view_name_str:
