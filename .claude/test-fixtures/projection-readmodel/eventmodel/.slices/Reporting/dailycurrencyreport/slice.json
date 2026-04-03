@@ -1,0 +1,88 @@
+{
+  "id": "9999999999999000001",
+  "status": "Planned",
+  "title": "slice: Daily Currency Report",
+  "context": "Reporting",
+  "sliceType": "STATE_VIEW",
+  "commands": [],
+  "events": [],
+  "readmodels": [
+    {
+      "id": "9999999999999000002",
+      "tags": [],
+      "modelContext": "Reporting",
+      "slice": "slice: Daily Currency Report",
+      "title": "Daily Currency Report",
+      "fields": [
+        {
+          "name": "Currency",
+          "type": "String",
+          "example": "USD",
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "reportDate",
+          "type": "Date",
+          "example": "2026-04-02",
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "totalOriginalAmount",
+          "type": "Double",
+          "example": "1500",
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "totalBaseCurrencyAmount",
+          "type": "Double",
+          "example": "1380",
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "averageExchangeRate",
+          "type": "Decimal",
+          "example": "0.92",
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "transactionCount",
+          "type": "Integer",
+          "example": "5",
+          "cardinality": "Single",
+          "idAttribute": false
+        }
+      ],
+      "type": "READMODEL",
+      "description": "Aggregates withdrawal reports by currency and date. Key: {currency}:{reportDate}. On each TxnReportedInBaseCurrency event: UPSERT the row, accumulating totalOriginalAmount, totalBaseCurrencyAmount, and transactionCount.",
+      "aggregate": "default",
+      "aggregateDependencies": [],
+      "dependencies": [
+        {
+          "id": "9999999999999000003",
+          "type": "INBOUND",
+          "title": "TxnReportedInBaseCurrency",
+          "elementType": "EVENT"
+        }
+      ],
+      "createsAggregate": false,
+      "triggers": [],
+      "sketched": false,
+      "prototype": {
+        "activeByDefault": false
+      }
+    }
+  ],
+  "screens": [],
+  "screenImages": [],
+  "screenLayouts": [],
+  "processors": [],
+  "tables": [],
+  "specifications": [],
+  "actors": [],
+  "aggregates": []
+}

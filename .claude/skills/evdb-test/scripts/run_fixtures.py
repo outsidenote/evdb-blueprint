@@ -56,6 +56,11 @@ def run_fixture(repo: Path, fixture: str, script: Path, results_dir: Path) -> di
                 dst.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(src_file, dst)
 
+        # Copy implementation-hashes.json if fixture provides one
+        hashes_src = fixture_dir / "implementation-hashes.json"
+        if hashes_src.exists():
+            shutil.copy2(hashes_src, worktree / ".eventmodel" / "implementation-hashes.json")
+
         # Handle deletions
         if fixture == "deleted-slice":
             shutil.rmtree(worktree / ".eventmodel" / ".slices" / "Funds" / "pendingwithdrawallookup", ignore_errors=True)
