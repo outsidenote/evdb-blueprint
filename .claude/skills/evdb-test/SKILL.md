@@ -158,7 +158,9 @@ Present to user:
 | AI fill duration | `<end_time - start_time>` seconds (record `date +%s` before/after Agent call) |
 | AI fill tokens | `<total_tokens>` from Agent tool usage metadata |
 | AI fill tool calls | `<tool_uses>` from Agent tool usage metadata |
-| Est. cost | Compute: `(total_tokens * 0.8 * 3 + total_tokens * 0.2 * 15) / 1_000_000` |
+| Model | Report which model was used (check the parent conversation's model) |
+| Est. cost (Opus) | `(total_tokens * 0.8 * 15 + total_tokens * 0.2 * 75) / 1_000_000` |
+| Est. cost (Sonnet) | `(total_tokens * 0.8 * 3 + total_tokens * 0.2 * 15) / 1_000_000` |
 
 - Overall: PASS or FAIL
 
@@ -288,12 +290,11 @@ Present results to the user:
 | Duration | `<end_time - start_time>` seconds |
 | Total tokens | `<total_tokens>` from agent usage |
 | Tool calls | `<tool_uses>` from agent usage |
-| Est. cost | Compute from tokens using: input @ $3/MTok, output @ $15/MTok (claude-sonnet-4-6). If breakdown unavailable, estimate 80% input / 20% output. |
+| Model | Report which model was used |
+| Est. cost (Opus) | Compute: `(total_tokens * 0.8 * 15 + total_tokens * 0.2 * 75) / 1_000_000` |
+| Est. cost (Sonnet) | Compute: `(total_tokens * 0.8 * 3 + total_tokens * 0.2 * 15) / 1_000_000` |
 
-Use this formula for cost estimate:
-```
-cost = (total_tokens * 0.8 * 3 + total_tokens * 0.2 * 15) / 1_000_000
-```
+If breakdown unavailable, estimate 80% input / 20% output. Report both costs so the user can see the difference.
 
 ### What constitutes a PASS
 

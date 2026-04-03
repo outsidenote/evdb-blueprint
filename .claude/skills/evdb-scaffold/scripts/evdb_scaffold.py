@@ -605,51 +605,91 @@ def is_automation_slice(slice_data: dict) -> bool:
 def get_trigger_info(slice_data: dict) -> dict:
     """Extract trigger event info from automation processor dependencies.
 
-    Returns: { message_type, payload_fields, target_command }
+    Supports both .eventmodel (INBOUND READMODEL) and .eventmodel2 (INBOUND EVENT) patterns.
+
+    Returns: { message_type, payload_fields, target_command, source, kafka_topic,
+               trigger_readmodel, trigger_event, processor_title, description }
     """
     for proc in slice_data.get("processors", []):
         if proc.get("type") != "AUTOMATION":
             continue
 
         trigger_readmodel = None
+        trigger_event = None
         target_command = None
         for dep in proc.get("dependencies", []):
             if dep["type"] == "INBOUND" and dep["elementType"] == "READMODEL":
                 trigger_readmodel = dep["title"]
+            if dep["type"] == "INBOUND" and dep["elementType"] == "EVENT":
+                trigger_event = dep["title"]
             if dep["type"] == "OUTBOUND" and dep["elementType"] == "COMMAND":
                 target_command = dep["title"]
 
         # Processor fields = the trigger event payload shape
         payload_fields = proc.get("fields", [])
 
+        # Determine source type and Kafka topic
+        # .eventmodel2: INBOUND EVENT + triggers[] → cross-boundary Kafka consumer
+        # .eventmodel:  INBOUND READMODEL → same-context outbox trigger
+        triggers = proc.get("triggers", [])
+        if trigger_event:
+            source = "message"
+            kafka_topic = f"events.{pascal_case(trigger_event)}"
+        else:
+            source = "event"
+            kafka_topic = None
+
+        # Per-component description (.eventmodel2 pattern)
+        description = proc.get("description", "")
+
         return {
             "trigger_readmodel": trigger_readmodel or "",
+            "trigger_event": trigger_event or "",
             "target_command": target_command or "",
             "payload_fields": payload_fields,
             "processor_title": proc.get("title", ""),
+            "source": source,
+            "kafka_topic": kafka_topic,
+            "triggers": triggers,
+            "description": description,
         }
 
     return {}
 
 
 def gen_pgboss_endpoint(slice_data: dict) -> str:
-    """Generate pg-boss automation endpoint index.ts."""
+    """Generate pg-boss automation endpoint index.ts.
+
+    Supports both delivery patterns:
+    - source: "event"   → same-context, outbox trigger (INBOUND READMODEL)
+    - source: "message" → cross-boundary, Kafka CDC (INBOUND EVENT)
+    """
     sn = slice_name_pascal(slice_data)
     sn_camel = camel_case(sn)
     context = slice_data["context"]
     trigger = get_trigger_info(slice_data)
     payload_fields = trigger.get("payload_fields", [])
+    source = trigger.get("source", "event")
+    kafka_topic = trigger.get("kafka_topic")
 
-    # Derive the trigger message type from the INBOUND readmodel name
-    # Convention: the readmodel name hints at the trigger event
-    # But we can't know the exact message type without reading other slices
-    # Use processor fields to build the payload interface
-    trigger_readmodel = trigger.get("trigger_readmodel", "Unknown")
-    message_type = pascal_case(trigger_readmodel.replace("TODO", "").replace("To-Do", "").strip())
+    # Derive message type from trigger
+    if trigger.get("trigger_event"):
+        # .eventmodel2: INBOUND EVENT → use the event title directly
+        message_type = pascal_case(trigger["trigger_event"])
+    elif trigger.get("trigger_readmodel"):
+        # .eventmodel: INBOUND READMODEL → derive from readmodel name
+        trigger_readmodel = trigger["trigger_readmodel"]
+        message_type = pascal_case(trigger_readmodel.replace("TODO", "").replace("To-Do", "").strip())
+    else:
+        message_type = "Unknown"
 
-    # Build payload interface fields
+    # Check if this processor has enrichment (generated fields + description)
+    has_enrichment = any(f.get("generated") for f in payload_fields) and trigger.get("description")
+
+    # Build payload interface fields (only non-generated = what comes from the trigger event)
+    input_fields = [f for f in payload_fields if not f.get("generated")]
     payload_lines = []
-    for f in payload_fields:
+    for f in input_fields:
         fn = field_name(f["name"])
         ft = ts_type(f.get("type", "String"))
         payload_lines.append(f"  readonly {fn}: {ft};")
@@ -658,17 +698,23 @@ def gen_pgboss_endpoint(slice_data: dict) -> str:
     cmd = slice_data["commands"][0] if slice_data.get("commands") else {}
     cmd_fields = cmd.get("fields", [])
 
+    # Build set of enriched field names from the processor (generated: true on processor fields)
+    enriched_field_names = {field_name(pf["name"]) for pf in payload_fields if pf.get("generated")}
+
     map_lines = []
     map_lines.append(f'    commandType: "{sn}" as const,')
     for f in cmd_fields:
         fn = field_name(f["name"])
         ft = f.get("type", "String")
-        if f.get("generated"):
+        if has_enrichment and fn in enriched_field_names:
+            # Field comes from the enrichment output
+            map_lines.append(f"    {fn}: enriched.{fn},")
+        elif f.get("generated"):
             if ft == "DateTime":
                 map_lines.append(f"    {fn}: new Date(),")
             elif ft == "UUID":
                 map_lines.append(f'    {fn}: randomUUID(),')
-            elif ft in ("Double", "Integer", "Int"):
+            elif ft in ("Double", "Integer", "Int", "Decimal"):
                 map_lines.append(f"    {fn}: 0, // TODO: compute generated field")
             else:
                 map_lines.append(f'    {fn}: "", // TODO: compute generated field')
@@ -682,27 +728,56 @@ def gen_pgboss_endpoint(slice_data: dict) -> str:
 
     payload_interface_name = f"{message_type}Payload"
 
+    # Imports
     lines = [
         f'import {{ defineAutomationEndpoint }} from "#abstractions/endpoints/defineAutomationEndpoint.js";',
         f'import {{ create{sn}Adapter }} from "#BusinessCapabilities/{context}/slices/{sn}/adapter.js";',
-        "",
-        f"interface {payload_interface_name} {{",
     ]
+    if has_enrichment:
+        lines.append(f'import {{ enrich }} from "../enrichment.js";')
+    lines.append("")
+
+    # Payload interface
+    lines.append(f"interface {payload_interface_name} {{")
     lines.extend(payload_lines)
     lines.extend([
         "}",
         "",
-        "const worker = defineAutomationEndpoint({",
-        '  source: "event",',
-        f'  messageType: "{message_type}",',
-        f'  handlerName: "{sn}",',
-        f"  createAdapter: create{sn}Adapter,",
-        f"  getIdempotencyKey: (payload: {payload_interface_name}) => payload.transactionId,",
-        f"  mapPayloadToCommand: (payload: {payload_interface_name}) => ({{",
     ])
-    lines.extend(map_lines)
+
+    # Worker definition
+    lines.append("const worker = defineAutomationEndpoint({")
+    lines.append(f'  source: "{source}",')
+    lines.append(f'  messageType: "{message_type}",')
+    if kafka_topic and source == "message":
+        lines.append(f'  kafkaTopic: "{kafka_topic}",')
+    lines.append(f'  handlerName: "{sn}",')
+    lines.append(f"  createAdapter: create{sn}Adapter,")
+
+    # Idempotency key — use session or transactionId if available
+    id_key_field = None
+    for f in input_fields:
+        fn = field_name(f["name"])
+        if fn in ("transactionId", "session"):
+            id_key_field = fn
+            break
+    if id_key_field:
+        lines.append(f"  getIdempotencyKey: (payload: {payload_interface_name}) => payload.{id_key_field},")
+
+    # Map payload to command
+    if has_enrichment:
+        lines.append(f"  mapPayloadToCommand: async (payload: {payload_interface_name}) => {{")
+        lines.append(f"    const enriched = await enrich(payload);")
+        lines.append(f"    return {{")
+        lines.extend(map_lines)
+        lines.append(f"    }};")
+        lines.append(f"  }},")
+    else:
+        lines.append(f"  mapPayloadToCommand: (payload: {payload_interface_name}) => ({{")
+        lines.extend(map_lines)
+        lines.append("  }),")
+
     lines.extend([
-        "  }),",
         "});",
         "",
         "export const endpointIdentity = worker.endpointIdentity;",
@@ -713,12 +788,28 @@ def gen_pgboss_endpoint(slice_data: dict) -> str:
 
 
 def has_backend_prompts(slice_data: dict) -> bool:
-    """Check if this slice has codeGen.backendPrompts (enrichment slice)."""
-    return bool(slice_data.get("codeGen", {}).get("backendPrompts"))
+    """Check if this slice has enrichment instructions.
+
+    Supports both formats:
+    - .eventmodel:  codeGen.backendPrompts[] on the slice
+    - .eventmodel2: description on individual AUTOMATION processors
+    """
+    if slice_data.get("codeGen", {}).get("backendPrompts"):
+        return True
+    # .eventmodel2: check processor descriptions
+    for proc in slice_data.get("processors", []):
+        if proc.get("type") == "AUTOMATION" and proc.get("description"):
+            return True
+    return False
 
 
 def get_enrichment_info(slice_data: dict) -> dict:
-    """Extract enrichment-relevant data from a processor slice with backendPrompts."""
+    """Extract enrichment-relevant data from a processor slice.
+
+    Supports both formats:
+    - .eventmodel:  codeGen.backendPrompts[] on the slice
+    - .eventmodel2: description on individual AUTOMATION processors
+    """
     processors = slice_data.get("processors", [])
     proc = None
     for p in processors:
@@ -731,7 +822,11 @@ def get_enrichment_info(slice_data: dict) -> dict:
     all_fields = proc.get("fields", [])
     input_fields = [f for f in all_fields if not f.get("generated")]
     enriched_fields = [f for f in all_fields if f.get("generated")]
+
+    # Prompts: try slice-level backendPrompts first, fall back to processor description
     prompts = slice_data.get("codeGen", {}).get("backendPrompts", [])
+    if not prompts and proc.get("description"):
+        prompts = [proc["description"]]
 
     # Get outbound target (e.g. the command this enrichment feeds)
     outbound_target = None
@@ -745,6 +840,7 @@ def get_enrichment_info(slice_data: dict) -> dict:
         "prompts": prompts,
         "outbound_target": outbound_target,
         "processor_title": proc.get("title", ""),
+        "description": proc.get("description", ""),
     }
 
 
@@ -855,6 +951,188 @@ def gen_enrichment_test(slice_data: dict) -> str:
         "});",
         "",
     ])
+    return "\n".join(lines)
+
+
+def gen_automation_endpoint_test(slice_data: dict) -> str:
+    """Generate automation endpoint test — identity check only.
+
+    The full payload → enrich → command → events pipeline is tested in
+    command.slice.test.ts (via gen_automation_slice_test).
+    This test just verifies the endpoint wiring is correct.
+    """
+    sn = slice_name_pascal(slice_data)
+    trigger = get_trigger_info(slice_data)
+    source = trigger.get("source", "event")
+
+    # Derive message type
+    if trigger.get("trigger_event"):
+        message_type = pascal_case(trigger["trigger_event"])
+    elif trigger.get("trigger_readmodel"):
+        message_type = pascal_case(trigger["trigger_readmodel"].replace("TODO", "").replace("To-Do", "").strip())
+    else:
+        message_type = "Unknown"
+
+    lines = [
+        'import { describe, it } from "node:test";',
+        'import assert from "node:assert/strict";',
+        f'import {{ endpointIdentity }} from "../pg-boss/index.js";',
+        "",
+        f'describe("{sn} Automation Endpoint", () => {{',
+        f'  it("has correct endpoint identity", () => {{',
+        f'    assert.strictEqual(endpointIdentity.source, "{source}");',
+        f'    assert.strictEqual(endpointIdentity.messageType, "{message_type}");',
+        f'    assert.strictEqual(endpointIdentity.handlerName, "{sn}");',
+        f'    assert.strictEqual(endpointIdentity.queueName, "{source}.{message_type}.{sn}");',
+        "  });",
+        "});",
+        "",
+    ]
+    return "\n".join(lines)
+
+
+def gen_automation_slice_test(slice_data: dict) -> str:
+    """Generate command.slice.test.ts for automation slices.
+
+    Tests the full slice pipeline from the Kafka payload perspective:
+      payload → enrich() → build command → command handler → events
+
+    This is different from standard slice tests which start from the command.
+    Automation slice tests start from the raw payload (what Kafka delivers).
+    """
+    sn = slice_name_pascal(slice_data)
+    stream = stream_name(slice_data["context"])
+    context = slice_data["context"]
+    events = slice_data.get("events", [])
+    cmd = slice_data["commands"][0] if slice_data.get("commands") else {}
+    cmd_fields = cmd.get("fields", [])
+    trigger = get_trigger_info(slice_data)
+    payload_fields = trigger.get("payload_fields", [])
+    input_fields = [f for f in payload_fields if not f.get("generated")]
+    enriched_field_names = {field_name(pf["name"]) for pf in payload_fields if pf.get("generated")}
+    has_enrichment = any(f.get("generated") for f in payload_fields) and trigger.get("description")
+
+    # Build sample payload entries (input fields only — what arrives from Kafka)
+    payload_entries = []
+    for f in input_fields:
+        fn = field_name(f["name"])
+        payload_entries.append(f"    {fn}: {_format_example(f)},")
+
+    # Build command mapping lines (payload fields + enriched fields)
+    cmd_mapping = []
+    cmd_mapping.append(f'    commandType: "{sn}" as const,')
+    for f in cmd_fields:
+        fn = field_name(f["name"])
+        if has_enrichment and fn in enriched_field_names:
+            cmd_mapping.append(f"    {fn}: enriched.{fn},")
+        else:
+            proc_field_names = {field_name(pf["name"]) for pf in payload_fields}
+            if fn in proc_field_names:
+                cmd_mapping.append(f"    {fn}: payload.{fn},")
+            else:
+                cmd_mapping.append(f"    {fn}: undefined as any, // TODO: map from payload or enriched")
+
+    # Build expected event entries
+    event_field_entries = []
+    if events:
+        for f in events[0].get("fields", []):
+            fn = field_name(f["name"])
+            event_field_entries.append(f"          {fn}: command.{fn},")
+
+    # Imports
+    lines = [
+        'import { test, describe } from "node:test";',
+    ]
+    if has_enrichment:
+        lines.append('import assert from "node:assert/strict";')
+    lines.extend([
+        f'import type {{ {sn} }} from "../command.js";',
+        f'import {{ handle{sn} }} from "../commandHandler.js";',
+        f'import {{ SliceTester, type TestEvent }} from "#abstractions/slices/SliceTester.js";',
+        f'import {stream}StreamFactory from "#BusinessCapabilities/{context}/swimlanes/{stream}/index.js";',
+    ])
+    if has_enrichment:
+        lines.append(f'import {{ enrich }} from "#BusinessCapabilities/{context}/endpoints/{sn}/enrichment.js";')
+    lines.extend(["", f'describe("{sn} Slice - Unit Tests", () => {{', ""])
+
+    # Main test: payload → enrich → command → events
+    lines.append(f'  test("automation: payload → enrich → command → event", async () => {{')
+    lines.append("    // What arrives from Kafka")
+    lines.append("    const payload = {")
+    lines.extend(payload_entries)
+    lines.append("    };")
+    lines.append("")
+
+    if has_enrichment:
+        lines.append("    // Enrichment step (same as the automation processor does)")
+        lines.append("    const enriched = await enrich(payload);")
+        lines.append("")
+
+    lines.append(f"    // Build command (same mapping as pg-boss endpoint)")
+    lines.append(f"    const command: {sn} = {{")
+    lines.extend(cmd_mapping)
+    lines.append("    };")
+    lines.append("")
+
+    # Expected events
+    if events:
+        en = event_name_from_title(events[0]["title"], "")
+        lines.append("    const expectedEvents: TestEvent[] = [")
+        lines.append("      {")
+        lines.append(f'        eventType: "{en}",')
+        lines.append("        payload: {")
+        lines.extend(event_field_entries)
+        lines.append("        },")
+        lines.append("      },")
+        lines.append("    ];")
+    else:
+        lines.append("    const expectedEvents: TestEvent[] = [];")
+
+    lines.extend([
+        "",
+        f"    return SliceTester.testCommandHandler(",
+        f"      handle{sn},",
+        f"      {stream}StreamFactory,",
+        "      [],",
+        "      command,",
+        "      expectedEvents,",
+        "    );",
+        "  });",
+        "",
+    ])
+
+    if has_enrichment:
+        # Additional test: verify enrichment produces expected types
+        lines.append(f'  test("enrichment produces valid enriched fields", async () => {{')
+        lines.append("    const payload = {")
+        lines.extend(payload_entries)
+        lines.append("    };")
+        lines.append("")
+        lines.append("    const enriched = await enrich(payload);")
+        lines.append("")
+        lines.append("    // Input fields passed through")
+        for f in input_fields:
+            fn = field_name(f["name"])
+            lines.append(f"    assert.strictEqual(enriched.{fn}, payload.{fn});")
+        lines.append("")
+        lines.append("    // Enriched fields populated")
+        for f in payload_fields:
+            if f.get("generated"):
+                fn = field_name(f["name"])
+                ft = f.get("type", "String")
+                if ft in ("Double", "Integer", "Int", "Decimal", "Float"):
+                    lines.append(f'    assert.strictEqual(typeof enriched.{fn}, "number");')
+                elif ft in ("DateTime", "Date"):
+                    lines.append(f"    assert.ok(enriched.{fn} instanceof Date);")
+                else:
+                    lines.append(f'    assert.strictEqual(typeof enriched.{fn}, "string");')
+        lines.extend([
+            "  });",
+            "",
+        ])
+
+    lines.append("});")
+    lines.append("")
     return "\n".join(lines)
 
 
@@ -1272,6 +1550,36 @@ def gen_view_test(slice_data: dict, event_id_map: dict[str, str] | None = None) 
 
 
 # ──────────────────────────────────────────────────────────────────────
+# Automations / routes / projections registry updaters
+# ──────────────────────────────────────────────────────────────────────
+
+def update_context_automations(paths: SlicePaths, slice_data: dict, slice_name: str) -> str:
+    """Create or update per-context automations.ts with a side-effect import.
+
+    Each automation endpoint self-registers via defineAutomationEndpoint().
+    automations.ts just imports the pg-boss endpoint module to trigger registration.
+    Discovery at startup dynamically imports all automations.ts files.
+    """
+    automations_path = paths.bc / "endpoints" / "automations.ts"
+    content = automations_path.read_text() if automations_path.exists() else ""
+
+    import_line = f'import "./{slice_name}/pg-boss/index.js";'
+
+    if import_line in content:
+        return content
+
+    if not content:
+        return f"""// Side-effect imports — triggers self-registration via defineAutomationEndpoint()
+{import_line}
+"""
+
+    # Append new import line
+    content = content.rstrip("\n") + "\n" + import_line + "\n"
+    return content
+
+
+
+# ──────────────────────────────────────────────────────────────────────
 # Stream factory / views type updaters
 # ──────────────────────────────────────────────────────────────────────
 
@@ -1487,26 +1795,34 @@ def _auto_normalize(root: Path, slice_json_path: Path) -> None:
 # Main scaffold function
 # ──────────────────────────────────────────────────────────────────────
 
+def _find_slice_in_indexes(root: Path, folder: str) -> tuple:
+    """Find a slice across .eventmodel and .eventmodel2 index files.
+
+    Returns: (index_path, index_data, slice_entry, eventmodel_base)
+    """
+    for em_dir in [".eventmodel", ".eventmodel2"]:
+        index_path = root / em_dir / ".slices" / "index.json"
+        if not index_path.exists():
+            continue
+        with open(index_path) as f:
+            index = json.load(f)
+        for s in index["slices"]:
+            if s["folder"] == folder:
+                return (index_path, index, s, em_dir)
+    return (None, None, None, None)
+
+
 def scaffold_slice(root: Path, folder: str, dry_run: bool = False) -> dict:
     """Scaffold all files for a slice. Returns a report of what was created."""
-    index_path = root / ".eventmodel" / ".slices" / "index.json"
-    with open(index_path) as f:
-        index = json.load(f)
-
-    # Find slice in index
-    slice_entry = None
-    for s in index["slices"]:
-        if s["folder"] == folder:
-            slice_entry = s
-            break
+    index_path, index, slice_entry, em_base = _find_slice_in_indexes(root, folder)
 
     if not slice_entry:
-        return {"error": f"Slice '{folder}' not found in index.json"}
+        return {"error": f"Slice '{folder}' not found in any index.json (.eventmodel or .eventmodel2)"}
 
     context = slice_entry["context"]
 
     # Read slice.json
-    slice_json_path = root / ".eventmodel" / ".slices" / context / folder / "slice.json"
+    slice_json_path = root / em_base / ".slices" / context / folder / "slice.json"
     if not slice_json_path.exists():
         return {"error": f"slice.json not found at {slice_json_path}"}
 
@@ -1606,6 +1922,23 @@ def scaffold_slice(root: Path, folder: str, dry_run: bool = False) -> dict:
                 endpoint_path = paths.pgboss_endpoint_dir / "index.ts"
                 if not endpoint_path.exists():
                     write_file(endpoint_path, gen_pgboss_endpoint(slice_data))
+
+                # 7a. Enrichment file for automation slices with generated fields + description
+                trigger = get_trigger_info(slice_data)
+                has_enrichment_fields = any(f.get("generated") for f in trigger.get("payload_fields", []))
+                has_enrichment_desc = bool(trigger.get("description"))
+                if has_enrichment_fields and has_enrichment_desc:
+                    enrichment_path = paths.bc / "endpoints" / sn / "enrichment.ts"
+                    if not enrichment_path.exists():
+                        write_file(enrichment_path, gen_enrichment(slice_data))
+                    enrichment_test_path = paths.bc / "endpoints" / sn / "tests" / "enrichment.test.ts"
+                    if not enrichment_test_path.exists():
+                        write_file(enrichment_test_path, gen_enrichment_test(slice_data))
+
+                # 7b. Automation endpoint test
+                auto_test_path = paths.bc / "endpoints" / sn / "tests" / "automation.endpoint.test.ts"
+                if not auto_test_path.exists():
+                    write_file(auto_test_path, gen_automation_endpoint_test(slice_data))
             else:
                 endpoint_path = paths.rest_endpoint_dir / "index.ts"
                 if not endpoint_path.exists():
@@ -1615,7 +1948,10 @@ def scaffold_slice(root: Path, folder: str, dry_run: bool = False) -> dict:
         if has_commands:
             test_path = paths.tests_dir / "command.slice.test.ts"
             if not test_path.exists():
-                write_file(test_path, gen_test(slice_data))
+                if is_automation_slice(slice_data):
+                    write_file(test_path, gen_automation_slice_test(slice_data))
+                else:
+                    write_file(test_path, gen_test(slice_data))
 
     # 9-11: Stream factory, views type, routes (skip for enrichment-only slices)
     if not is_enrichment:
@@ -1623,11 +1959,13 @@ def scaffold_slice(root: Path, folder: str, dry_run: bool = False) -> dict:
 
         # 9. Update stream factory (create minimal one if missing)
         if not paths.stream_factory.exists():
-            paths.stream_factory.parent.mkdir(parents=True, exist_ok=True)
+            if not dry_run:
+                paths.stream_factory.parent.mkdir(parents=True, exist_ok=True)
             write_file(paths.stream_factory, gen_stream_factory(slice_data))
-        updated = update_stream_factory(paths, slice_data, events, view_name_str)
-        if updated != paths.stream_factory.read_text():
-            write_file(paths.stream_factory, updated, is_update=True)
+        if paths.stream_factory.exists():
+            updated = update_stream_factory(paths, slice_data, events, view_name_str)
+            if updated != paths.stream_factory.read_text():
+                write_file(paths.stream_factory, updated, is_update=True)
 
         # 10. Update views type
         if view_name_str:
@@ -1642,6 +1980,16 @@ def scaffold_slice(root: Path, folder: str, dry_run: bool = False) -> dict:
             updated = update_routes(paths, slice_data)
             if updated != paths.routes.read_text():
                 write_file(paths.routes, updated, is_update=True)
+
+    # 11b. Update per-context automations.ts (automation slices only)
+    # Discovery at startup dynamically imports all automations.ts files,
+    # so no central registry needs updating — just the per-context file.
+    if not is_enrichment and is_automation_slice(slice_data) and not dry_run:
+        automations_path = paths.bc / "endpoints" / "automations.ts"
+        updated = update_context_automations(paths, slice_data, sn)
+        existing = automations_path.read_text() if automations_path.exists() else ""
+        if updated != existing:
+            write_file(automations_path, updated, is_update=bool(existing))
 
     # 12. Update index.json status
     if not dry_run:
@@ -1685,7 +2033,12 @@ def _gen_todo_context(paths: SlicePaths, slice_data: dict, sn: str, stream: str,
     context = slice_data["context"]
     eid_map = event_id_map or {}
     is_enrichment = has_backend_prompts(slice_data) and not slice_data.get("commands")
+    # Get backend prompts from slice-level or processor descriptions
     backend_prompts = slice_data.get("codeGen", {}).get("backendPrompts", [])
+    if not backend_prompts:
+        for proc in slice_data.get("processors", []):
+            if proc.get("type") == "AUTOMATION" and proc.get("description"):
+                backend_prompts.append(proc["description"])
 
     lines = [
         f"# TODO Context for {sn}",
@@ -1695,6 +2048,18 @@ def _gen_todo_context(paths: SlicePaths, slice_data: dict, sn: str, stream: str,
 
     if is_enrichment:
         lines.append(f"Type: **Enrichment Processor** (backendPrompts-driven)")
+
+    # Automation trigger info (for slices with AUTOMATION processors)
+    is_automation = is_automation_slice(slice_data)
+    if is_automation:
+        trigger = get_trigger_info(slice_data)
+        trigger_source = trigger.get("source", "event")
+        if trigger.get("trigger_event"):
+            lines.append(f"Trigger: **{trigger['trigger_event']}** event via Kafka CDC (source: `{trigger_source}`)")
+            lines.append(f"Kafka topic: `{trigger.get('kafka_topic', 'events.' + pascal_case(trigger['trigger_event']))}`")
+        elif trigger.get("trigger_readmodel"):
+            lines.append(f"Trigger: **{trigger['trigger_readmodel']}** readmodel via outbox (source: `{trigger_source}`)")
+
     lines.extend(["", "## Files with TODOs (only edit these)", ""])
 
     # List files that need AI work
@@ -1706,6 +2071,12 @@ def _gen_todo_context(paths: SlicePaths, slice_data: dict, sn: str, stream: str,
         if specs:
             todo_files.append(f"- `slices/{sn}/gwts.ts` — fill in predicate conditions")
         todo_files.append(f"- `slices/{sn}/commandHandler.ts` — fill in computed event fields")
+        if is_automation:
+            trigger = get_trigger_info(slice_data)
+            if any(f.get("generated") for f in trigger.get("payload_fields", [])) and trigger.get("description"):
+                todo_files.append(f"- `endpoints/{sn}/enrichment.ts` — implement enrichment logic per description below")
+                todo_files.append(f"- `endpoints/{sn}/tests/enrichment.test.ts` — verify enrichment output")
+            todo_files.append(f"- `endpoints/{sn}/tests/automation.endpoint.test.ts` — verify endpoint identity and mapping")
         if specs:
             todo_files.append(f"- `slices/{sn}/tests/command.slice.test.ts` — verify test payloads match spec examples")
             todo_files.append(f"- `swimlanes/{stream}/views/SliceState{sn}/view.slice.test.ts` — adjust accumulation logic in tests")
@@ -1910,10 +2281,19 @@ def main():
     root = Path(args.root).resolve()
 
     if args.all_planned:
-        index_path = root / ".eventmodel" / ".slices" / "index.json"
-        with open(index_path) as f:
-            index = json.load(f)
-        planned = [s["folder"] for s in sorted(index["slices"], key=lambda x: x["index"]) if s["status"] == "Planned"]
+        # Scan both .eventmodel and .eventmodel2 for scaffoldable slices
+        # "Planned" (.eventmodel) and "Created" (.eventmodel2) are both scaffoldable
+        planned = []
+        scaffoldable_statuses = {"Planned", "Created"}
+        for em_dir in [".eventmodel", ".eventmodel2"]:
+            idx_path = root / em_dir / ".slices" / "index.json"
+            if not idx_path.exists():
+                continue
+            with open(idx_path) as f:
+                idx = json.load(f)
+            for s in sorted(idx["slices"], key=lambda x: x["index"]):
+                if s["status"] in scaffoldable_statuses:
+                    planned.append(s["folder"])
 
         results = []
         for folder in planned:

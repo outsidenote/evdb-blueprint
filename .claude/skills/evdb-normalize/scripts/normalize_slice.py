@@ -90,6 +90,19 @@ DERIVATION_RULES: dict[str, str] = {
 
     "PROCESSOR_DEPENDENCIES":
         "Processor inbound/outbound dependency titles extracted from processors[].dependencies[].",
+
+    "PROCESSOR_TRIGGERS":
+        "Trigger events that activate the processor. Extracted from processors[].triggers[]. "
+        "Each trigger maps to a Kafka topic subscription (events.{triggerTitle}).",
+
+    "PROCESSOR_DESCRIPTION_PASSTHROUGH":
+        "Per-component description copied verbatim from the processor element. "
+        "In .eventmodel2 format, this replaces slice-level backendPrompts as the "
+        "enrichment implementation instructions for the AI.",
+
+    "PROCESSOR_SOURCE_TYPE":
+        "Delivery source derived from INBOUND dependency elementType: "
+        "EVENT → 'message' (cross-boundary Kafka CDC), READMODEL → 'event' (same-context outbox trigger).",
 }
 
 
@@ -356,6 +369,37 @@ def normalize_processor(proc: dict, proc_index: int, prov: Provenance) -> dict:
                        "outbound": [d["title"] for d in outbound]},
                 rule="PROCESSOR_DEPENDENCIES")
 
+    # Triggers (.eventmodel2: populated array of {title, id} for event subscriptions)
+    triggers = proc.get("triggers", [])
+    trigger_titles = [t.get("title", "") for t in triggers]
+    if trigger_titles:
+        prov.record(f"processors[{proc_index}].triggers",
+                    source=f"processors[{proc_index}].triggers[]",
+                    value=trigger_titles,
+                    rule="PROCESSOR_TRIGGERS")
+
+    # Per-component description (.eventmodel2: enrichment instructions on each component)
+    description = proc.get("description", "")
+    if description:
+        prov.record(f"processors[{proc_index}].description",
+                    source=f"processors[{proc_index}].description",
+                    value=f"{len(description)} chars",
+                    rule="PROCESSOR_DESCRIPTION_PASSTHROUGH")
+
+    # Source type: derive from INBOUND dependency elementType
+    # EVENT → "message" (cross-boundary Kafka CDC)
+    # READMODEL → "event" (same-context outbox trigger)
+    source_type = "event"  # default: same-context
+    for dep in inbound:
+        if dep.get("elementType") == "EVENT":
+            source_type = "message"
+            break
+
+    prov.record(f"processors[{proc_index}].sourceType",
+                source=f"processors[{proc_index}].dependencies[type=INBOUND].elementType",
+                value=source_type,
+                rule="PROCESSOR_SOURCE_TYPE")
+
     return {
         "id": proc.get("id"),
         "title": title,
@@ -366,6 +410,10 @@ def normalize_processor(proc: dict, proc_index: int, prov: Provenance) -> dict:
         "enrichedFields": enriched_fields,
         "inbound": inbound,
         "outbound": outbound,
+        "triggers": triggers,
+        "triggerTitles": trigger_titles,
+        "description": description,
+        "sourceType": source_type,
     }
 
 
@@ -505,17 +553,27 @@ def normalize(slice_path: Path, source_root: Path) -> dict:
         if p.get("type") == "AUTOMATION"
     ]
 
-    # ── Backend prompts (codeGen.backendPrompts) ────────────────────────
-    # Can live on the slice itself or on a processor's parent codeGen block
+    # ── Backend prompts (codeGen.backendPrompts or processor descriptions) ──
+    # In .eventmodel format: slice-level codeGen.backendPrompts[]
+    # In .eventmodel2 format: per-component processor.description
     backend_prompts = []
     slice_codegen = raw.get("codeGen", {})
     if slice_codegen.get("backendPrompts"):
         backend_prompts.extend(slice_codegen["backendPrompts"])
-    if backend_prompts:
         prov.record("backendPrompts",
                     source="codeGen.backendPrompts[]",
                     value=f"{len(backend_prompts)} prompt(s)",
                     rule="BACKEND_PROMPTS_PASSTHROUGH")
+    elif not backend_prompts:
+        # Fall back to processor descriptions (.eventmodel2 pattern)
+        for pi, p in enumerate(processors_norm):
+            if p.get("description"):
+                backend_prompts.append(p["description"])
+        if backend_prompts:
+            prov.record("backendPrompts",
+                        source="processors[*].description",
+                        value=f"{len(backend_prompts)} prompt(s) from processor descriptions",
+                        rule="PROCESSOR_DESCRIPTION_PASSTHROUGH")
 
     # ── Source path ──────────────────────────────────────────────────────
     try:
@@ -560,12 +618,18 @@ def normalize(slice_path: Path, source_root: Path) -> dict:
 # ---------------------------------------------------------------------------
 
 def output_path_for(slice_path: Path, root: Path) -> Path:
-    """Derive .eventmodel/.normalized/<Context>/<sliceDir>.normalized.json"""
+    """Derive .eventmodel[2]/.normalized/<Context>/<sliceDir>.normalized.json
+
+    Uses .eventmodel2/.normalized/ for slices sourced from .eventmodel2/,
+    and .eventmodel/.normalized/ for slices from .eventmodel/.
+    """
     raw = json.loads(slice_path.read_text())
     context = raw.get("context", "unknown")
     slice_title = raw.get("title", "")
     slice_dir = to_slice_dir(slice_title)
-    return root / ".eventmodel" / ".normalized" / context / f"{slice_dir}.normalized.json"
+    # Determine which eventmodel root this slice belongs to
+    eventmodel_base = ".eventmodel2" if ".eventmodel2" in str(slice_path) else ".eventmodel"
+    return root / eventmodel_base / ".normalized" / context / f"{slice_dir}.normalized.json"
 
 
 # ---------------------------------------------------------------------------
@@ -586,11 +650,12 @@ def main():
     root = Path(args.root).resolve()
 
     if args.all:
-        slices_dir = root / ".eventmodel" / ".slices"
-        if not slices_dir.exists():
-            print(f"ERROR: {slices_dir} not found", file=sys.stderr)
-            sys.exit(1)
-        slice_files = list(slices_dir.rglob("slice.json"))
+        # Scan both .eventmodel and .eventmodel2 for slice.json files
+        slice_files = []
+        for em_dir_name in [".eventmodel", ".eventmodel2"]:
+            slices_dir = root / em_dir_name / ".slices"
+            if slices_dir.exists():
+                slice_files.extend(slices_dir.rglob("slice.json"))
         if not slice_files:
             print("No slice.json files found.", file=sys.stderr)
             sys.exit(1)
