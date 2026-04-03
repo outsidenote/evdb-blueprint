@@ -16,6 +16,7 @@ import json
 import os
 import re
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 
@@ -135,6 +136,183 @@ def kebab_case(s: str) -> str:
 
 
 # ──────────────────────────────────────────────────────────────────────
+# Field helpers (centralised)
+# ──────────────────────────────────────────────────────────────────────
+
+def field_ts_decl(f: dict) -> str:
+    """Generate a single TypeScript interface field declaration.
+
+    Returns e.g. '  readonly accountId: string;'
+    """
+    fn = field_name(f["name"])
+    ft = ts_type(f.get("type", "String"))
+    return f"  readonly {fn}: {ft};"
+
+
+def split_fields(fields: list[dict]) -> tuple[list[dict], list[dict]]:
+    """Split fields into (user_fields, generated_fields)."""
+    user = [f for f in fields if not f.get("generated")]
+    generated = [f for f in fields if f.get("generated")]
+    return user, generated
+
+
+def extract_predicate(spec: dict) -> str:
+    """Extract predicate name from a spec's comments."""
+    comments = spec.get("comments", [])
+    if comments and comments[0].get("description"):
+        return predicate_name(comments[0]["description"])
+    return "unknownPredicate"
+
+
+def derive_message_type(trigger: dict) -> str:
+    """Derive the message type string from trigger info."""
+    if trigger.get("trigger_event"):
+        return pascal_case(trigger["trigger_event"])
+    if trigger.get("trigger_readmodel"):
+        return pascal_case(trigger["trigger_readmodel"].replace("TODO", "").replace("To-Do", "").strip())
+    return "Unknown"
+
+
+def map_event_field_line(f: dict, cmd_field_names: set[str], indent: str) -> str:
+    """Map a single event field to its command handler line.
+
+    If the field exists on the command, maps directly.
+    Otherwise generates a TODO default based on field type.
+    """
+    fn = field_name(f["name"])
+    if fn in cmd_field_names:
+        return f"{indent}{fn}: command.{fn},"
+
+    ft = f.get("type", "String")
+    example = f.get("example", "")
+    hint = f" — example: {example}" if example else ""
+    if ft == "String":
+        return f'{indent}{fn}: "", // TODO: derive from command fields{hint}'
+    elif ft in ("Double", "Integer", "Int"):
+        return f"{indent}{fn}: 0, // TODO: calculate from command fields{hint}"
+    elif ft == "DateTime":
+        return f"{indent}{fn}: new Date(), // TODO: computed field{hint}"
+    else:
+        return f'{indent}{fn}: "", // TODO: derive from command fields{hint}'
+
+
+def ts_type_check_assertion(fn: str, ft: str, source: str) -> str:
+    """Generate a type-check assertion line for enrichment/automation tests."""
+    if ft in ("Double", "Integer", "Int", "Decimal", "Float"):
+        return f'    assert.strictEqual(typeof {source}.{fn}, "number");'
+    elif ft in ("DateTime", "Date"):
+        return f"    assert.ok({source}.{fn} instanceof Date);"
+    else:
+        return f'    assert.strictEqual(typeof {source}.{fn}, "string");'
+
+
+def _format_example(f: dict) -> str:
+    """Format a field's example value as TypeScript literal."""
+    example = f.get("example", "")
+    ft = f.get("type", "String")
+    if ft in ("Double", "Integer", "Int"):
+        try:
+            return str(float(example)) if "." in str(example) else str(int(example))
+        except (ValueError, TypeError):
+            return "0"
+    if ft == "DateTime":
+        if not example:
+            return 'new Date("2025-01-01T11:00:00Z")'
+        # Normalize "YYYY-MM-DD HH:MM" (space separator, no timezone) → ISO UTC
+        import re as _re
+        if _re.match(r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$", example.strip()):
+            example = example.strip().replace(" ", "T") + ":00Z"
+        return f'new Date("{example}")'
+    if ft == "Boolean":
+        return "true" if example.lower() in ("true", "1", "yes") else "false"
+    # String / UUID
+    return f'"{example}"' if example else '""'
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Derived model
+# ──────────────────────────────────────────────────────────────────────
+
+@dataclass
+class DerivedSlice:
+    """Precomputed slice metadata passed to all generators.
+
+    Computed once from raw slice_data, avoids redundant derivation.
+    """
+    raw: dict
+    slice_name: str
+    slice_name_camel: str
+    stream: str
+    context: str
+
+    # Command
+    command: dict
+    command_fields: list
+    user_fields: list
+    generated_fields: list
+    command_field_names: set
+    has_commands: bool
+
+    # Events & specs
+    events: list
+    specs: list
+    has_specs: bool
+    predicates: list
+
+    # Automation / trigger
+    is_automation: bool
+    trigger_info: dict
+    message_type: str
+    has_enrichment: bool
+
+    # Cross-slice event resolution
+    event_id_map: dict
+
+
+def derive_slice(slice_data: dict, event_id_map: dict[str, str] | None = None) -> DerivedSlice:
+    """Build a DerivedSlice from raw slice_data."""
+    sn = slice_name_pascal(slice_data)
+    context = slice_data["context"]
+    cmd = slice_data["commands"][0] if slice_data.get("commands") else {}
+    cmd_fields = cmd.get("fields", [])
+    user, generated = split_fields(cmd_fields)
+    specs = slice_data.get("specifications", [])
+    events = slice_data.get("events", [])
+
+    is_auto = is_automation_slice(slice_data)
+    trigger = get_trigger_info(slice_data) if is_auto else {}
+
+    # Enrichment: automation with generated processor fields + description
+    payload_fields = trigger.get("payload_fields", [])
+    has_enrich = (
+        any(f.get("generated") for f in payload_fields) and bool(trigger.get("description"))
+    ) if is_auto else False
+
+    return DerivedSlice(
+        raw=slice_data,
+        slice_name=sn,
+        slice_name_camel=camel_case(sn),
+        stream=stream_name(context),
+        context=context,
+        command=cmd,
+        command_fields=cmd_fields,
+        user_fields=user,
+        generated_fields=generated,
+        command_field_names={field_name(f["name"]) for f in cmd_fields},
+        has_commands=bool(slice_data.get("commands")),
+        events=events,
+        specs=specs,
+        has_specs=bool(specs),
+        predicates=[extract_predicate(s) for s in specs],
+        is_automation=is_auto,
+        trigger_info=trigger,
+        message_type=derive_message_type(trigger) if is_auto else "",
+        has_enrichment=has_enrich,
+        event_id_map=event_id_map or {},
+    )
+
+
+# ──────────────────────────────────────────────────────────────────────
 # Path helpers
 # ──────────────────────────────────────────────────────────────────────
 
@@ -172,427 +350,8 @@ class SlicePaths:
 
 
 # ──────────────────────────────────────────────────────────────────────
-# Template generators
+# Automation / enrichment info helpers
 # ──────────────────────────────────────────────────────────────────────
-
-def gen_event_interface(event: dict) -> str:
-    """Generate event interface file content."""
-    name = event_name_from_title(event["title"], "")
-    iface = interface_name(name)
-    fields = event.get("fields", [])
-
-    lines = [f"export interface {iface} {{"]
-    for f in fields:
-        fn = field_name(f["name"])
-        ft = ts_type(f.get("type", "String"))
-        lines.append(f"  readonly {fn}: {ft};")
-    lines.append("}")
-    lines.append("")
-    return "\n".join(lines)
-
-
-def gen_command(slice_data: dict) -> str:
-    """Generate command.ts content.
-
-    ALL fields are included in the interface — including generated: true fields.
-    Generated fields are part of the command type; they're only computed at the
-    REST/pg-boss endpoint layer, not excluded from the TS interface.
-    """
-    sn = slice_name_pascal(slice_data)
-    cmd = slice_data["commands"][0]
-    fields = cmd.get("fields", [])
-
-    lines = [
-        'import type { ICommand } from "#abstractions/commands/ICommand.js";',
-        "",
-        f"export interface {sn} extends ICommand {{",
-        f'  readonly commandType: "{sn}";',
-    ]
-    for f in fields:
-        fn = field_name(f["name"])
-        ft = ts_type(f.get("type", "String"))
-        lines.append(f"  readonly {fn}: {ft};")
-    lines.append("}")
-    lines.append("")
-    return "\n".join(lines)
-
-
-def gen_gwts(slice_data: dict) -> str:
-    """Generate gwts.ts with predicate stubs."""
-    sn = slice_name_pascal(slice_data)
-    specs = slice_data.get("specifications", [])
-
-    view_state_type = f"SliceState{sn}ViewState"
-    stream = stream_name(slice_data["context"])
-    context = slice_data["context"]
-
-    lines = [
-        f'import type {{ {sn} }} from "./command.js";',
-        f'import type {{ {view_state_type} }} from "#BusinessCapabilities/{context}/swimlanes/{stream}/views/SliceState{sn}/state.js";',
-        "",
-        "/**",
-        " * Named spec predicates derived from the event model's GWT specifications.",
-        " * Each function maps 1:1 to a named spec in the event model diagram.",
-        " */",
-        "",
-    ]
-
-    for spec in specs:
-        pred_name = "unknownPredicate"
-        comments = spec.get("comments", [])
-        if comments and comments[0].get("description"):
-            pred_name = predicate_name(comments[0]["description"])
-
-        title = spec.get("title", "")
-        then_events = [t["title"] for t in spec.get("then", [])]
-        then_str = ", ".join(then_events) if then_events else "no events (idempotent)"
-
-        # Collect given fields and when fields for hint
-        given_fields_hint = []
-        for g in spec.get("given", []):
-            for f in g.get("fields", []):
-                fn = field_name(f["name"])
-                if fn not in given_fields_hint:
-                    given_fields_hint.append(fn)
-        when_fields_hint = [field_name(f["name"]) for f in spec.get("when", [{}])[0].get("fields", [])]
-
-        lines.append("/**")
-        lines.append(f" * {title}")
-        lines.append(f" * GIVEN state fields: {', '.join(given_fields_hint) if given_fields_hint else 'none'}")
-        lines.append(f" * WHEN command fields: {', '.join(when_fields_hint) if when_fields_hint else 'all'}")
-        lines.append(f" * THEN: {then_str}")
-        lines.append(" */")
-        view_state_type = f"SliceState{sn}ViewState"
-        lines.append(f"export const {pred_name} = (state: {view_state_type}, command: {sn}): boolean =>")
-        lines.append(f"  false; // TODO: return boolean comparing state.{given_fields_hint[0] if given_fields_hint else 'field'} vs command.{when_fields_hint[0] if when_fields_hint else 'field'}")
-        lines.append("")
-
-    return "\n".join(lines)
-
-
-def build_event_id_map(root: Path, context: str) -> dict[str, str]:
-    """Build a map of event ID → registered event name by scanning all slice.json files.
-
-    The spec.given[].linkedId points to an event in another slice.
-    This function scans all slices to build: { eventId: "FundsDepositApproved" }
-    so we can resolve given event titles to their actual registered names.
-    """
-    id_map = {}
-    slices_dir = root / ".eventmodel" / ".slices" / context
-    if not slices_dir.exists():
-        return id_map
-    for slice_json in slices_dir.rglob("slice.json"):
-        with open(slice_json) as f:
-            sd = json.load(f)
-        for event in sd.get("events", []):
-            eid = str(event.get("id", ""))
-            en = event_name_from_title(event["title"], "")
-            if eid:
-                id_map[eid] = en
-    return id_map
-
-
-def resolve_given_event_name(given: dict, event_id_map: dict[str, str]) -> str:
-    """Resolve a spec.given event to its actual registered event name.
-
-    Uses linkedId to find the real event name. Falls back to title if no match.
-    """
-    linked_id = str(given.get("linkedId", ""))
-    if linked_id and linked_id in event_id_map:
-        return event_id_map[linked_id]
-    return event_name_from_title(given["title"], "")
-
-
-def _find_event_by_title(events: list[dict], title: str) -> dict | None:
-    """Find an event definition by title."""
-    for e in events:
-        if e["title"] == title:
-            return e
-    return None
-
-
-def gen_command_handler(slice_data: dict) -> str:
-    """Generate commandHandler.ts with TODO body."""
-    sn = slice_name_pascal(slice_data)
-    stream = stream_name(slice_data["context"])
-    specs = slice_data.get("specifications", [])
-    events = slice_data.get("events", [])
-
-    # Build set of ALL command field names (all are on the interface now)
-    cmd = slice_data["commands"][0] if slice_data.get("commands") else {}
-    cmd_field_names = {field_name(f["name"]) for f in cmd.get("fields", [])}
-
-    # Determine if we need gwts import
-    has_specs = bool(specs)
-    predicates = []
-    for spec in specs:
-        comments = spec.get("comments", [])
-        if comments and comments[0].get("description"):
-            predicates.append(predicate_name(comments[0]["description"]))
-
-    lines = [
-        f'import type {{ CommandHandler }} from "#abstractions/commands/commandHandler.js";',
-        f'import type {{ {sn} }} from "./command.js";',
-        f'import type {{ {stream}StreamType }} from "#BusinessCapabilities/{slice_data["context"]}/swimlanes/{stream}/index.js";',
-    ]
-
-    if has_specs:
-        pred_imports = ", ".join(predicates) if predicates else ""
-        if pred_imports:
-            lines.append(f'import {{ {pred_imports} }} from "./gwts.js";')
-
-    lines.extend([
-        "",
-        "/**",
-        f" * Pure command handler for the {sn} command.",
-        " * ONLY appends events — no I/O, no fetching, no returning values.",
-        " */",
-        f"export const handle{sn}: CommandHandler<",
-        f"  {stream}StreamType,",
-        f"  {sn}",
-        "> = (stream, command) => {",
-    ])
-
-    if has_specs:
-        # Destructure state fields from the view — only when given events exist.
-        # Slices with no given[] events need no state; skip the destructure so the
-        # handler doesn't crash if the view isn't registered in the stream factory.
-        seen = set()
-        state_fields = []
-        for spec in specs:
-            for given in spec.get("given", []):
-                for f in given.get("fields", []):
-                    fn = field_name(f["name"])
-                    if fn not in seen:
-                        seen.add(fn)
-                        state_fields.append(fn)
-        if state_fields:
-            destructure = ", ".join(state_fields)
-            lines.append(f"  const {{ {destructure} }} = stream.views.SliceState{sn};")
-            lines.append("")
-
-    # Generate if/else structure from specs
-    if specs:
-        for i, spec in enumerate(specs):
-            pred_name = "unknownPredicate"
-            comments = spec.get("comments", [])
-            if comments and comments[0].get("description"):
-                pred_name = predicate_name(comments[0]["description"])
-
-            then_events = spec.get("then", [])
-            keyword = "if" if i == 0 else "} else if"
-
-            lines.append(f"  {keyword} ({pred_name}(stream.views.SliceState{sn}, command)) {{")
-
-            if not then_events:
-                lines.append("    // Empty then[] — idempotent no-op, append no events")
-                lines.append("    return;")
-            else:
-                for te in then_events:
-                    en = event_name_from_title(te["title"], "")
-                    lines.append(f"    stream.appendEvent{en}({{")
-                    full_event = _find_event_by_title(events, te["title"])
-                    event_fields = full_event.get("fields", []) if full_event else te.get("fields", [])
-                    for f in event_fields:
-                        fn = field_name(f["name"])
-                        if fn in cmd_field_names:
-                            lines.append(f"      {fn}: command.{fn},")
-                        else:
-                            ft = f.get("type", "String")
-                            example = f.get("example", "")
-                            hint = f" — example: {example}" if example else ""
-                            if ft == "String":
-                                lines.append(f'      {fn}: "", // TODO: derive from command fields{hint}')
-                            elif ft in ("Double", "Integer", "Int"):
-                                lines.append(f"      {fn}: 0, // TODO: calculate from command fields{hint}")
-                            elif ft == "DateTime":
-                                lines.append(f"      {fn}: new Date(), // TODO: computed field{hint}")
-                            else:
-                                lines.append(f'      {fn}: "", // TODO: derive from command fields{hint}')
-                    lines.append(f"    }});")
-
-        # Default (happy) path
-        lines.append("  } else {")
-        # Find the "positive" event (first event not in any spec.then)
-        spec_event_titles = set()
-        for spec in specs:
-            for te in spec.get("then", []):
-                spec_event_titles.add(te["title"])
-
-        default_events = [e for e in events if e["title"] not in spec_event_titles]
-        if not default_events:
-            default_events = events[:1]
-
-        for de in default_events:
-            en = event_name_from_title(de["title"], "")
-            lines.append(f"    stream.appendEvent{en}({{")
-            for f in de.get("fields", []):
-                fn = field_name(f["name"])
-                if fn in cmd_field_names:
-                    lines.append(f"      {fn}: command.{fn},")
-                else:
-                    ft = f.get("type", "String")
-                    example = f.get("example", "")
-                    hint = f" — example: {example}" if example else ""
-                    if ft == "String":
-                        lines.append(f'      {fn}: "", // TODO: derive from command fields{hint}')
-                    elif ft in ("Double", "Integer", "Int"):
-                        lines.append(f"      {fn}: 0, // TODO: calculate from command fields{hint}")
-                    elif ft == "DateTime":
-                        lines.append(f"      {fn}: new Date(), // TODO: computed field{hint}")
-                    else:
-                        lines.append(f'      {fn}: "", // TODO: derive from command fields{hint}')
-            lines.append(f"    }});")
-        lines.append("  }")
-    else:
-        # No specs — single event, simple flow
-        if events:
-            en = event_name_from_title(events[0]["title"], "")
-            lines.append(f"  stream.appendEvent{en}({{")
-            lines.append(f"    // TODO: map command fields to event payload")
-            lines.append(f"  }});")
-
-    lines.append("};")
-    lines.append("")
-    return "\n".join(lines)
-
-
-def gen_adapter(slice_data: dict) -> str:
-    """Generate adapter.ts."""
-    sn = slice_name_pascal(slice_data)
-    stream = stream_name(slice_data["context"])
-    context = slice_data["context"]
-    cmd = slice_data["commands"][0]
-
-    # Determine stream ID field from aggregate
-    aggregate = cmd.get("aggregate", "")
-    # Find the likely ID field — first UUID field or 'account'
-    id_field = "account"
-    for f in cmd.get("fields", []):
-        if f.get("idAttribute"):
-            id_field = field_name(f["name"])
-            break
-        if f.get("type") == "UUID" and not f.get("generated"):
-            id_field = field_name(f["name"])
-            break
-
-    return f'''import type {{ {sn} }} from "./command.js";
-import {{ handle{sn} }} from "./commandHandler.js";
-import {{ CommandHandlerOrchestratorFactory }} from "#abstractions/commands/CommandHandlerOrchestratorFactory.js";
-import type {{ CommandHandlerOrchestrator }} from "#abstractions/commands/commandHandler.js";
-import {stream}StreamFactory from "#BusinessCapabilities/{context}/swimlanes/{stream}/index.js";
-import type {{ IEvDbStorageAdapter }} from "@eventualize/core/adapters/IEvDbStorageAdapter";
-
-export function create{sn}Adapter(storageAdapter: IEvDbStorageAdapter): CommandHandlerOrchestrator<{sn}> {{
-  return CommandHandlerOrchestratorFactory.create(
-    storageAdapter,
-    {stream}StreamFactory,
-    (command: {sn}) => command.{id_field},
-    handle{sn},
-  );
-}}
-'''
-
-
-def gen_rest_endpoint(slice_data: dict) -> str:
-    """Generate REST endpoint index.ts."""
-    sn = slice_name_pascal(slice_data)
-    sn_camel = camel_case(sn)
-    context = slice_data["context"]
-    cmd = slice_data["commands"][0]
-    fields = cmd.get("fields", [])
-
-    user_fields = [f for f in fields if not f.get("generated")]
-    generated_fields = [f for f in fields if f.get("generated")]
-
-    # Required fields (first UUID or the first field)
-    required = []
-    for f in user_fields:
-        fn = field_name(f["name"])
-        if f.get("type") == "UUID" or fn == "account":
-            required.append(fn)
-    if not required and user_fields:
-        required = [field_name(user_fields[0]["name"])]
-
-    # Destructure
-    destructure_fields = [field_name(f["name"]) for f in user_fields]
-
-    lines = [
-        'import type { Request, Response } from "express";',
-        'import { randomUUID } from "node:crypto";',
-        f'import {{ create{sn}Adapter }} from "#BusinessCapabilities/{context}/slices/{sn}/adapter.js";',
-        'import type { IEvDbStorageAdapter } from "@eventualize/core/adapters/IEvDbStorageAdapter";',
-        "",
-        f"export const create{sn}RestAdapter = (storageAdapter: IEvDbStorageAdapter) => {{",
-        f"  const {sn_camel} = create{sn}Adapter(storageAdapter);",
-        "",
-        "  return async (req: Request, res: Response) => {",
-        "    try {",
-        f"      const {{",
-    ]
-    for fn in destructure_fields:
-        lines.append(f"        {fn},")
-    lines.append("      } = req.body;")
-    lines.append("")
-
-    # Validation
-    if required:
-        conditions = " || ".join(f"!{fn}" for fn in required)
-        required_str = " and ".join(required)
-        lines.append(f'      if ({conditions}) {{')
-        lines.append(f'        res.status(400).json({{ error: "{required_str} is required" }});')
-        lines.append(f'        return;')
-        lines.append(f'      }}')
-        lines.append("")
-
-    lines.append("      const command = {")
-    lines.append(f'        commandType: "{sn}" as const,')
-    for f in user_fields:
-        fn = field_name(f["name"])
-        ft = f.get("type", "String")
-        if ft == "Double":
-            lines.append(f"        {fn}: Number({fn}),")
-        elif fn == "transactionId":
-            lines.append(f"        {fn}: {fn} ?? randomUUID(),")
-        else:
-            lines.append(f"        {fn},")
-
-    for f in generated_fields:
-        fn = field_name(f["name"])
-        ft = f.get("type", "String")
-        if ft == "DateTime":
-            lines.append(f"        {fn}: new Date(),")
-        elif ft == "UUID":
-            lines.append(f"        {fn}: randomUUID(),")
-        elif ft == "Double":
-            lines.append(f"        {fn}: 0, // TODO: compute generated field")
-        else:
-            lines.append(f'        {fn}: "", // TODO: compute generated field')
-
-    lines.extend([
-        "      };",
-        "",
-        f"      const result = await {sn_camel}(command);",
-        "",
-        "      res.json({",
-        "        streamId: result.streamId,",
-        "        emittedEventTypes: result.events.map(e => e.eventType),",
-        "      });",
-        "    } catch (err: unknown) {",
-        "      const message = err instanceof Error ? err.message : String(err);",
-        '      if (message === "OPTIMISTIC_CONCURRENCY_VIOLATION") {',
-        '        res.status(409).json({ error: "Conflict: stream was modified concurrently" });',
-        "        return;",
-        "      }",
-        f'      console.error("POST /{kebab_case(sn)} error:", err);',
-        "      res.status(500).json({ error: message });",
-        "    }",
-        "  };",
-        "};",
-        "",
-    ])
-    return "\n".join(lines)
-
 
 def is_automation_slice(slice_data: dict) -> bool:
     """Detect Pattern 5: automation processor (pg-boss triggered)."""
@@ -657,136 +416,6 @@ def get_trigger_info(slice_data: dict) -> dict:
     return {}
 
 
-def gen_pgboss_endpoint(slice_data: dict) -> str:
-    """Generate pg-boss automation endpoint index.ts.
-
-    Supports both delivery patterns:
-    - source: "event"   → same-context, outbox trigger (INBOUND READMODEL)
-    - source: "message" → cross-boundary, Kafka CDC (INBOUND EVENT)
-    """
-    sn = slice_name_pascal(slice_data)
-    sn_camel = camel_case(sn)
-    context = slice_data["context"]
-    trigger = get_trigger_info(slice_data)
-    payload_fields = trigger.get("payload_fields", [])
-    source = trigger.get("source", "event")
-    kafka_topic = trigger.get("kafka_topic")
-
-    # Derive message type from trigger
-    if trigger.get("trigger_event"):
-        # .eventmodel2: INBOUND EVENT → use the event title directly
-        message_type = pascal_case(trigger["trigger_event"])
-    elif trigger.get("trigger_readmodel"):
-        # .eventmodel: INBOUND READMODEL → derive from readmodel name
-        trigger_readmodel = trigger["trigger_readmodel"]
-        message_type = pascal_case(trigger_readmodel.replace("TODO", "").replace("To-Do", "").strip())
-    else:
-        message_type = "Unknown"
-
-    # Check if this processor has enrichment (generated fields + description)
-    has_enrichment = any(f.get("generated") for f in payload_fields) and trigger.get("description")
-
-    # Build payload interface fields (only non-generated = what comes from the trigger event)
-    input_fields = [f for f in payload_fields if not f.get("generated")]
-    payload_lines = []
-    for f in input_fields:
-        fn = field_name(f["name"])
-        ft = ts_type(f.get("type", "String"))
-        payload_lines.append(f"  readonly {fn}: {ft};")
-
-    # Build command mapping — match processor fields to command fields
-    cmd = slice_data["commands"][0] if slice_data.get("commands") else {}
-    cmd_fields = cmd.get("fields", [])
-
-    # Build set of enriched field names from the processor (generated: true on processor fields)
-    enriched_field_names = {field_name(pf["name"]) for pf in payload_fields if pf.get("generated")}
-
-    map_lines = []
-    map_lines.append(f'    commandType: "{sn}" as const,')
-    for f in cmd_fields:
-        fn = field_name(f["name"])
-        ft = f.get("type", "String")
-        if has_enrichment and fn in enriched_field_names:
-            # Field comes from the enrichment output
-            map_lines.append(f"    {fn}: enriched.{fn},")
-        elif f.get("generated"):
-            if ft == "DateTime":
-                map_lines.append(f"    {fn}: new Date(),")
-            elif ft == "UUID":
-                map_lines.append(f'    {fn}: randomUUID(),')
-            elif ft in ("Double", "Integer", "Int", "Decimal"):
-                map_lines.append(f"    {fn}: 0, // TODO: compute generated field")
-            else:
-                map_lines.append(f'    {fn}: "", // TODO: compute generated field')
-        else:
-            # Check if field exists in processor payload
-            proc_field_names = {field_name(pf["name"]) for pf in payload_fields}
-            if fn in proc_field_names:
-                map_lines.append(f"    {fn}: payload.{fn},")
-            else:
-                map_lines.append(f'    {fn}: "", // TODO: not in trigger payload')
-
-    payload_interface_name = f"{message_type}Payload"
-
-    # Imports
-    lines = [
-        f'import {{ defineAutomationEndpoint }} from "#abstractions/endpoints/defineAutomationEndpoint.js";',
-        f'import {{ create{sn}Adapter }} from "#BusinessCapabilities/{context}/slices/{sn}/adapter.js";',
-    ]
-    if has_enrichment:
-        lines.append(f'import {{ enrich }} from "../enrichment.js";')
-    lines.append("")
-
-    # Payload interface
-    lines.append(f"interface {payload_interface_name} {{")
-    lines.extend(payload_lines)
-    lines.extend([
-        "}",
-        "",
-    ])
-
-    # Worker definition
-    lines.append("const worker = defineAutomationEndpoint({")
-    lines.append(f'  source: "{source}",')
-    lines.append(f'  messageType: "{message_type}",')
-    if kafka_topic and source == "message":
-        lines.append(f'  kafkaTopic: "{kafka_topic}",')
-    lines.append(f'  handlerName: "{sn}",')
-    lines.append(f"  createAdapter: create{sn}Adapter,")
-
-    # Idempotency key — use session or transactionId if available
-    id_key_field = None
-    for f in input_fields:
-        fn = field_name(f["name"])
-        if fn in ("transactionId", "session"):
-            id_key_field = fn
-            break
-    if id_key_field:
-        lines.append(f"  getIdempotencyKey: (payload: {payload_interface_name}) => payload.{id_key_field},")
-
-    # Map payload to command
-    if has_enrichment:
-        lines.append(f"  mapPayloadToCommand: async (payload: {payload_interface_name}) => {{")
-        lines.append(f"    const enriched = await enrich(payload);")
-        lines.append(f"    return {{")
-        lines.extend(map_lines)
-        lines.append(f"    }};")
-        lines.append(f"  }},")
-    else:
-        lines.append(f"  mapPayloadToCommand: (payload: {payload_interface_name}) => ({{")
-        lines.extend(map_lines)
-        lines.append("  }),")
-
-    lines.extend([
-        "});",
-        "",
-        "export const endpointIdentity = worker.endpointIdentity;",
-        f"export const create{message_type}Worker = worker.create;",
-        "",
-    ])
-    return "\n".join(lines)
-
-
 def has_backend_prompts(slice_data: dict) -> bool:
     """Check if this slice has enrichment instructions.
 
@@ -820,8 +449,7 @@ def get_enrichment_info(slice_data: dict) -> dict:
         return {}
 
     all_fields = proc.get("fields", [])
-    input_fields = [f for f in all_fields if not f.get("generated")]
-    enriched_fields = [f for f in all_fields if f.get("generated")]
+    input_fields, enriched_fields = split_fields(all_fields)
 
     # Prompts: try slice-level backendPrompts first, fall back to processor description
     prompts = slice_data.get("codeGen", {}).get("backendPrompts", [])
@@ -844,27 +472,479 @@ def get_enrichment_info(slice_data: dict) -> dict:
     }
 
 
-def gen_enrichment(slice_data: dict) -> str:
+def build_event_id_map(root: Path, context: str) -> dict[str, str]:
+    """Build a map of event ID → registered event name by scanning all slice.json files.
+
+    The spec.given[].linkedId points to an event in another slice.
+    This function scans all slices to build: { eventId: "FundsDepositApproved" }
+    so we can resolve given event titles to their actual registered names.
+    """
+    id_map = {}
+    slices_dir = root / ".eventmodel" / ".slices" / context
+    if not slices_dir.exists():
+        return id_map
+    for slice_json in slices_dir.rglob("slice.json"):
+        with open(slice_json) as f:
+            sd = json.load(f)
+        for event in sd.get("events", []):
+            eid = str(event.get("id", ""))
+            en = event_name_from_title(event["title"], "")
+            if eid:
+                id_map[eid] = en
+    return id_map
+
+
+def resolve_given_event_name(given: dict, event_id_map: dict[str, str]) -> str:
+    """Resolve a spec.given event to its actual registered event name.
+
+    Uses linkedId to find the real event name. Falls back to title if no match.
+    """
+    linked_id = str(given.get("linkedId", ""))
+    if linked_id and linked_id in event_id_map:
+        return event_id_map[linked_id]
+    return event_name_from_title(given["title"], "")
+
+
+def _find_event_by_title(events: list[dict], title: str) -> dict | None:
+    """Find an event definition by title."""
+    for e in events:
+        if e["title"] == title:
+            return e
+    return None
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Renderers — event / command / gwts / command handler
+# ──────────────────────────────────────────────────────────────────────
+
+def gen_event_interface(event: dict) -> str:
+    """Generate event interface file content."""
+    name = event_name_from_title(event["title"], "")
+    iface = interface_name(name)
+    fields = event.get("fields", [])
+
+    lines = [f"export interface {iface} {{"]
+    for f in fields:
+        lines.append(field_ts_decl(f))
+    lines.append("}")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def gen_command(ds: DerivedSlice) -> str:
+    """Generate command.ts content.
+
+    ALL fields are included in the interface — including generated: true fields.
+    Generated fields are part of the command type; they're only computed at the
+    REST/pg-boss endpoint layer, not excluded from the TS interface.
+    """
+    lines = [
+        'import type { ICommand } from "#abstractions/commands/ICommand.js";',
+        "",
+        f"export interface {ds.slice_name} extends ICommand {{",
+        f'  readonly commandType: "{ds.slice_name}";',
+    ]
+    for f in ds.command_fields:
+        lines.append(field_ts_decl(f))
+    lines.append("}")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def gen_gwts(ds: DerivedSlice) -> str:
+    """Generate gwts.ts with predicate stubs."""
+    view_state_type = f"SliceState{ds.slice_name}ViewState"
+
+    lines = [
+        f'import type {{ {ds.slice_name} }} from "./command.js";',
+        f'import type {{ {view_state_type} }} from "#BusinessCapabilities/{ds.context}/swimlanes/{ds.stream}/views/SliceState{ds.slice_name}/state.js";',
+        "",
+        "/**",
+        " * Named spec predicates derived from the event model's GWT specifications.",
+        " * Each function maps 1:1 to a named spec in the event model diagram.",
+        " */",
+        "",
+    ]
+
+    for spec in ds.specs:
+        pred_name = extract_predicate(spec)
+
+        title = spec.get("title", "")
+        then_events = [t["title"] for t in spec.get("then", [])]
+        then_str = ", ".join(then_events) if then_events else "no events (idempotent)"
+
+        # Collect given fields and when fields for hint
+        given_fields_hint = []
+        for g in spec.get("given", []):
+            for f in g.get("fields", []):
+                fn = field_name(f["name"])
+                if fn not in given_fields_hint:
+                    given_fields_hint.append(fn)
+        when_fields_hint = [field_name(f["name"]) for f in spec.get("when", [{}])[0].get("fields", [])]
+
+        lines.append("/**")
+        lines.append(f" * {title}")
+        lines.append(f" * GIVEN state fields: {', '.join(given_fields_hint) if given_fields_hint else 'none'}")
+        lines.append(f" * WHEN command fields: {', '.join(when_fields_hint) if when_fields_hint else 'all'}")
+        lines.append(f" * THEN: {then_str}")
+        lines.append(" */")
+        view_state_type = f"SliceState{ds.slice_name}ViewState"
+        lines.append(f"export const {pred_name} = (state: {view_state_type}, command: {ds.slice_name}): boolean =>")
+        lines.append(f"  false; // TODO: return boolean comparing state.{given_fields_hint[0] if given_fields_hint else 'field'} vs command.{when_fields_hint[0] if when_fields_hint else 'field'}")
+        lines.append("")
+
+    return "\n".join(lines)
+
+
+def gen_command_handler(ds: DerivedSlice) -> str:
+    """Generate commandHandler.ts with TODO body."""
+    lines = [
+        f'import type {{ CommandHandler }} from "#abstractions/commands/commandHandler.js";',
+        f'import type {{ {ds.slice_name} }} from "./command.js";',
+        f'import type {{ {ds.stream}StreamType }} from "#BusinessCapabilities/{ds.context}/swimlanes/{ds.stream}/index.js";',
+    ]
+
+    if ds.has_specs:
+        pred_imports = ", ".join(p for p in ds.predicates) if ds.predicates else ""
+        if pred_imports:
+            lines.append(f'import {{ {pred_imports} }} from "./gwts.js";')
+
+    lines.extend([
+        "",
+        "/**",
+        f" * Pure command handler for the {ds.slice_name} command.",
+        " * ONLY appends events — no I/O, no fetching, no returning values.",
+        " */",
+        f"export const handle{ds.slice_name}: CommandHandler<",
+        f"  {ds.stream}StreamType,",
+        f"  {ds.slice_name}",
+        "> = (stream, command) => {",
+    ])
+
+    if ds.has_specs:
+        # Destructure state fields from the view
+        seen = set()
+        state_fields = []
+        for spec in ds.specs:
+            for given in spec.get("given", []):
+                for f in given.get("fields", []):
+                    fn = field_name(f["name"])
+                    if fn not in seen:
+                        seen.add(fn)
+                        state_fields.append(fn)
+        if state_fields:
+            destructure = ", ".join(state_fields)
+            lines.append(f"  const {{ {destructure} }} = stream.views.SliceState{ds.slice_name};")
+            lines.append("")
+
+    # Generate if/else structure from specs
+    if ds.specs:
+        for i, spec in enumerate(ds.specs):
+            pred_name = extract_predicate(spec)
+            then_events = spec.get("then", [])
+            keyword = "if" if i == 0 else "} else if"
+
+            lines.append(f"  {keyword} ({pred_name}(stream.views.SliceState{ds.slice_name}, command)) {{")
+
+            if not then_events:
+                lines.append("    // Empty then[] — idempotent no-op, append no events")
+                lines.append("    return;")
+            else:
+                for te in then_events:
+                    en = event_name_from_title(te["title"], "")
+                    lines.append(f"    stream.appendEvent{en}({{")
+                    full_event = _find_event_by_title(ds.events, te["title"])
+                    event_fields = full_event.get("fields", []) if full_event else te.get("fields", [])
+                    for f in event_fields:
+                        lines.append(map_event_field_line(f, ds.command_field_names, "      "))
+                    lines.append(f"    }});")
+
+        # Default (happy) path
+        lines.append("  } else {")
+        spec_event_titles = set()
+        for spec in ds.specs:
+            for te in spec.get("then", []):
+                spec_event_titles.add(te["title"])
+
+        default_events = [e for e in ds.events if e["title"] not in spec_event_titles]
+        if not default_events:
+            default_events = ds.events[:1]
+
+        for de in default_events:
+            en = event_name_from_title(de["title"], "")
+            lines.append(f"    stream.appendEvent{en}({{")
+            for f in de.get("fields", []):
+                lines.append(map_event_field_line(f, ds.command_field_names, "      "))
+            lines.append(f"    }});")
+        lines.append("  }")
+    else:
+        # No specs — single event, simple flow
+        if ds.events:
+            en = event_name_from_title(ds.events[0]["title"], "")
+            lines.append(f"  stream.appendEvent{en}({{")
+            lines.append(f"    // TODO: map command fields to event payload")
+            lines.append(f"  }});")
+
+    lines.append("};")
+    lines.append("")
+    return "\n".join(lines)
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Renderers — adapter / REST endpoint / pg-boss endpoint
+# ──────────────────────────────────────────────────────────────────────
+
+def gen_adapter(ds: DerivedSlice) -> str:
+    """Generate adapter.ts."""
+    # Determine stream ID field from aggregate
+    aggregate = ds.command.get("aggregate", "")
+    id_field = "account"
+    for f in ds.command.get("fields", []):
+        if f.get("idAttribute"):
+            id_field = field_name(f["name"])
+            break
+        if f.get("type") == "UUID" and not f.get("generated"):
+            id_field = field_name(f["name"])
+            break
+
+    return f'''import type {{ {ds.slice_name} }} from "./command.js";
+import {{ handle{ds.slice_name} }} from "./commandHandler.js";
+import {{ CommandHandlerOrchestratorFactory }} from "#abstractions/commands/CommandHandlerOrchestratorFactory.js";
+import type {{ CommandHandlerOrchestrator }} from "#abstractions/commands/commandHandler.js";
+import {ds.stream}StreamFactory from "#BusinessCapabilities/{ds.context}/swimlanes/{ds.stream}/index.js";
+import type {{ IEvDbStorageAdapter }} from "@eventualize/core/adapters/IEvDbStorageAdapter";
+
+export function create{ds.slice_name}Adapter(storageAdapter: IEvDbStorageAdapter): CommandHandlerOrchestrator<{ds.slice_name}> {{
+  return CommandHandlerOrchestratorFactory.create(
+    storageAdapter,
+    {ds.stream}StreamFactory,
+    (command: {ds.slice_name}) => command.{id_field},
+    handle{ds.slice_name},
+  );
+}}
+'''
+
+
+def gen_rest_endpoint(ds: DerivedSlice) -> str:
+    """Generate REST endpoint index.ts."""
+    # Required fields (first UUID or the first field)
+    required = []
+    for f in ds.user_fields:
+        fn = field_name(f["name"])
+        if f.get("type") == "UUID" or fn == "account":
+            required.append(fn)
+    if not required and ds.user_fields:
+        required = [field_name(ds.user_fields[0]["name"])]
+
+    # Destructure
+    destructure_fields = [field_name(f["name"]) for f in ds.user_fields]
+
+    lines = [
+        'import type { Request, Response } from "express";',
+        'import { randomUUID } from "node:crypto";',
+        f'import {{ create{ds.slice_name}Adapter }} from "#BusinessCapabilities/{ds.context}/slices/{ds.slice_name}/adapter.js";',
+        'import type { IEvDbStorageAdapter } from "@eventualize/core/adapters/IEvDbStorageAdapter";',
+        "",
+        f"export const create{ds.slice_name}RestAdapter = (storageAdapter: IEvDbStorageAdapter) => {{",
+        f"  const {ds.slice_name_camel} = create{ds.slice_name}Adapter(storageAdapter);",
+        "",
+        "  return async (req: Request, res: Response) => {",
+        "    try {",
+        f"      const {{",
+    ]
+    for fn in destructure_fields:
+        lines.append(f"        {fn},")
+    lines.append("      } = req.body;")
+    lines.append("")
+
+    # Validation
+    if required:
+        conditions = " || ".join(f"!{fn}" for fn in required)
+        required_str = " and ".join(required)
+        lines.append(f'      if ({conditions}) {{')
+        lines.append(f'        res.status(400).json({{ error: "{required_str} is required" }});')
+        lines.append(f'        return;')
+        lines.append(f'      }}')
+        lines.append("")
+
+    lines.append("      const command = {")
+    lines.append(f'        commandType: "{ds.slice_name}" as const,')
+    for f in ds.user_fields:
+        fn = field_name(f["name"])
+        ft = f.get("type", "String")
+        if ft == "Double":
+            lines.append(f"        {fn}: Number({fn}),")
+        elif fn == "transactionId":
+            lines.append(f"        {fn}: {fn} ?? randomUUID(),")
+        else:
+            lines.append(f"        {fn},")
+
+    for f in ds.generated_fields:
+        fn = field_name(f["name"])
+        ft = f.get("type", "String")
+        if ft == "DateTime":
+            lines.append(f"        {fn}: new Date(),")
+        elif ft == "UUID":
+            lines.append(f"        {fn}: randomUUID(),")
+        elif ft == "Double":
+            lines.append(f"        {fn}: 0, // TODO: compute generated field")
+        else:
+            lines.append(f'        {fn}: "", // TODO: compute generated field')
+
+    lines.extend([
+        "      };",
+        "",
+        f"      const result = await {ds.slice_name_camel}(command);",
+        "",
+        "      res.json({",
+        "        streamId: result.streamId,",
+        "        emittedEventTypes: result.events.map(e => e.eventType),",
+        "      });",
+        "    } catch (err: unknown) {",
+        "      const message = err instanceof Error ? err.message : String(err);",
+        '      if (message === "OPTIMISTIC_CONCURRENCY_VIOLATION") {',
+        '        res.status(409).json({ error: "Conflict: stream was modified concurrently" });',
+        "        return;",
+        "      }",
+        f'      console.error("POST /{kebab_case(ds.slice_name)} error:", err);',
+        "      res.status(500).json({ error: message });",
+        "    }",
+        "  };",
+        "};",
+        "",
+    ])
+    return "\n".join(lines)
+
+
+def gen_pgboss_endpoint(ds: DerivedSlice) -> str:
+    """Generate pg-boss automation endpoint index.ts.
+
+    Supports both delivery patterns:
+    - source: "event"   → same-context, outbox trigger (INBOUND READMODEL)
+    - source: "message" → cross-boundary, Kafka CDC (INBOUND EVENT)
+    """
+    trigger = ds.trigger_info
+    payload_fields = trigger.get("payload_fields", [])
+    source = trigger.get("source", "event")
+    kafka_topic = trigger.get("kafka_topic")
+    message_type = ds.message_type
+
+    # Build payload interface fields (only non-generated = what comes from the trigger event)
+    input_fields = [f for f in payload_fields if not f.get("generated")]
+    payload_lines = []
+    for f in input_fields:
+        payload_lines.append(field_ts_decl(f))
+
+    # Build command mapping — match processor fields to command fields
+    # Build set of enriched field names from the processor (generated: true on processor fields)
+    enriched_field_names = {field_name(pf["name"]) for pf in payload_fields if pf.get("generated")}
+
+    map_lines = []
+    map_lines.append(f'    commandType: "{ds.slice_name}" as const,')
+    for f in ds.command_fields:
+        fn = field_name(f["name"])
+        ft = f.get("type", "String")
+        if ds.has_enrichment and fn in enriched_field_names:
+            # Field comes from the enrichment output
+            map_lines.append(f"    {fn}: enriched.{fn},")
+        elif f.get("generated"):
+            if ft == "DateTime":
+                map_lines.append(f"    {fn}: new Date(),")
+            elif ft == "UUID":
+                map_lines.append(f'    {fn}: randomUUID(),')
+            elif ft in ("Double", "Integer", "Int", "Decimal"):
+                map_lines.append(f"    {fn}: 0, // TODO: compute generated field")
+            else:
+                map_lines.append(f'    {fn}: "", // TODO: compute generated field')
+        else:
+            # Check if field exists in processor payload
+            proc_field_names = {field_name(pf["name"]) for pf in payload_fields}
+            if fn in proc_field_names:
+                map_lines.append(f"    {fn}: payload.{fn},")
+            else:
+                map_lines.append(f'    {fn}: "", // TODO: not in trigger payload')
+
+    payload_interface_name = f"{message_type}Payload"
+
+    # Imports
+    lines = [
+        f'import {{ defineAutomationEndpoint }} from "#abstractions/endpoints/defineAutomationEndpoint.js";',
+        f'import {{ create{ds.slice_name}Adapter }} from "#BusinessCapabilities/{ds.context}/slices/{ds.slice_name}/adapter.js";',
+    ]
+    if ds.has_enrichment:
+        lines.append(f'import {{ enrich }} from "../enrichment.js";')
+    lines.append("")
+
+    # Payload interface
+    lines.append(f"interface {payload_interface_name} {{")
+    lines.extend(payload_lines)
+    lines.extend([
+        "}",
+        "",
+    ])
+
+    # Worker definition
+    lines.append("const worker = defineAutomationEndpoint({")
+    lines.append(f'  source: "{source}",')
+    lines.append(f'  messageType: "{message_type}",')
+    if kafka_topic and source == "message":
+        lines.append(f'  kafkaTopic: "{kafka_topic}",')
+    lines.append(f'  handlerName: "{ds.slice_name}",')
+    lines.append(f"  createAdapter: create{ds.slice_name}Adapter,")
+
+    # Idempotency key — use session or transactionId if available
+    id_key_field = None
+    for f in input_fields:
+        fn = field_name(f["name"])
+        if fn in ("transactionId", "session"):
+            id_key_field = fn
+            break
+    if id_key_field:
+        lines.append(f"  getIdempotencyKey: (payload: {payload_interface_name}) => payload.{id_key_field},")
+
+    # Map payload to command
+    if ds.has_enrichment:
+        lines.append(f"  mapPayloadToCommand: async (payload: {payload_interface_name}) => {{")
+        lines.append(f"    const enriched = await enrich(payload);")
+        lines.append(f"    return {{")
+        lines.extend(map_lines)
+        lines.append(f"    }};")
+        lines.append(f"  }},")
+    else:
+        lines.append(f"  mapPayloadToCommand: (payload: {payload_interface_name}) => ({{")
+        lines.extend(map_lines)
+        lines.append("  }),")
+
+    lines.extend([
+        "});",
+        "",
+        "export const endpointIdentity = worker.endpointIdentity;",
+        f"export const create{message_type}Worker = worker.create;",
+        "",
+    ])
+    return "\n".join(lines)
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Renderers — enrichment
+# ──────────────────────────────────────────────────────────────────────
+
+def gen_enrichment(ds: DerivedSlice) -> str:
     """Generate enrichment.ts skeleton with input/output interfaces and a TODO body."""
-    sn = slice_name_pascal(slice_data)
-    info = get_enrichment_info(slice_data)
+    info = get_enrichment_info(ds.raw)
     input_fields = info.get("input_fields", [])
     enriched_fields = info.get("enriched_fields", [])
 
     # Build input interface
-    input_lines = [f"export interface {sn}EnrichmentInput {{"]
+    input_lines = [f"export interface {ds.slice_name}EnrichmentInput {{"]
     for f in input_fields:
-        fn = field_name(f["name"])
-        ft = ts_type(f.get("type", "String"))
-        input_lines.append(f"  readonly {fn}: {ft};")
+        input_lines.append(field_ts_decl(f))
     input_lines.append("}")
 
     # Build output interface (extends input + enriched fields)
-    output_lines = [f"export interface {sn}EnrichmentOutput extends {sn}EnrichmentInput {{"]
+    output_lines = [f"export interface {ds.slice_name}EnrichmentOutput extends {ds.slice_name}EnrichmentInput {{"]
     for f in enriched_fields:
-        fn = field_name(f["name"])
-        ft = ts_type(f.get("type", "String"))
-        output_lines.append(f"  readonly {fn}: {ft};")
+        output_lines.append(field_ts_decl(f))
     output_lines.append("}")
 
     # Function skeleton with TODO
@@ -873,7 +953,7 @@ def gen_enrichment(slice_data: dict) -> str:
         "",
         *output_lines,
         "",
-        f"export async function enrich(input: {sn}EnrichmentInput): Promise<{sn}EnrichmentOutput> {{",
+        f"export async function enrich(input: {ds.slice_name}EnrichmentInput): Promise<{ds.slice_name}EnrichmentOutput> {{",
         "  // TODO: implement enrichment logic — see TODO_CONTEXT.md for backendPrompts instructions",
         "  return {",
         "    ...input,",
@@ -895,10 +975,9 @@ def gen_enrichment(slice_data: dict) -> str:
     return "\n".join(lines)
 
 
-def gen_enrichment_test(slice_data: dict) -> str:
+def gen_enrichment_test(ds: DerivedSlice) -> str:
     """Generate enrichment.test.ts skeleton for an enrichment processor."""
-    sn = slice_name_pascal(slice_data)
-    info = get_enrichment_info(slice_data)
+    info = get_enrichment_info(ds.raw)
     input_fields = info.get("input_fields", [])
     enriched_fields = info.get("enriched_fields", [])
 
@@ -918,19 +997,14 @@ def gen_enrichment_test(slice_data: dict) -> str:
     for f in enriched_fields:
         fn = field_name(f["name"])
         ft = f.get("type", "String")
-        if ft in ("Double", "Integer", "Int", "Decimal", "Float"):
-            check_lines.append(f'    assert.strictEqual(typeof result.{fn}, "number");')
-        elif ft in ("DateTime", "Date"):
-            check_lines.append(f"    assert.ok(result.{fn} instanceof Date);")
-        else:
-            check_lines.append(f'    assert.strictEqual(typeof result.{fn}, "string");')
+        check_lines.append(ts_type_check_assertion(fn, ft, "result"))
 
     lines = [
         'import { describe, it } from "node:test";',
         'import assert from "node:assert/strict";',
         f'import {{ enrich }} from "../enrichment.js";',
         "",
-        f'describe("{sn} Enrichment", () => {{',
+        f'describe("{ds.slice_name} Enrichment", () => {{',
         f'  it("enriches input with computed fields", async () => {{',
         "    const input = {",
         *input_entries,
@@ -954,36 +1028,26 @@ def gen_enrichment_test(slice_data: dict) -> str:
     return "\n".join(lines)
 
 
-def gen_automation_endpoint_test(slice_data: dict) -> str:
-    """Generate automation endpoint test — identity check only.
+# ──────────────────────────────────────────────────────────────────────
+# Renderers — tests
+# ──────────────────────────────────────────────────────────────────────
 
-    The full payload → enrich → command → events pipeline is tested in
-    command.slice.test.ts (via gen_automation_slice_test).
-    This test just verifies the endpoint wiring is correct.
-    """
-    sn = slice_name_pascal(slice_data)
-    trigger = get_trigger_info(slice_data)
-    source = trigger.get("source", "event")
-
-    # Derive message type
-    if trigger.get("trigger_event"):
-        message_type = pascal_case(trigger["trigger_event"])
-    elif trigger.get("trigger_readmodel"):
-        message_type = pascal_case(trigger["trigger_readmodel"].replace("TODO", "").replace("To-Do", "").strip())
-    else:
-        message_type = "Unknown"
+def gen_automation_endpoint_test(ds: DerivedSlice) -> str:
+    """Generate automation endpoint test — identity check only."""
+    source = ds.trigger_info.get("source", "event")
+    message_type = ds.message_type
 
     lines = [
         'import { describe, it } from "node:test";',
         'import assert from "node:assert/strict";',
         f'import {{ endpointIdentity }} from "../pg-boss/index.js";',
         "",
-        f'describe("{sn} Automation Endpoint", () => {{',
+        f'describe("{ds.slice_name} Automation Endpoint", () => {{',
         f'  it("has correct endpoint identity", () => {{',
         f'    assert.strictEqual(endpointIdentity.source, "{source}");',
         f'    assert.strictEqual(endpointIdentity.messageType, "{message_type}");',
-        f'    assert.strictEqual(endpointIdentity.handlerName, "{sn}");',
-        f'    assert.strictEqual(endpointIdentity.queueName, "{source}.{message_type}.{sn}");',
+        f'    assert.strictEqual(endpointIdentity.handlerName, "{ds.slice_name}");',
+        f'    assert.strictEqual(endpointIdentity.queueName, "{source}.{message_type}.{ds.slice_name}");',
         "  });",
         "});",
         "",
@@ -991,7 +1055,7 @@ def gen_automation_endpoint_test(slice_data: dict) -> str:
     return "\n".join(lines)
 
 
-def gen_automation_slice_test(slice_data: dict) -> str:
+def gen_automation_slice_test(ds: DerivedSlice) -> str:
     """Generate command.slice.test.ts for automation slices.
 
     Tests the full slice pipeline from the Kafka payload perspective:
@@ -1000,17 +1064,10 @@ def gen_automation_slice_test(slice_data: dict) -> str:
     This is different from standard slice tests which start from the command.
     Automation slice tests start from the raw payload (what Kafka delivers).
     """
-    sn = slice_name_pascal(slice_data)
-    stream = stream_name(slice_data["context"])
-    context = slice_data["context"]
-    events = slice_data.get("events", [])
-    cmd = slice_data["commands"][0] if slice_data.get("commands") else {}
-    cmd_fields = cmd.get("fields", [])
-    trigger = get_trigger_info(slice_data)
+    trigger = ds.trigger_info
     payload_fields = trigger.get("payload_fields", [])
     input_fields = [f for f in payload_fields if not f.get("generated")]
     enriched_field_names = {field_name(pf["name"]) for pf in payload_fields if pf.get("generated")}
-    has_enrichment = any(f.get("generated") for f in payload_fields) and trigger.get("description")
 
     # Build sample payload entries (input fields only — what arrives from Kafka)
     payload_entries = []
@@ -1020,10 +1077,10 @@ def gen_automation_slice_test(slice_data: dict) -> str:
 
     # Build command mapping lines (payload fields + enriched fields)
     cmd_mapping = []
-    cmd_mapping.append(f'    commandType: "{sn}" as const,')
-    for f in cmd_fields:
+    cmd_mapping.append(f'    commandType: "{ds.slice_name}" as const,')
+    for f in ds.command_fields:
         fn = field_name(f["name"])
-        if has_enrichment and fn in enriched_field_names:
+        if ds.has_enrichment and fn in enriched_field_names:
             cmd_mapping.append(f"    {fn}: enriched.{fn},")
         else:
             proc_field_names = {field_name(pf["name"]) for pf in payload_fields}
@@ -1034,8 +1091,8 @@ def gen_automation_slice_test(slice_data: dict) -> str:
 
     # Build expected event entries
     event_field_entries = []
-    if events:
-        for f in events[0].get("fields", []):
+    if ds.events:
+        for f in ds.events[0].get("fields", []):
             fn = field_name(f["name"])
             event_field_entries.append(f"          {fn}: command.{fn},")
 
@@ -1043,17 +1100,17 @@ def gen_automation_slice_test(slice_data: dict) -> str:
     lines = [
         'import { test, describe } from "node:test";',
     ]
-    if has_enrichment:
+    if ds.has_enrichment:
         lines.append('import assert from "node:assert/strict";')
     lines.extend([
-        f'import type {{ {sn} }} from "../command.js";',
-        f'import {{ handle{sn} }} from "../commandHandler.js";',
+        f'import type {{ {ds.slice_name} }} from "../command.js";',
+        f'import {{ handle{ds.slice_name} }} from "../commandHandler.js";',
         f'import {{ SliceTester, type TestEvent }} from "#abstractions/slices/SliceTester.js";',
-        f'import {stream}StreamFactory from "#BusinessCapabilities/{context}/swimlanes/{stream}/index.js";',
+        f'import {ds.stream}StreamFactory from "#BusinessCapabilities/{ds.context}/swimlanes/{ds.stream}/index.js";',
     ])
-    if has_enrichment:
-        lines.append(f'import {{ enrich }} from "#BusinessCapabilities/{context}/endpoints/{sn}/enrichment.js";')
-    lines.extend(["", f'describe("{sn} Slice - Unit Tests", () => {{', ""])
+    if ds.has_enrichment:
+        lines.append(f'import {{ enrich }} from "#BusinessCapabilities/{ds.context}/endpoints/{ds.slice_name}/enrichment.js";')
+    lines.extend(["", f'describe("{ds.slice_name} Slice - Unit Tests", () => {{', ""])
 
     # Main test: payload → enrich → command → events
     lines.append(f'  test("automation: payload → enrich → command → event", async () => {{')
@@ -1063,20 +1120,20 @@ def gen_automation_slice_test(slice_data: dict) -> str:
     lines.append("    };")
     lines.append("")
 
-    if has_enrichment:
+    if ds.has_enrichment:
         lines.append("    // Enrichment step (same as the automation processor does)")
         lines.append("    const enriched = await enrich(payload);")
         lines.append("")
 
     lines.append(f"    // Build command (same mapping as pg-boss endpoint)")
-    lines.append(f"    const command: {sn} = {{")
+    lines.append(f"    const command: {ds.slice_name} = {{")
     lines.extend(cmd_mapping)
     lines.append("    };")
     lines.append("")
 
     # Expected events
-    if events:
-        en = event_name_from_title(events[0]["title"], "")
+    if ds.events:
+        en = event_name_from_title(ds.events[0]["title"], "")
         lines.append("    const expectedEvents: TestEvent[] = [")
         lines.append("      {")
         lines.append(f'        eventType: "{en}",')
@@ -1091,8 +1148,8 @@ def gen_automation_slice_test(slice_data: dict) -> str:
     lines.extend([
         "",
         f"    return SliceTester.testCommandHandler(",
-        f"      handle{sn},",
-        f"      {stream}StreamFactory,",
+        f"      handle{ds.slice_name},",
+        f"      {ds.stream}StreamFactory,",
         "      [],",
         "      command,",
         "      expectedEvents,",
@@ -1101,7 +1158,7 @@ def gen_automation_slice_test(slice_data: dict) -> str:
         "",
     ])
 
-    if has_enrichment:
+    if ds.has_enrichment:
         # Additional test: verify enrichment produces expected types
         lines.append(f'  test("enrichment produces valid enriched fields", async () => {{')
         lines.append("    const payload = {")
@@ -1120,12 +1177,7 @@ def gen_automation_slice_test(slice_data: dict) -> str:
             if f.get("generated"):
                 fn = field_name(f["name"])
                 ft = f.get("type", "String")
-                if ft in ("Double", "Integer", "Int", "Decimal", "Float"):
-                    lines.append(f'    assert.strictEqual(typeof enriched.{fn}, "number");')
-                elif ft in ("DateTime", "Date"):
-                    lines.append(f"    assert.ok(enriched.{fn} instanceof Date);")
-                else:
-                    lines.append(f'    assert.strictEqual(typeof enriched.{fn}, "string");')
+                lines.append(ts_type_check_assertion(fn, ft, "enriched"))
         lines.extend([
             "  });",
             "",
@@ -1136,19 +1188,21 @@ def gen_automation_slice_test(slice_data: dict) -> str:
     return "\n".join(lines)
 
 
-def gen_view_state(slice_data: dict, event_id_map: dict[str, str] | None = None) -> str:
+# ──────────────────────────────────────────────────────────────────────
+# Renderers — views
+# ──────────────────────────────────────────────────────────────────────
+
+def gen_view_state(ds: DerivedSlice) -> str:
     """Generate SliceState view state.ts.
 
     Derives state shape from spec.given[] event fields — no domain assumptions.
     """
-    sn = slice_name_pascal(slice_data)
-    view_name = f"SliceState{sn}"
-    specs = slice_data.get("specifications", [])
+    view_name = f"SliceState{ds.slice_name}"
 
     # Collect all fields from given events (deduplicated, preserving order)
     seen = set()
     given_fields = []
-    for spec in specs:
+    for spec in ds.specs:
         for given in spec.get("given", []):
             for f in given.get("fields", []):
                 fn = field_name(f["name"])
@@ -1191,22 +1245,19 @@ def gen_view_state(slice_data: dict, event_id_map: dict[str, str] | None = None)
     return "\n".join(lines)
 
 
-def gen_view_handlers(slice_data: dict, event_id_map: dict[str, str] | None = None) -> str:
+def gen_view_handlers(ds: DerivedSlice) -> str:
     """Generate SliceState view handlers.ts.
 
     Each given event type gets a handler that spreads event fields into state.
     No domain assumptions — just maps event fields to state fields.
     """
-    sn = slice_name_pascal(slice_data)
-    view_name = f"SliceState{sn}"
-    specs = slice_data.get("specifications", [])
-    eid_map = event_id_map or {}
+    view_name = f"SliceState{ds.slice_name}"
 
     # Collect given event types (deduplicated), resolving via linkedId
     given_events = {}
-    for spec in specs:
+    for spec in ds.specs:
         for given in spec.get("given", []):
-            en = resolve_given_event_name(given, eid_map)
+            en = resolve_given_event_name(given, ds.event_id_map)
             if en not in given_events:
                 given_events[en] = given
 
@@ -1239,225 +1290,23 @@ def gen_view_handlers(slice_data: dict, event_id_map: dict[str, str] | None = No
     return "\n".join(lines)
 
 
-def gen_test(slice_data: dict, event_id_map: dict[str, str] | None = None) -> str:
-    """Generate command.slice.test.ts."""
-    sn = slice_name_pascal(slice_data)
-    stream = stream_name(slice_data["context"])
-    context = slice_data["context"]
-    specs = slice_data.get("specifications", [])
-    events = slice_data.get("events", [])
-    cmd = slice_data["commands"][0]
-    eid_map = event_id_map or {}
-
-    lines = [
-        'import { test, describe } from "node:test";',
-        f'import type {{ {sn} }} from "../command.js";',
-        f'import {{ handle{sn} }} from "../commandHandler.js";',
-        f'import {{ SliceTester, type TestEvent }} from "#abstractions/slices/SliceTester.js";',
-        f'import {stream}StreamFactory from "#BusinessCapabilities/{context}/swimlanes/{stream}/index.js";',
-        "",
-        f'describe("{sn} Slice - Unit Tests", () => {{',
-    ]
-
-    # Main flow test — use the spec with fewest given events (happy/success path).
-    # This avoids the case where the first spec is a rejection that conflicts with
-    # the expected success outcome.
-    main_spec = min(specs, key=lambda s: len(s.get("given", []))) if specs else None
-
-    lines.append('  test("main flow", async () => {')
-
-    # Given events
-    main_given = main_spec.get("given", []) if main_spec else []
-    if main_given:
-        lines.append("    const givenEvents: TestEvent[] = [")
-        for g in main_given:
-            en = event_name_from_title(g["title"], "")
-            lines.append(f"      {{")
-            lines.append(f'        eventType: "{en}",')
-            lines.append(f"        payload: {{")
-            for f in g.get("fields", []):
-                lines.append(f"          {field_name(f['name'])}: {_format_example(f)},")
-            lines.append(f"        }},")
-            lines.append(f"      }},")
-        lines.append("    ];")
-    else:
-        lines.append("    const givenEvents: TestEvent[] = [];")
-
-    # Command — use main_spec's when fields if available, else command defaults
-    main_when_fields = {}
-    if main_spec:
-        for f in main_spec.get("when", [{}])[0].get("fields", []):
-            main_when_fields[field_name(f["name"])] = f
-    lines.append(f"    const command: {sn} = {{")
-    lines.append(f'      commandType: "{sn}",')
-    for f in cmd.get("fields", []):
-        fn = field_name(f["name"])
-        src = main_when_fields.get(fn, f)
-        lines.append(f"      {fn}: {_format_example(src)},")
-    lines.append("    };")
-
-    # Expected events — use main_spec's then events
-    lines.append("    const expectedEvents: TestEvent[] = [")
-    main_then = main_spec.get("then", []) if main_spec else []
-    for te in main_then:
-        en = event_name_from_title(te["title"], "")
-        lines.append(f"      {{")
-        lines.append(f'        eventType: "{en}",')
-        lines.append(f"        payload: {{")
-        for f in te.get("fields", []):
-            lines.append(f"          {field_name(f['name'])}: {_format_example(f)},")
-        lines.append(f"        }},")
-        lines.append(f"      }},")
-    lines.append("    ];")
-
-    lines.extend([
-        "    return SliceTester.testCommandHandler(",
-        f"      handle{sn},",
-        f"      {stream}StreamFactory,",
-        "      givenEvents,",
-        "      command,",
-        "      expectedEvents,",
-        "    );",
-        "  });",
-        "",
-    ])
-
-    # Spec tests
-    for spec in specs:
-        pred_name = "unknown"
-        comments = spec.get("comments", [])
-        if comments and comments[0].get("description"):
-            pred_name = predicate_name(comments[0]["description"])
-
-        spec_title = spec.get("title", pred_name)
-
-        lines.append(f'  test("{spec_title}", async () => {{')
-
-        # Given
-        given_list = spec.get("given", [])
-        if given_list:
-            lines.append("    const givenEvents: TestEvent[] = [")
-            for g in given_list:
-                en = event_name_from_title(g["title"], "")
-                lines.append(f"      {{")
-                lines.append(f'        eventType: "{en}",')
-                lines.append(f"        payload: {{")
-                for f in g.get("fields", []):
-                    fn = field_name(f["name"])
-                    lines.append(f"          {fn}: {_format_example(f)},")
-                lines.append(f"        }},")
-                lines.append(f"      }},")
-            lines.append("    ];")
-        else:
-            lines.append("    const givenEvents: TestEvent[] = [];")
-
-        # When
-        when_cmd = spec.get("when", [{}])[0]
-        lines.append(f"    const command: {sn} = {{")
-        lines.append(f'      commandType: "{sn}",')
-        # Use spec when fields if available, otherwise fall back to command fields
-        when_fields = when_cmd.get("fields", [])
-        cmd_fields = cmd.get("fields", [])
-
-        # Build a map of when field examples
-        when_map = {field_name(f["name"]): f for f in when_fields}
-
-        for f in cmd_fields:
-            fn = field_name(f["name"])
-            ft = f.get("type", "String")
-            if fn in when_map:
-                lines.append(f"      {fn}: {_format_example(when_map[fn])},")
-            elif f.get("generated"):
-                if ft == "DateTime":
-                    lines.append(f'      {fn}: new Date("2025-01-01T11:00:00Z"),')
-                elif ft == "UUID":
-                    lines.append(f'      {fn}: "generated-uuid",')
-                elif ft in ("Double", "Integer", "Int"):
-                    lines.append(f"      {fn}: 0,")
-                else:
-                    lines.append(f"      {fn}: {_format_example(f)},")
-            else:
-                lines.append(f"      {fn}: {_format_example(f)},")
-        lines.append("    };")
-
-        # Then
-        then_events = spec.get("then", [])
-        if then_events:
-            lines.append("    const expectedEvents: TestEvent[] = [")
-            for te in then_events:
-                en = event_name_from_title(te["title"], "")
-                lines.append(f"      {{")
-                lines.append(f'        eventType: "{en}",')
-                lines.append(f"        payload: {{")
-                for f in te.get("fields", []):
-                    fn = field_name(f["name"])
-                    lines.append(f"          {fn}: {_format_example(f)},")
-                lines.append(f"        }},")
-                lines.append(f"      }},")
-            lines.append("    ];")
-        else:
-            lines.append("    const expectedEvents: TestEvent[] = [];")
-
-        lines.extend([
-            "    return SliceTester.testCommandHandler(",
-            f"      handle{sn},",
-            f"      {stream}StreamFactory,",
-            "      givenEvents,",
-            "      command,",
-            "      expectedEvents,",
-            "    );",
-            "  });",
-            "",
-        ])
-
-    lines.append("});")
-    lines.append("")
-    return "\n".join(lines)
-
-
-def _format_example(f: dict) -> str:
-    """Format a field's example value as TypeScript literal."""
-    example = f.get("example", "")
-    ft = f.get("type", "String")
-    if ft in ("Double", "Integer", "Int"):
-        try:
-            return str(float(example)) if "." in str(example) else str(int(example))
-        except (ValueError, TypeError):
-            return "0"
-    if ft == "DateTime":
-        if not example:
-            return 'new Date("2025-01-01T11:00:00Z")'
-        # Normalize "YYYY-MM-DD HH:MM" (space separator, no timezone) → ISO UTC
-        import re as _re
-        if _re.match(r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$", example.strip()):
-            example = example.strip().replace(" ", "T") + ":00Z"
-        return f'new Date("{example}")'
-    if ft == "Boolean":
-        return "true" if example.lower() in ("true", "1", "yes") else "false"
-    # String / UUID
-    return f'"{example}"' if example else '""'
-
-
-def gen_view_test(slice_data: dict, event_id_map: dict[str, str] | None = None) -> str:
+def gen_view_test(ds: DerivedSlice) -> str:
     """Generate view.slice.test.ts for SliceState view."""
-    sn = slice_name_pascal(slice_data)
-    view_name = f"SliceState{sn}"
+    view_name = f"SliceState{ds.slice_name}"
     state_type = f"{view_name}ViewState"
-    specs = slice_data.get("specifications", [])
-    eid_map = event_id_map or {}
 
     # Collect given event types and their fields
     given_events = {}
-    for spec in specs:
+    for spec in ds.specs:
         for given in spec.get("given", []):
-            en = resolve_given_event_name(given, eid_map)
+            en = resolve_given_event_name(given, ds.event_id_map)
             if en not in given_events:
                 given_events[en] = given
 
     # Collect all state fields for 'then' assertions
     state_fields = []
     seen = set()
-    for spec in specs:
+    for spec in ds.specs:
         for given in spec.get("given", []):
             for f in given.get("fields", []):
                 fn = field_name(f["name"])
@@ -1467,7 +1316,7 @@ def gen_view_test(slice_data: dict, event_id_map: dict[str, str] | None = None) 
 
     # Collect negative event names (events in spec.then that are not given events)
     negative_events = set()
-    for spec in specs:
+    for spec in ds.specs:
         for te in spec.get("then", []):
             en = event_name_from_title(te["title"], "")
             if en not in given_events:
@@ -1549,38 +1398,172 @@ def gen_view_test(slice_data: dict, event_id_map: dict[str, str] | None = None) 
     return "\n".join(lines)
 
 
+def gen_test(ds: DerivedSlice) -> str:
+    """Generate command.slice.test.ts."""
+    cmd = ds.command
+
+    lines = [
+        'import { test, describe } from "node:test";',
+        f'import type {{ {ds.slice_name} }} from "../command.js";',
+        f'import {{ handle{ds.slice_name} }} from "../commandHandler.js";',
+        f'import {{ SliceTester, type TestEvent }} from "#abstractions/slices/SliceTester.js";',
+        f'import {ds.stream}StreamFactory from "#BusinessCapabilities/{ds.context}/swimlanes/{ds.stream}/index.js";',
+        "",
+        f'describe("{ds.slice_name} Slice - Unit Tests", () => {{',
+    ]
+
+    # Main flow test — use the spec with fewest given events (happy/success path).
+    main_spec = min(ds.specs, key=lambda s: len(s.get("given", []))) if ds.specs else None
+
+    lines.append('  test("main flow", async () => {')
+
+    # Given events
+    main_given = main_spec.get("given", []) if main_spec else []
+    if main_given:
+        lines.append("    const givenEvents: TestEvent[] = [")
+        for g in main_given:
+            en = event_name_from_title(g["title"], "")
+            lines.append(f"      {{")
+            lines.append(f'        eventType: "{en}",')
+            lines.append(f"        payload: {{")
+            for f in g.get("fields", []):
+                lines.append(f"          {field_name(f['name'])}: {_format_example(f)},")
+            lines.append(f"        }},")
+            lines.append(f"      }},")
+        lines.append("    ];")
+    else:
+        lines.append("    const givenEvents: TestEvent[] = [];")
+
+    # Command — use main_spec's when fields if available, else command defaults
+    main_when_fields = {}
+    if main_spec:
+        for f in main_spec.get("when", [{}])[0].get("fields", []):
+            main_when_fields[field_name(f["name"])] = f
+    lines.append(f"    const command: {ds.slice_name} = {{")
+    lines.append(f'      commandType: "{ds.slice_name}",')
+    for f in cmd.get("fields", []):
+        fn = field_name(f["name"])
+        src = main_when_fields.get(fn, f)
+        lines.append(f"      {fn}: {_format_example(src)},")
+    lines.append("    };")
+
+    # Expected events — use main_spec's then events
+    lines.append("    const expectedEvents: TestEvent[] = [")
+    main_then = main_spec.get("then", []) if main_spec else []
+    for te in main_then:
+        en = event_name_from_title(te["title"], "")
+        lines.append(f"      {{")
+        lines.append(f'        eventType: "{en}",')
+        lines.append(f"        payload: {{")
+        for f in te.get("fields", []):
+            lines.append(f"          {field_name(f['name'])}: {_format_example(f)},")
+        lines.append(f"        }},")
+        lines.append(f"      }},")
+    lines.append("    ];")
+
+    lines.extend([
+        "    return SliceTester.testCommandHandler(",
+        f"      handle{ds.slice_name},",
+        f"      {ds.stream}StreamFactory,",
+        "      givenEvents,",
+        "      command,",
+        "      expectedEvents,",
+        "    );",
+        "  });",
+        "",
+    ])
+
+    # Spec tests
+    for spec in ds.specs:
+        pred_name = extract_predicate(spec)
+        spec_title = spec.get("title", pred_name)
+
+        lines.append(f'  test("{spec_title}", async () => {{')
+
+        # Given
+        given_list = spec.get("given", [])
+        if given_list:
+            lines.append("    const givenEvents: TestEvent[] = [")
+            for g in given_list:
+                en = event_name_from_title(g["title"], "")
+                lines.append(f"      {{")
+                lines.append(f'        eventType: "{en}",')
+                lines.append(f"        payload: {{")
+                for f in g.get("fields", []):
+                    fn = field_name(f["name"])
+                    lines.append(f"          {fn}: {_format_example(f)},")
+                lines.append(f"        }},")
+                lines.append(f"      }},")
+            lines.append("    ];")
+        else:
+            lines.append("    const givenEvents: TestEvent[] = [];")
+
+        # When
+        when_cmd = spec.get("when", [{}])[0]
+        lines.append(f"    const command: {ds.slice_name} = {{")
+        lines.append(f'      commandType: "{ds.slice_name}",')
+        # Use spec when fields if available, otherwise fall back to command fields
+        when_fields = when_cmd.get("fields", [])
+        cmd_fields = cmd.get("fields", [])
+
+        # Build a map of when field examples
+        when_map = {field_name(f["name"]): f for f in when_fields}
+
+        for f in cmd_fields:
+            fn = field_name(f["name"])
+            ft = f.get("type", "String")
+            if fn in when_map:
+                lines.append(f"      {fn}: {_format_example(when_map[fn])},")
+            elif f.get("generated"):
+                if ft == "DateTime":
+                    lines.append(f'      {fn}: new Date("2025-01-01T11:00:00Z"),')
+                elif ft == "UUID":
+                    lines.append(f'      {fn}: "generated-uuid",')
+                elif ft in ("Double", "Integer", "Int"):
+                    lines.append(f"      {fn}: 0,")
+                else:
+                    lines.append(f"      {fn}: {_format_example(f)},")
+            else:
+                lines.append(f"      {fn}: {_format_example(f)},")
+        lines.append("    };")
+
+        # Then
+        then_events = spec.get("then", [])
+        if then_events:
+            lines.append("    const expectedEvents: TestEvent[] = [")
+            for te in then_events:
+                en = event_name_from_title(te["title"], "")
+                lines.append(f"      {{")
+                lines.append(f'        eventType: "{en}",')
+                lines.append(f"        payload: {{")
+                for f in te.get("fields", []):
+                    fn = field_name(f["name"])
+                    lines.append(f"          {fn}: {_format_example(f)},")
+                lines.append(f"        }},")
+                lines.append(f"      }},")
+            lines.append("    ];")
+        else:
+            lines.append("    const expectedEvents: TestEvent[] = [];")
+
+        lines.extend([
+            "    return SliceTester.testCommandHandler(",
+            f"      handle{ds.slice_name},",
+            f"      {ds.stream}StreamFactory,",
+            "      givenEvents,",
+            "      command,",
+            "      expectedEvents,",
+            "    );",
+            "  });",
+            "",
+        ])
+
+    lines.append("});")
+    lines.append("")
+    return "\n".join(lines)
+
+
 # ──────────────────────────────────────────────────────────────────────
-# Automations / routes / projections registry updaters
-# ──────────────────────────────────────────────────────────────────────
-
-def update_context_automations(paths: SlicePaths, slice_data: dict, slice_name: str) -> str:
-    """Create or update per-context automations.ts with a side-effect import.
-
-    Each automation endpoint self-registers via defineAutomationEndpoint().
-    automations.ts just imports the pg-boss endpoint module to trigger registration.
-    Discovery at startup dynamically imports all automations.ts files.
-    """
-    automations_path = paths.bc / "endpoints" / "automations.ts"
-    content = automations_path.read_text() if automations_path.exists() else ""
-
-    import_line = f'import "./{slice_name}/pg-boss/index.js";'
-
-    if import_line in content:
-        return content
-
-    if not content:
-        return f"""// Side-effect imports — triggers self-registration via defineAutomationEndpoint()
-{import_line}
-"""
-
-    # Append new import line
-    content = content.rstrip("\n") + "\n" + import_line + "\n"
-    return content
-
-
-
-# ──────────────────────────────────────────────────────────────────────
-# Projection generators (STATE_VIEW slices)
+# Renderers — projections
 # ──────────────────────────────────────────────────────────────────────
 
 def is_projection_slice(slice_data: dict) -> bool:
@@ -1592,15 +1575,13 @@ def is_projection_slice(slice_data: dict) -> bool:
     )
 
 
-def gen_projection(slice_data: dict) -> str:
+def gen_projection(ds: DerivedSlice) -> str:
     """Generate projection index.ts with ProjectionConfig skeleton.
 
     Creates a ProjectionConfig with handler stubs for each INBOUND event.
     Handler bodies are TODO — AI fills in the SQL logic.
     """
-    sn = slice_name_pascal(slice_data)
-    sn_camel = camel_case(sn)
-    readmodel = slice_data["readmodels"][0]
+    readmodel = ds.raw["readmodels"][0]
     rm_fields = readmodel.get("fields", [])
 
     # Find INBOUND events that feed this readmodel
@@ -1627,12 +1608,12 @@ def gen_projection(slice_data: dict) -> str:
         'import type { ProjectionConfig } from "#abstractions/projections/ProjectionFactory.js";',
         'import { ProjectionModeType } from "#abstractions/projections/ProjectionFactory.js";',
         "",
-        f"type {sn}Payload = {{",
+        f"type {ds.slice_name}Payload = {{",
         *payload_fields_ts,
         "};",
         "",
-        f"export const {sn_camel}Slice: ProjectionConfig = {{",
-        f'  projectionName: "{sn}",',
+        f"export const {ds.slice_name_camel}Slice: ProjectionConfig = {{",
+        f'  projectionName: "{ds.slice_name}",',
         "",
         "  mode: { type: ProjectionModeType.Query },",
         "",
@@ -1642,7 +1623,7 @@ def gen_projection(slice_data: dict) -> str:
     for event_name in inbound_events:
         lines.extend([
             f"    {event_name}: (payload, {{ projectionName }}) => {{",
-            f"      const p = payload as {sn}Payload;",
+            f"      const p = payload as {ds.slice_name}Payload;",
             f'      const key = p.{key_field};',
             "      return [",
             "        {",
@@ -1670,11 +1651,9 @@ def gen_projection(slice_data: dict) -> str:
     return "\n".join(lines)
 
 
-def gen_projection_test(slice_data: dict) -> str:
+def gen_projection_test(ds: DerivedSlice) -> str:
     """Generate projection test skeleton."""
-    sn = slice_name_pascal(slice_data)
-    sn_camel = camel_case(sn)
-    readmodel = slice_data["readmodels"][0]
+    readmodel = ds.raw["readmodels"][0]
     rm_fields = readmodel.get("fields", [])
 
     # Find INBOUND events
@@ -1692,11 +1671,11 @@ def gen_projection_test(slice_data: dict) -> str:
     lines = [
         'import { describe, it } from "node:test";',
         'import assert from "node:assert/strict";',
-        f'import {{ {sn_camel}Slice }} from "../index.js";',
+        f'import {{ {ds.slice_name_camel}Slice }} from "../index.js";',
         "",
-        f'describe("Projection: {sn}", () => {{',
+        f'describe("Projection: {ds.slice_name}", () => {{',
         f'  it("has correct projection name", () => {{',
-        f'    assert.strictEqual({sn_camel}Slice.projectionName, "{sn}");',
+        f'    assert.strictEqual({ds.slice_name_camel}Slice.projectionName, "{ds.slice_name}");',
         "  });",
         "",
     ]
@@ -1707,8 +1686,8 @@ def gen_projection_test(slice_data: dict) -> str:
             "    const payload = {",
             *payload_entries,
             "    };",
-            f'    const meta = {{ outboxId: "test-id", projectionName: "{sn}" }};',
-            f"    const result = {sn_camel}Slice.handlers.{event_name}!(payload, meta);",
+            f'    const meta = {{ outboxId: "test-id", projectionName: "{ds.slice_name}" }};',
+            f"    const result = {ds.slice_name_camel}Slice.handlers.{event_name}!(payload, meta);",
             "",
             "    assert.ok(result, 'handler should return SQL statements');",
             "    assert.ok(result.length > 0, 'should have at least one SQL statement');",
@@ -1723,6 +1702,35 @@ def gen_projection_test(slice_data: dict) -> str:
         "",
     ])
     return "\n".join(lines)
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Patchers — automations / routes / projections registry updaters
+# ──────────────────────────────────────────────────────────────────────
+
+def update_context_automations(paths: SlicePaths, slice_data: dict, slice_name: str) -> str:
+    """Create or update per-context automations.ts with a side-effect import.
+
+    Each automation endpoint self-registers via defineAutomationEndpoint().
+    automations.ts just imports the pg-boss endpoint module to trigger registration.
+    Discovery at startup dynamically imports all automations.ts files.
+    """
+    automations_path = paths.bc / "endpoints" / "automations.ts"
+    content = automations_path.read_text() if automations_path.exists() else ""
+
+    import_line = f'import "./{slice_name}/pg-boss/index.js";'
+
+    if import_line in content:
+        return content
+
+    if not content:
+        return f"""// Side-effect imports — triggers self-registration via defineAutomationEndpoint()
+{import_line}
+"""
+
+    # Append new import line
+    content = content.rstrip("\n") + "\n" + import_line + "\n"
+    return content
 
 
 def update_context_projections(paths: SlicePaths, slice_data: dict, slice_name: str) -> str:
@@ -1769,7 +1777,7 @@ export const {camel_case(slice_data["context"])}Projections: readonly Projection
 
 
 # ──────────────────────────────────────────────────────────────────────
-# Stream factory / views type updaters
+# Patchers — stream factory / views type updaters
 # ──────────────────────────────────────────────────────────────────────
 
 def gen_stream_factory(slice_data: dict) -> str:
@@ -1981,7 +1989,7 @@ def _auto_normalize(root: Path, slice_json_path: Path) -> None:
 
 
 # ──────────────────────────────────────────────────────────────────────
-# Main scaffold function
+# Orchestrator
 # ──────────────────────────────────────────────────────────────────────
 
 def _find_slice_in_indexes(root: Path, folder: str) -> tuple:
@@ -2018,16 +2026,11 @@ def scaffold_slice(root: Path, folder: str, dry_run: bool = False) -> dict:
     with open(slice_json_path) as f:
         slice_data = json.load(f)
 
-    sn = slice_name_pascal(slice_data)
-    stream = stream_name(context)
-    events = slice_data.get("events", [])
-    specs = slice_data.get("specifications", [])
-    has_specs = bool(specs)
-
-    # Build event ID map for resolving spec.given linkedId → actual event names
+    # Build event ID map and derive the slice model
     event_id_map = build_event_id_map(root, context)
+    ds = derive_slice(slice_data, event_id_map)
 
-    paths = SlicePaths(root, context, sn, stream)
+    paths = SlicePaths(root, context, ds.slice_name, ds.stream)
     files_created = []
     files_updated = []
 
@@ -2045,39 +2048,39 @@ def scaffold_slice(root: Path, folder: str, dry_run: bool = False) -> dict:
 
     if is_projection:
         # ── Projection slice: generate ProjectionConfig + test ────────
-        projection_dir = paths.bc / "slices" / sn
+        projection_dir = paths.bc / "slices" / ds.slice_name
         projection_path = projection_dir / "index.ts"
         if not projection_path.exists():
-            write_file(projection_path, gen_projection(slice_data))
+            write_file(projection_path, gen_projection(ds))
 
         projection_test_path = projection_dir / "tests" / "projection.test.ts"
         if not projection_test_path.exists():
-            write_file(projection_test_path, gen_projection_test(slice_data))
+            write_file(projection_test_path, gen_projection_test(ds))
 
         # Update per-context projections.ts
         if not dry_run:
             projections_path = paths.bc / "slices" / "projections.ts"
-            updated = update_context_projections(paths, slice_data, sn)
+            updated = update_context_projections(paths, slice_data, ds.slice_name)
             existing = projections_path.read_text() if projections_path.exists() else ""
             if updated != existing:
                 write_file(projections_path, updated, is_update=bool(existing))
 
     elif is_enrichment:
         # ── Enrichment-only slice: generate enrichment.ts + test ────────
-        enrichment_dir = paths.bc / "endpoints" / sn
+        enrichment_dir = paths.bc / "endpoints" / ds.slice_name
         enrichment_path = enrichment_dir / "enrichment.ts"
         if not enrichment_path.exists():
-            write_file(enrichment_path, gen_enrichment(slice_data))
+            write_file(enrichment_path, gen_enrichment(ds))
 
         enrichment_test_path = enrichment_dir / "tests" / "enrichment.test.ts"
         if not enrichment_test_path.exists():
-            write_file(enrichment_test_path, gen_enrichment_test(slice_data))
+            write_file(enrichment_test_path, gen_enrichment_test(ds))
 
     else:
         # ── Standard slice: command → events → views pipeline ───────────
 
         # 1. Event interfaces
-        for event in events:
+        for event in ds.events:
             en = event_name_from_title(event["title"], "")
             event_path = paths.event_file(en)
             if not event_path.exists():
@@ -2085,82 +2088,78 @@ def scaffold_slice(root: Path, folder: str, dry_run: bool = False) -> dict:
 
         # 2. SliceState view (always when has_specs — gwts.ts and commandHandler.ts always reference it)
         view_name_str = ""
-        if has_specs:
-            view_name_str = f"SliceState{sn}"
+        if ds.has_specs:
+            view_name_str = f"SliceState{ds.slice_name}"
             state_path = paths.view_state(view_name_str)
             handlers_path = paths.view_handlers(view_name_str)
             if not state_path.exists():
-                write_file(state_path, gen_view_state(slice_data))
+                write_file(state_path, gen_view_state(ds))
             if not handlers_path.exists():
-                write_file(handlers_path, gen_view_handlers(slice_data))
+                write_file(handlers_path, gen_view_handlers(ds))
             # View test skeleton
             view_test_path = paths.view_test(view_name_str)
             if not view_test_path.exists():
-                write_file(view_test_path, gen_view_test(slice_data, event_id_map))
+                write_file(view_test_path, gen_view_test(ds))
 
-        has_commands = bool(slice_data.get("commands"))
+        has_commands = ds.has_commands
 
         # 3. Command (only if slice has commands)
         if has_commands:
             cmd_path = paths.slice_dir / "command.ts"
             if not cmd_path.exists():
-                write_file(cmd_path, gen_command(slice_data))
+                write_file(cmd_path, gen_command(ds))
 
         # 4. GWTS (only if specs)
-        if has_specs:
+        if ds.has_specs:
             gwts_path = paths.slice_dir / "gwts.ts"
             if not gwts_path.exists():
-                write_file(gwts_path, gen_gwts(slice_data))
+                write_file(gwts_path, gen_gwts(ds))
 
         # 5. Command handler (only if slice has commands)
         if has_commands:
             handler_path = paths.slice_dir / "commandHandler.ts"
             if not handler_path.exists():
-                write_file(handler_path, gen_command_handler(slice_data))
+                write_file(handler_path, gen_command_handler(ds))
 
         # 6. Adapter (only if slice has commands)
         if has_commands:
             adapter_path = paths.slice_dir / "adapter.ts"
             if not adapter_path.exists():
-                write_file(adapter_path, gen_adapter(slice_data))
+                write_file(adapter_path, gen_adapter(ds))
 
         # 7. Endpoint (REST or pg-boss depending on pattern; only if slice has commands)
         if has_commands:
-            is_automation = is_automation_slice(slice_data)
-            if is_automation:
+            if ds.is_automation:
                 endpoint_path = paths.pgboss_endpoint_dir / "index.ts"
                 if not endpoint_path.exists():
-                    write_file(endpoint_path, gen_pgboss_endpoint(slice_data))
+                    write_file(endpoint_path, gen_pgboss_endpoint(ds))
 
                 # 7a. Enrichment file for automation slices with generated fields + description
-                trigger = get_trigger_info(slice_data)
-                has_enrichment_fields = any(f.get("generated") for f in trigger.get("payload_fields", []))
-                has_enrichment_desc = bool(trigger.get("description"))
-                if has_enrichment_fields and has_enrichment_desc:
-                    enrichment_path = paths.bc / "endpoints" / sn / "enrichment.ts"
+                if ds.has_enrichment:
+                    enrichment_path = paths.bc / "endpoints" / ds.slice_name / "enrichment.ts"
                     if not enrichment_path.exists():
-                        write_file(enrichment_path, gen_enrichment(slice_data))
-                    enrichment_test_path = paths.bc / "endpoints" / sn / "tests" / "enrichment.test.ts"
+                        write_file(enrichment_path, gen_enrichment(ds))
+                    enrichment_test_path = paths.bc / "endpoints" / ds.slice_name / "tests" / "enrichment.test.ts"
                     if not enrichment_test_path.exists():
-                        write_file(enrichment_test_path, gen_enrichment_test(slice_data))
+                        write_file(enrichment_test_path, gen_enrichment_test(ds))
 
                 # 7b. Automation endpoint test
-                auto_test_path = paths.bc / "endpoints" / sn / "tests" / "automation.endpoint.test.ts"
+                auto_test_path = paths.bc / "endpoints" / ds.slice_name / "tests" / "automation.endpoint.test.ts"
                 if not auto_test_path.exists():
-                    write_file(auto_test_path, gen_automation_endpoint_test(slice_data))
+                    write_file(auto_test_path, gen_automation_endpoint_test(ds))
             else:
                 endpoint_path = paths.rest_endpoint_dir / "index.ts"
                 if not endpoint_path.exists():
-                    write_file(endpoint_path, gen_rest_endpoint(slice_data))
+                    write_file(endpoint_path, gen_rest_endpoint(ds))
 
         # 8. Tests (only if slice has commands)
         if has_commands:
             test_path = paths.tests_dir / "command.slice.test.ts"
             if not test_path.exists():
-                if is_automation_slice(slice_data):
-                    write_file(test_path, gen_automation_slice_test(slice_data))
+                if ds.is_automation:
+                    write_file(test_path, gen_automation_slice_test(ds))
                 else:
-                    write_file(test_path, gen_test(slice_data))
+                    write_file(test_path, gen_test(ds))
 
     # 9-11: Stream factory, views type, routes (skip for enrichment-only and projection slices)
     if not is_enrichment and not is_projection:
@@ -2172,7 +2171,7 @@ def scaffold_slice(root: Path, folder: str, dry_run: bool = False) -> dict:
                 paths.stream_factory.parent.mkdir(parents=True, exist_ok=True)
             write_file(paths.stream_factory, gen_stream_factory(slice_data))
         if paths.stream_factory.exists():
-            updated = update_stream_factory(paths, slice_data, events, view_name_str)
+            updated = update_stream_factory(paths, slice_data, ds.events, view_name_str)
             if updated != paths.stream_factory.read_text():
                 write_file(paths.stream_factory, updated, is_update=True)
 
@@ -2184,18 +2183,15 @@ def scaffold_slice(root: Path, folder: str, dry_run: bool = False) -> dict:
                 write_file(paths.views_type, updated, is_update=True)
 
         # 11. Update routes (REST only — automation slices don't have routes)
-        is_automation = is_automation_slice(slice_data)
-        if not is_automation and paths.routes.exists():
+        if not ds.is_automation and paths.routes.exists():
             updated = update_routes(paths, slice_data)
             if updated != paths.routes.read_text():
                 write_file(paths.routes, updated, is_update=True)
 
     # 11b. Update per-context automations.ts (automation slices only)
-    # Discovery at startup dynamically imports all automations.ts files,
-    # so no central registry needs updating — just the per-context file.
-    if not is_enrichment and is_automation_slice(slice_data) and not dry_run:
+    if not is_enrichment and ds.is_automation and not dry_run:
         automations_path = paths.bc / "endpoints" / "automations.ts"
-        updated = update_context_automations(paths, slice_data, sn)
+        updated = update_context_automations(paths, slice_data, ds.slice_name)
         existing = automations_path.read_text() if automations_path.exists() else ""
         if updated != existing:
             write_file(automations_path, updated, is_update=bool(existing))
@@ -2212,14 +2208,14 @@ def scaffold_slice(root: Path, folder: str, dry_run: bool = False) -> dict:
 
     # 13. Generate TODO_CONTEXT.md — single file the AI reads instead of many
     if not dry_run:
-        _gen_todo_context(paths, slice_data, sn, stream, event_id_map, files_created, files_updated)
+        _gen_todo_context(paths, ds, files_created, files_updated)
 
     # 14. Auto-normalize: keep .eventmodel/.normalized/ in sync after scaffolding
     if not dry_run:
         _auto_normalize(root, slice_json_path)
 
     return {
-        "slice": sn,
+        "slice": ds.slice_name,
         "folder": folder,
         "context": context,
         "files_created": files_created,
@@ -2229,23 +2225,22 @@ def scaffold_slice(root: Path, folder: str, dry_run: bool = False) -> dict:
     }
 
 
-def _gen_todo_context(paths: SlicePaths, slice_data: dict, sn: str, stream: str,
-                      event_id_map: dict[str, str] | None, files_created: list, files_updated: list) -> None:
+def _gen_todo_context(paths: SlicePaths, ds: DerivedSlice,
+                      files_created: list, files_updated: list) -> None:
     """Generate TODO_CONTEXT.md — a single file the AI reads instead of many separate reads.
 
     Contains: slice summary, files with TODOs, spec details, backend prompts, and patterns.
     This eliminates the need for the AI to read slice.json, reference files, or existing code.
     """
-    specs = slice_data.get("specifications", [])
-    events = slice_data.get("events", [])
-    cmd = slice_data["commands"][0] if slice_data.get("commands") else {}
-    context = slice_data["context"]
-    eid_map = event_id_map or {}
-    is_enrichment = has_backend_prompts(slice_data) and not slice_data.get("commands")
+    sn = ds.slice_name
+    stream = ds.stream
+    context = ds.context
+    is_enrichment = has_backend_prompts(ds.raw) and not ds.raw.get("commands")
+
     # Get backend prompts from slice-level or processor descriptions
-    backend_prompts = slice_data.get("codeGen", {}).get("backendPrompts", [])
+    backend_prompts = ds.raw.get("codeGen", {}).get("backendPrompts", [])
     if not backend_prompts:
-        for proc in slice_data.get("processors", []):
+        for proc in ds.raw.get("processors", []):
             if proc.get("type") == "AUTOMATION" and proc.get("description"):
                 backend_prompts.append(proc["description"])
 
@@ -2259,9 +2254,8 @@ def _gen_todo_context(paths: SlicePaths, slice_data: dict, sn: str, stream: str,
         lines.append(f"Type: **Enrichment Processor** (backendPrompts-driven)")
 
     # Automation trigger info (for slices with AUTOMATION processors)
-    is_automation = is_automation_slice(slice_data)
-    if is_automation:
-        trigger = get_trigger_info(slice_data)
+    if ds.is_automation:
+        trigger = ds.trigger_info
         trigger_source = trigger.get("source", "event")
         if trigger.get("trigger_event"):
             lines.append(f"Trigger: **{trigger['trigger_event']}** event via Kafka CDC (source: `{trigger_source}`)")
@@ -2277,16 +2271,16 @@ def _gen_todo_context(paths: SlicePaths, slice_data: dict, sn: str, stream: str,
         todo_files.append(f"- `endpoints/{sn}/enrichment.ts` — implement enrichment logic per backendPrompts below")
         todo_files.append(f"- `endpoints/{sn}/tests/enrichment.test.ts` — verify enrichment output")
     else:
-        if specs:
+        if ds.has_specs:
             todo_files.append(f"- `slices/{sn}/gwts.ts` — fill in predicate conditions")
         todo_files.append(f"- `slices/{sn}/commandHandler.ts` — fill in computed event fields")
-        if is_automation:
-            trigger = get_trigger_info(slice_data)
-            if any(f.get("generated") for f in trigger.get("payload_fields", [])) and trigger.get("description"):
+        if ds.is_automation:
+            trigger = ds.trigger_info
+            if ds.has_enrichment:
                 todo_files.append(f"- `endpoints/{sn}/enrichment.ts` — implement enrichment logic per description below")
                 todo_files.append(f"- `endpoints/{sn}/tests/enrichment.test.ts` — verify enrichment output")
             todo_files.append(f"- `endpoints/{sn}/tests/automation.endpoint.test.ts` — verify endpoint identity and mapping")
-        if specs:
+        if ds.has_specs:
             todo_files.append(f"- `slices/{sn}/tests/command.slice.test.ts` — verify test payloads match spec examples")
             todo_files.append(f"- `swimlanes/{stream}/views/SliceState{sn}/view.slice.test.ts` — adjust accumulation logic in tests")
     lines.extend(todo_files)
@@ -2304,7 +2298,7 @@ def _gen_todo_context(paths: SlicePaths, slice_data: dict, sn: str, stream: str,
 
     # Enrichment processor details
     if is_enrichment:
-        info = get_enrichment_info(slice_data)
+        info = get_enrichment_info(ds.raw)
         input_fields = info.get("input_fields", [])
         enriched_fields = info.get("enriched_fields", [])
 
@@ -2349,15 +2343,11 @@ def _gen_todo_context(paths: SlicePaths, slice_data: dict, sn: str, stream: str,
     else:
         # Standard slice patterns
         # Spec details — the AI needs these to fill TODOs
-        if specs:
+        if ds.specs:
             lines.append("## Specifications (GWT)")
             lines.append("")
-            for spec in specs:
-                pred_name = "unknown"
-                comments = spec.get("comments", [])
-                if comments and comments[0].get("description"):
-                    pred_name = predicate_name(comments[0]["description"])
-
+            for spec in ds.specs:
+                pred_name = extract_predicate(spec)
                 title = spec.get("title", pred_name)
                 lines.append(f"### {title}")
                 lines.append(f"Predicate: `{pred_name}`")
@@ -2367,7 +2357,7 @@ def _gen_todo_context(paths: SlicePaths, slice_data: dict, sn: str, stream: str,
                 if given_list:
                     lines.append("**Given** (prior events in stream):")
                     for g in given_list:
-                        en = resolve_given_event_name(g, eid_map)
+                        en = resolve_given_event_name(g, ds.event_id_map)
                         fields_str = ", ".join(f"{field_name(f['name'])}={f.get('example', '?')}" for f in g.get("fields", []))
                         lines.append(f"  - {en}: {fields_str}")
 
@@ -2390,12 +2380,11 @@ def _gen_todo_context(paths: SlicePaths, slice_data: dict, sn: str, stream: str,
 
         # Event field details for computed fields
         computed_fields = []
-        for event in events:
+        for event in ds.events:
             en = event_name_from_title(event["title"], "")
-            cmd_field_names = {field_name(f["name"]) for f in cmd.get("fields", [])}
             for f in event.get("fields", []):
                 fn = field_name(f["name"])
-                if fn not in cmd_field_names:
+                if fn not in ds.command_field_names:
                     computed_fields.append((en, fn, f.get("example", ""), f.get("type", "String")))
 
         if computed_fields:
