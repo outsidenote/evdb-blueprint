@@ -13,8 +13,7 @@ import { OutboxIdempotencyGate } from "./abstractions/endpoints/IdempotencyGate.
 import { ProjectionFactory } from "./abstractions/projections/ProjectionFactory.js";
 import { createFundsRouter } from "./BusinessCapabilities/Funds/endpoints/routes.js";
 import { discoverAutomations } from "./abstractions/endpoints/discoverAutomations.js";
-import { pendingWithdrawalLookupSlice } from "./BusinessCapabilities/Funds/slices/PendingWithdrawalLookup/index.js";
-import { accountBalanceReadModelSlice } from "./BusinessCapabilities/Funds/slices/AccountBalanceReadModel/index.js";
+import { discoverProjections } from "./abstractions/projections/discoverProjections.js";
 import EvDbPostgresPrismaClientFactory from "@eventualize/postgres-storage-adapter/EvDbPostgresPrismaClientFactory";
 import EvDbPrismaStorageAdapter from "@eventualize/relational-storage-adapter/EvDbPrismaStorageAdapter";
 
@@ -70,11 +69,7 @@ async function main() {
   );
   console.log("[Startup] pg-boss workers registered");
 
-  const projectionSlices = [
-    pendingWithdrawalLookupSlice,
-    accountBalanceReadModelSlice,
-  ];
-
+  const projectionSlices = await discoverProjections();
   const projectionFactory = await ProjectionFactory.startAll(kafka, pool, projectionSlices);
   console.log("[Startup] projections registered");
 

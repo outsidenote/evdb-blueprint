@@ -1580,6 +1580,195 @@ def update_context_automations(paths: SlicePaths, slice_data: dict, slice_name: 
 
 
 # ──────────────────────────────────────────────────────────────────────
+# Projection generators (STATE_VIEW slices)
+# ──────────────────────────────────────────────────────────────────────
+
+def is_projection_slice(slice_data: dict) -> bool:
+    """Detect STATE_VIEW slices (readmodels, no commands)."""
+    return (
+        slice_data.get("sliceType") == "STATE_VIEW"
+        and slice_data.get("readmodels")
+        and not slice_data.get("commands")
+    )
+
+
+def gen_projection(slice_data: dict) -> str:
+    """Generate projection index.ts with ProjectionConfig skeleton.
+
+    Creates a ProjectionConfig with handler stubs for each INBOUND event.
+    Handler bodies are TODO — AI fills in the SQL logic.
+    """
+    sn = slice_name_pascal(slice_data)
+    sn_camel = camel_case(sn)
+    readmodel = slice_data["readmodels"][0]
+    rm_fields = readmodel.get("fields", [])
+
+    # Find INBOUND events that feed this readmodel
+    inbound_events = []
+    for dep in readmodel.get("dependencies", []):
+        if dep.get("type") == "INBOUND" and dep.get("elementType") == "EVENT":
+            inbound_events.append(pascal_case(dep["title"]))
+
+    # Determine projection key field (first UUID field or 'account')
+    key_field = "account"
+    for f in rm_fields:
+        if f.get("type") == "UUID":
+            key_field = field_name(f["name"])
+            break
+
+    # Build payload type for each event
+    payload_fields_ts = []
+    for f in rm_fields:
+        fn = field_name(f["name"])
+        ft = ts_type(f.get("type", "String"))
+        payload_fields_ts.append(f"  {fn}: {ft};")
+
+    lines = [
+        'import type { ProjectionConfig } from "#abstractions/projections/ProjectionFactory.js";',
+        'import { ProjectionModeType } from "#abstractions/projections/ProjectionFactory.js";',
+        "",
+        f"type {sn}Payload = {{",
+        *payload_fields_ts,
+        "};",
+        "",
+        f"export const {sn_camel}Slice: ProjectionConfig = {{",
+        f'  projectionName: "{sn}",',
+        "",
+        "  mode: { type: ProjectionModeType.Query },",
+        "",
+        "  handlers: {",
+    ]
+
+    for event_name in inbound_events:
+        lines.extend([
+            f"    {event_name}: (payload, {{ projectionName }}) => {{",
+            f"      const p = payload as {sn}Payload;",
+            f'      const key = p.{key_field};',
+            "      return [",
+            "        {",
+            '          sql: `',
+            '            INSERT INTO projections (name, key, payload)',
+            '            VALUES ($1, $2, $3::jsonb)',
+            '            ON CONFLICT (name, key) DO UPDATE',
+            '              SET payload = EXCLUDED.payload`,',
+            "          params: [",
+            "            projectionName,",
+            "            key,",
+            f"            JSON.stringify(p), // TODO: select specific fields to store",
+            "          ],",
+            "        },",
+            "      ];",
+            "    },",
+            "",
+        ])
+
+    lines.extend([
+        "  },",
+        "};",
+        "",
+    ])
+    return "\n".join(lines)
+
+
+def gen_projection_test(slice_data: dict) -> str:
+    """Generate projection test skeleton."""
+    sn = slice_name_pascal(slice_data)
+    sn_camel = camel_case(sn)
+    readmodel = slice_data["readmodels"][0]
+    rm_fields = readmodel.get("fields", [])
+
+    # Find INBOUND events
+    inbound_events = []
+    for dep in readmodel.get("dependencies", []):
+        if dep.get("type") == "INBOUND" and dep.get("elementType") == "EVENT":
+            inbound_events.append(pascal_case(dep["title"]))
+
+    # Build sample payload from readmodel fields
+    payload_entries = []
+    for f in rm_fields:
+        fn = field_name(f["name"])
+        payload_entries.append(f"      {fn}: {_format_example(f)},")
+
+    lines = [
+        'import { describe, it } from "node:test";',
+        'import assert from "node:assert/strict";',
+        f'import {{ {sn_camel}Slice }} from "../index.js";',
+        "",
+        f'describe("Projection: {sn}", () => {{',
+        f'  it("has correct projection name", () => {{',
+        f'    assert.strictEqual({sn_camel}Slice.projectionName, "{sn}");',
+        "  });",
+        "",
+    ]
+
+    for event_name in inbound_events:
+        lines.extend([
+            f'  it("{event_name} handler returns SQL statements", () => {{',
+            "    const payload = {",
+            *payload_entries,
+            "    };",
+            f'    const meta = {{ outboxId: "test-id", projectionName: "{sn}" }};',
+            f"    const result = {sn_camel}Slice.handlers.{event_name}!(payload, meta);",
+            "",
+            "    assert.ok(result, 'handler should return SQL statements');",
+            "    assert.ok(result.length > 0, 'should have at least one SQL statement');",
+            "    assert.ok(result[0].sql.length > 0, 'SQL should not be empty');",
+            "    assert.ok(result[0].params.length > 0, 'params should not be empty');",
+            "  });",
+            "",
+        ])
+
+    lines.extend([
+        "});",
+        "",
+    ])
+    return "\n".join(lines)
+
+
+def update_context_projections(paths: SlicePaths, slice_data: dict, slice_name: str) -> str:
+    """Create or update per-context slices/projections.ts.
+
+    Collects all projection slice exports for discovery at startup.
+    """
+    sn_camel = camel_case(slice_name)
+    export_name = f"{sn_camel}Slice"
+    projections_path = paths.bc / "slices" / "projections.ts"
+    content = projections_path.read_text() if projections_path.exists() else ""
+
+    import_line = f'import {{ {export_name} }} from "./{slice_name}/index.js";'
+
+    if export_name in content:
+        return content
+
+    if not content:
+        return f'''// Projection slice exports — collected for discovery at startup
+{import_line}
+import type {{ ProjectionConfig }} from "#abstractions/projections/ProjectionFactory.js";
+
+export const {camel_case(slice_data["context"])}Projections: readonly ProjectionConfig[] = [
+  {export_name},
+];
+'''
+
+    # Add import
+    if import_line not in content:
+        lines_list = content.split("\n")
+        last_import = 0
+        for i, line in enumerate(lines_list):
+            if line.startswith("import "):
+                last_import = i
+        lines_list.insert(last_import + 1, import_line)
+        content = "\n".join(lines_list)
+
+    # Add to array — insert before closing ];
+    entry_line = f"  {export_name},"
+    if entry_line not in content:
+        content = content.replace("];", f"{entry_line}\n];")
+
+    return content
+
+
+# ──────────────────────────────────────────────────────────────────────
 # Stream factory / views type updaters
 # ──────────────────────────────────────────────────────────────────────
 
@@ -1852,8 +2041,28 @@ def scaffold_slice(root: Path, folder: str, dry_run: bool = False) -> dict:
 
     # Detect enrichment-only slice (processor + backendPrompts, no commands)
     is_enrichment = has_backend_prompts(slice_data) and not slice_data.get("commands")
+    is_projection = is_projection_slice(slice_data)
 
-    if is_enrichment:
+    if is_projection:
+        # ── Projection slice: generate ProjectionConfig + test ────────
+        projection_dir = paths.bc / "slices" / sn
+        projection_path = projection_dir / "index.ts"
+        if not projection_path.exists():
+            write_file(projection_path, gen_projection(slice_data))
+
+        projection_test_path = projection_dir / "tests" / "projection.test.ts"
+        if not projection_test_path.exists():
+            write_file(projection_test_path, gen_projection_test(slice_data))
+
+        # Update per-context projections.ts
+        if not dry_run:
+            projections_path = paths.bc / "slices" / "projections.ts"
+            updated = update_context_projections(paths, slice_data, sn)
+            existing = projections_path.read_text() if projections_path.exists() else ""
+            if updated != existing:
+                write_file(projections_path, updated, is_update=bool(existing))
+
+    elif is_enrichment:
         # ── Enrichment-only slice: generate enrichment.ts + test ────────
         enrichment_dir = paths.bc / "endpoints" / sn
         enrichment_path = enrichment_dir / "enrichment.ts"
@@ -1953,8 +2162,8 @@ def scaffold_slice(root: Path, folder: str, dry_run: bool = False) -> dict:
                 else:
                     write_file(test_path, gen_test(slice_data))
 
-    # 9-11: Stream factory, views type, routes (skip for enrichment-only slices)
-    if not is_enrichment:
+    # 9-11: Stream factory, views type, routes (skip for enrichment-only and projection slices)
+    if not is_enrichment and not is_projection:
         view_name_str = view_name_str if 'view_name_str' in dir() else ""
 
         # 9. Update stream factory (create minimal one if missing)

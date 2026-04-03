@@ -229,6 +229,18 @@ def main():
             test_files.append(enrichment_test)
             print(f"  Found: {enrichment_test.relative_to(worktree)}")
 
+        # Projection tests
+        projection_test = worktree / "src" / "BusinessCapabilities" / context / "slices" / cmd_class / "tests" / "projection.test.ts"
+        if projection_test.exists():
+            test_files.append(projection_test)
+            print(f"  Found: {projection_test.relative_to(worktree)}")
+
+        # Automation endpoint tests
+        auto_test = worktree / "src" / "BusinessCapabilities" / context / "endpoints" / cmd_class / "tests" / "automation.endpoint.test.ts"
+        if auto_test.exists():
+            test_files.append(auto_test)
+            print(f"  Found: {auto_test.relative_to(worktree)}")
+
         # Find view tests
         if view_test_pattern.exists():
             for vt in view_test_pattern.rglob("view.slice.test.ts"):
