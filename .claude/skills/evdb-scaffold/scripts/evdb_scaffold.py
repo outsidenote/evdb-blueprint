@@ -143,7 +143,7 @@ class SlicePaths:
 
     def __init__(self, root: Path, context: str, slice_name: str, stream: str):
         self.root = root
-        self.bc = root / "src" / "BusinessCapabilities" / context
+        self.bc = root / "src" / "BusinessCapabilities" / pascal_case(context)
         self.swimlane = self.bc / "swimlanes" / stream
         self.events_dir = self.swimlane / "events"
         self.views_dir = self.swimlane / "views"
