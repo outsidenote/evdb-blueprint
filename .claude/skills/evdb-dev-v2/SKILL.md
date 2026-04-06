@@ -78,6 +78,7 @@ directly. Do not scan existing code to verify them.
 Read `TODO_CONTEXT.md` for the slice. Location depends on slice type:
 - **Standard slice**: `slices/<SliceName>/TODO_CONTEXT.md`
 - **Enrichment processor**: `endpoints/<SliceName>/TODO_CONTEXT.md`
+- **Projection (STATE_VIEW)**: `slices/<SliceName>/TODO_CONTEXT.md`
 
 This single file contains everything: spec details, backend prompts, field hints, file list,
 and structural patterns. Do NOT read `slice.json`, `references/templates.md`, or existing
@@ -103,6 +104,13 @@ Read and edit only the files listed in `TODO_CONTEXT.md` under "Files with TODOs
 | `enrichment.ts` | Implement the `enrich()` function body per the **Backend Prompts** section in TODO_CONTEXT.md. This replaces GWT predicates — the prompts are natural-language instructions from the event modeler. |
 | `tests/enrichment.test.ts` | Add meaningful assertions (e.g. verify API call results, edge cases like same-currency shortcut) |
 
+**For projection (STATE_VIEW) slices** (TODO_CONTEXT.md says "Projection / Read Model"):
+
+| File | What to fill in |
+|---|---|
+| `slices/<SliceName>/index.ts` | Replace generic `JSON.stringify(p)` UPSERT with proper SQL: select specific fields, handle accumulation (`jsonb_set` + cast) vs overwrite, build composite keys from payload fields |
+| `slices/<SliceName>/tests/projection.test.ts` | Verify SQL params contain correct field values, test accumulation logic, cover each inbound event handler |
+
 **For any slice with Backend Prompts** (even standard slices):
 
 The "Backend Prompts" section in TODO_CONTEXT.md contains natural-language instructions from
@@ -113,6 +121,8 @@ the event modeler. Use them as implementation guidance alongside GWT specs.
 ```bash
 # Standard slice
 node --import tsx --test src/BusinessCapabilities/<Context>/slices/<SliceName>/tests/command.slice.test.ts
+# Projection slice
+node --import tsx --test src/BusinessCapabilities/<Context>/slices/<SliceName>/tests/projection.test.ts
 # Enrichment processor
 node --import tsx --test src/BusinessCapabilities/<Context>/endpoints/<SliceName>/tests/enrichment.test.ts
 ```
@@ -197,6 +207,15 @@ python3 .claude/skills/evdb-dev-v2/scripts/scan_learn.py append \
 | enrichment.ts | Input/output interfaces + function skeleton | Implement enrich() body per backendPrompts |
 | enrichment.test.ts | Passthrough + type assertions | Add edge-case tests, mock API calls |
 | TODO_CONTEXT.md | Complete (includes backendPrompts) | Read-only — your guide for Step 3 |
+
+### Projection (STATE_VIEW) slices
+
+| Artifact | Scaffold (deterministic) | You (AI) |
+|---|---|---|
+| ProjectionConfig index.ts | Structure + generic UPSERT SQL | Fill in field selection, accumulation logic (jsonb_set), DELETE handlers |
+| projection.test.ts | Basic handler-returns-SQL checks | Add meaningful SQL param assertions, cover each inbound event |
+| projections.ts registry | Complete | — |
+| TODO_CONTEXT.md | Complete (includes readmodel fields + description) | Read-only — your guide for Step 3 |
 
 ---
 

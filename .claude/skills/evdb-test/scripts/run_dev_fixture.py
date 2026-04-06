@@ -160,7 +160,7 @@ def main():
         context = sl["context"]
         folder = sl["folder"]
 
-        # Derive command class name from slice.json
+        # Derive class name from slice.json (command title for STATE_CHANGE, slice title for projections)
         slice_json = worktree / ".eventmodel" / ".slices" / context / folder / "slice.json"
         cmd_class = folder  # fallback
         if slice_json.exists():
@@ -170,6 +170,13 @@ def main():
                 if cmds:
                     title = cmds[0].get("title", "")
                     cmd_class = "".join(w.capitalize() for w in title.split())
+                else:
+                    # Projection or enrichment — derive from slice title
+                    title = sd.get("title", "")
+                    import re
+                    cleaned = re.sub(r"^slice:\s*", "", title, flags=re.IGNORECASE).strip()
+                    if cleaned:
+                        cmd_class = "".join(w.capitalize() for w in cleaned.split())
             except Exception:
                 pass
 

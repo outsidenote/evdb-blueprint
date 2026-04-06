@@ -428,6 +428,127 @@ def _title_to_class(title: str) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Projection (STATE_VIEW) checks
+# ---------------------------------------------------------------------------
+
+def projection_src_paths(norm: dict, src_root: Path) -> dict:
+    context = norm["slice"]["context"]
+    slice_name = norm["naming"]["sliceName"]
+    bc = src_root / "src" / "BusinessCapabilities" / context
+    slices = bc / "slices" / slice_name
+    return {
+        "index": slices / "index.ts",
+        "test": slices / "tests" / "projection.test.ts",
+        "projections_registry": bc / "slices" / "projections.ts",
+    }
+
+
+def _load_raw_slice(normalized_path: Path, src_root: Path) -> dict | None:
+    """Load the raw slice.json from the eventmodel directory."""
+    # Derive slice.json path from normalized path:
+    # .eventmodel/.normalized/<Context>/<folder>.normalized.json
+    # → .eventmodel/.slices/<Context>/<folder>/slice.json
+    norm_name = normalized_path.stem.replace(".normalized", "")
+    context_dir = normalized_path.parent
+    context_name = context_dir.name
+    eventmodel_dir = context_dir.parent.parent  # .eventmodel/
+    slice_json = eventmodel_dir / ".slices" / context_name / norm_name / "slice.json"
+    if slice_json.exists():
+        return json.loads(slice_json.read_text())
+    return None
+
+
+def check_projection(norm: dict, raw_slice: dict, paths: dict, report: SliceReport):
+    slice_name = norm["naming"]["sliceName"]
+    camel_name = slice_name[0].lower() + slice_name[1:]
+
+    # Collect inbound events from readmodel dependencies
+    readmodel = raw_slice["readmodels"][0]
+    inbound_events = [
+        _title_to_class(dep["title"])
+        for dep in readmodel.get("dependencies", [])
+        if dep.get("type") == "INBOUND" and dep.get("elementType") == "EVENT"
+    ]
+
+    # ── index.ts ──
+    rel = f"slices/{slice_name}/index.ts"
+    content = read(paths["index"])
+    if content is None:
+        add(report, rel, "file_exists", MISSING)
+    else:
+        add(report, rel, "file_exists", PASS)
+
+        # ProjectionConfig export
+        if grep(content, rf"export const {re.escape(camel_name)}Slice"):
+            add(report, rel, "projection_export", PASS)
+        else:
+            add(report, rel, "projection_export", FAIL,
+                f"Expected: export const {camel_name}Slice")
+
+        # projectionName
+        if grep(content, rf'projectionName:\s*"{re.escape(slice_name)}"'):
+            add(report, rel, "projection_name", PASS)
+        else:
+            add(report, rel, "projection_name", FAIL,
+                f'Expected: projectionName: "{slice_name}"')
+
+        # Handler per inbound event
+        for evt in inbound_events:
+            if grep(content, rf"{re.escape(evt)}\s*:"):
+                add(report, rel, f"handler_{evt}", PASS)
+            else:
+                add(report, rel, f"handler_{evt}", FAIL,
+                    f"Missing handler for inbound event {evt}")
+
+        # SQL present in handlers
+        if grep(content, r"sql\s*:"):
+            add(report, rel, "sql_present", PASS)
+        else:
+            add(report, rel, "sql_present", FAIL,
+                "No SQL statements found in handlers")
+
+        # Check for generic JSON.stringify TODO
+        if grep(content, r"JSON\.stringify\(p\).*TODO"):
+            add(report, rel, "todo_json_stringify", WARN,
+                "Generic JSON.stringify(p) with TODO — SQL not customized yet")
+        else:
+            add(report, rel, "todo_json_stringify", PASS)
+
+    # ── test file ──
+    test_rel = f"slices/{slice_name}/tests/projection.test.ts"
+    test_content = read(paths["test"])
+    if test_content is None:
+        add(report, test_rel, "file_exists", MISSING)
+    else:
+        add(report, test_rel, "file_exists", PASS)
+
+        if grep(test_content, r"describe\(") or grep(test_content, r"ProjectionSliceTester"):
+            add(report, test_rel, "test_structure", PASS)
+        else:
+            add(report, test_rel, "test_structure", FAIL, "No describe() or ProjectionSliceTester found")
+
+        for evt in inbound_events:
+            if grep(test_content, rf"{re.escape(evt)}"):
+                add(report, test_rel, f"references_{evt}", PASS)
+            else:
+                add(report, test_rel, f"references_{evt}", WARN,
+                    f"Event {evt} not referenced in projection test")
+
+    # ── projections.ts registry ──
+    reg_rel = f"slices/projections.ts"
+    reg_content = read(paths["projections_registry"])
+    if reg_content is None:
+        add(report, reg_rel, "registry_exists", WARN,
+            "No projections.ts registry file — projection may not be discovered at startup")
+    else:
+        if grep(reg_content, rf"{re.escape(camel_name)}Slice"):
+            add(report, reg_rel, "registered", PASS)
+        else:
+            add(report, reg_rel, "registered", WARN,
+                f"{camel_name}Slice not found in projections.ts registry")
+
+
+# ---------------------------------------------------------------------------
 # Full slice verification
 # ---------------------------------------------------------------------------
 
@@ -436,11 +557,21 @@ def verify(normalized_path: Path, src_root: Path) -> SliceReport:
     slice_name = norm["naming"]["sliceName"]
     report = SliceReport(slice_name=slice_name, normalized_path=str(normalized_path))
 
-    # Only verify STATE_CHANGE slices that have commands — other slice types
-    # (read models, projections, processors) have a different file structure.
+    # STATE_VIEW (projection) slices have their own checks
+    if norm["slice"]["sliceType"] == "STATE_VIEW":
+        raw_slice = _load_raw_slice(normalized_path, src_root)
+        if raw_slice and raw_slice.get("readmodels"):
+            paths = projection_src_paths(norm, src_root)
+            check_projection(norm, raw_slice, paths, report)
+            return report
+        add(report, "(skip)", "slice_type",
+            WARN, "STATE_VIEW with no readmodels — nothing to verify")
+        return report
+
+    # Other non-STATE_CHANGE types (processors, etc.) are not yet supported
     if norm["slice"]["sliceType"] != "STATE_CHANGE":
         add(report, "(skip)", "slice_type",
-            WARN, f"Skipped: sliceType={norm['slice']['sliceType']} — verifier only handles STATE_CHANGE")
+            WARN, f"Skipped: sliceType={norm['slice']['sliceType']} — verifier handles STATE_CHANGE and STATE_VIEW")
         return report
 
     cmd_class = norm["naming"]["commandClassName"]

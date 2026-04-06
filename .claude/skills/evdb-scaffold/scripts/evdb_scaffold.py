@@ -2236,6 +2236,7 @@ def _gen_todo_context(paths: SlicePaths, ds: DerivedSlice,
     stream = ds.stream
     context = ds.context
     is_enrichment = has_backend_prompts(ds.raw) and not ds.raw.get("commands")
+    is_proj = is_projection_slice(ds.raw)
 
     # Get backend prompts from slice-level or processor descriptions
     backend_prompts = ds.raw.get("codeGen", {}).get("backendPrompts", [])
@@ -2250,7 +2251,9 @@ def _gen_todo_context(paths: SlicePaths, ds: DerivedSlice,
         f"Slice: {sn} | Context: {context} | Stream: {stream}",
     ]
 
-    if is_enrichment:
+    if is_proj:
+        lines.append(f"Type: **Projection / Read Model** (STATE_VIEW)")
+    elif is_enrichment:
         lines.append(f"Type: **Enrichment Processor** (backendPrompts-driven)")
 
     # Automation trigger info (for slices with AUTOMATION processors)
@@ -2267,7 +2270,10 @@ def _gen_todo_context(paths: SlicePaths, ds: DerivedSlice,
 
     # List files that need AI work
     todo_files = []
-    if is_enrichment:
+    if is_proj:
+        todo_files.append(f"- `slices/{sn}/index.ts` — replace generic UPSERT with proper SQL: select specific fields, handle accumulation vs overwrite")
+        todo_files.append(f"- `slices/{sn}/tests/projection.test.ts` — verify SQL params contain correct field values")
+    elif is_enrichment:
         todo_files.append(f"- `endpoints/{sn}/enrichment.ts` — implement enrichment logic per backendPrompts below")
         todo_files.append(f"- `endpoints/{sn}/tests/enrichment.test.ts` — verify enrichment output")
     else:
@@ -2339,6 +2345,87 @@ def _gen_todo_context(paths: SlicePaths, ds: DerivedSlice,
         lines.append("")
         lines.append("- Handle edge cases (e.g. same-currency shortcut: skip API call)")
         lines.append("- Round numeric results to 2 decimal places where appropriate")
+        lines.append("")
+    elif is_proj:
+        # Projection slice details
+        readmodel = ds.raw["readmodels"][0]
+        rm_fields = readmodel.get("fields", [])
+        rm_description = readmodel.get("description", "")
+        inbound_events = [
+            pascal_case(dep["title"])
+            for dep in readmodel.get("dependencies", [])
+            if dep.get("type") == "INBOUND" and dep.get("elementType") == "EVENT"
+        ]
+
+        # Extract key pattern from description (e.g. "Key: {currency}:{reportDate}")
+        import re as _re
+        key_match = _re.findall(r'\{(\w+)\}', _re.search(r'Key:\s*(.+?)(?:\.|$)', rm_description).group(1)) if 'Key:' in rm_description else []
+
+        if rm_description:
+            lines.append("## Readmodel Description (from the event modeler)")
+            lines.append("")
+            lines.append(rm_description)
+            lines.append("")
+
+        lines.append("## Readmodel Fields (columns of the projection)")
+        lines.append("")
+        for f in rm_fields:
+            fn = field_name(f["name"])
+            ft = ts_type(f.get("type", "String"))
+            example = f.get("example", "")
+            lines.append(f"  - `{fn}`: {ft}" + (f" (example: `{example}`)" if example else ""))
+        lines.append("")
+
+        if key_match:
+            key_expr = "`:`.join([" + ", ".join(f"p.{k}" for k in key_match) + "])" if len(key_match) > 1 else f"p.{key_match[0]}"
+            lines.append(f"**Key**: composite key from `{', '.join(key_match)}` — construct as template literal: `` `{'{'}${'}{'.join(f'p.{k}' for k in key_match)}{'}'}` ``")
+        else:
+            # Fallback: first UUID field or first field
+            fallback_key = "account"
+            for f in rm_fields:
+                if f.get("type") == "UUID":
+                    fallback_key = field_name(f["name"])
+                    break
+            lines.append(f"**Key**: `{fallback_key}`")
+        lines.append("")
+
+        lines.append("## Inbound Events (triggers this projection)")
+        lines.append("")
+        for evt in inbound_events:
+            lines.append(f"  - `{evt}`")
+        lines.append("")
+
+        lines.append("## Patterns (projection SQL)")
+        lines.append("")
+        lines.append("```typescript")
+        lines.append("// UPSERT with accumulation — increment numeric fields")
+        lines.append("handlers: {")
+        lines.append('  EventName: (payload, { projectionName }) => {')
+        lines.append("    const p = payload as PayloadType;")
+        lines.append("    const key = `${p.currency}:${p.reportDate}`;  // composite key")
+        lines.append("    return [{")
+        lines.append("      sql: `")
+        lines.append("        INSERT INTO projections (name, key, payload)")
+        lines.append("        VALUES ($1, $2, $3::jsonb)")
+        lines.append("        ON CONFLICT (name, key) DO UPDATE")
+        lines.append("          SET payload = jsonb_set(")
+        lines.append("            jsonb_set(projections.payload, '{totalAmount}',")
+        lines.append("              to_jsonb((projections.payload->>'totalAmount')::numeric + $4)),")
+        lines.append("            '{count}',")
+        lines.append("            to_jsonb((projections.payload->>'count')::int + 1)")
+        lines.append("          )`,")
+        lines.append("      params: [projectionName, key, JSON.stringify(p), p.amount],")
+        lines.append("    }];")
+        lines.append("  },")
+        lines.append("}")
+        lines.append("```")
+        lines.append("")
+        lines.append("### Key rules")
+        lines.append("- Use `projectionName` param (from meta), never hardcode the projection name")
+        lines.append("- Destructure payload fields explicitly — don't `JSON.stringify(p)` the whole payload for the initial INSERT")
+        lines.append("- For accumulation fields (totals, counts): use `jsonb_set` + cast in the ON CONFLICT clause")
+        lines.append("- For overwrite fields (status, name): use `EXCLUDED.payload` or explicit SET")
+        lines.append("- Composite keys: build as template literal from payload fields")
         lines.append("")
     else:
         # Standard slice patterns
