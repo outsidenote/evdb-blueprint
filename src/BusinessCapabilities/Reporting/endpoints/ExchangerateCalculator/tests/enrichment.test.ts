@@ -24,4 +24,19 @@ describe("ExchangerateCalculator Enrichment", () => {
     assert.strictEqual(typeof result.exchangeRate, "number");
     assert.ok(result.reportDate instanceof Date);
   });
+
+  it("skips API call when currency is EUR", async () => {
+    const input = {
+      account: "5678",
+      amount: 50,
+      currency: "EUR",
+      session: "0022",
+    };
+
+    const result = await enrich(input);
+
+    assert.strictEqual(result.exchangeRate, 1);
+    assert.strictEqual(result.baseCurrencyAmount, 50);
+    assert.ok(result.reportDate instanceof Date);
+  });
 });
