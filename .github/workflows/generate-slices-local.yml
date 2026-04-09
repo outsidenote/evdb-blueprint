@@ -163,6 +163,9 @@ jobs:
               eval "$CLAUDE_CMD"
             fi
 
+            # Clean up TODO_CONTEXT.md files before committing
+            find "src/BusinessCapabilities/$CTX_PASCAL/" -name "TODO_CONTEXT.md" -delete 2>/dev/null || true
+
             # Commit 3: business logic
             git add "src/BusinessCapabilities/$CTX_PASCAL/" 2>/dev/null || true
             if ! git diff --cached --quiet; then

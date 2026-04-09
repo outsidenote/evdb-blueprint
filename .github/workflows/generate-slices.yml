@@ -285,6 +285,10 @@ jobs:
       - name: Run slice tests
         run: npm run test:slices
 
+      - name: Clean up TODO_CONTEXT.md files
+        run: |
+          find "src/BusinessCapabilities/${{ matrix.context_pascal }}/" -name "TODO_CONTEXT.md" -delete 2>/dev/null || true
+
       - name: Commit business logic
         run: |
           git add "src/BusinessCapabilities/${{ matrix.context_pascal }}/" || true
