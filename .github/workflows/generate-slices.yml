@@ -274,9 +274,11 @@ jobs:
             npm run test:slices"
 
           # Run with JSON output to capture token usage
+          # Use Sonnet for speed (~3x faster than Opus, sufficient for filling scaffolded stubs)
           claude --print --dangerously-skip-permissions \
             --output-format json \
-            --max-turns 50 \
+            --model claude-sonnet-4-6 \
+            --max-turns 30 \
             "$PROMPT" > /tmp/claude-output.json
 
           END_TIME=$(date +%s)
