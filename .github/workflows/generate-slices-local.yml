@@ -16,7 +16,7 @@ on:
       em_dir:
         description: 'Event model directory'
         required: false
-        default: '.eventmodel2'
+        default: '.eventmodel'
       context:
         description: 'Only process a specific context (leave empty for all)'
         required: false

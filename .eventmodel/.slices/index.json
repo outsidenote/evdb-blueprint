@@ -79,6 +79,38 @@
       "context": "Funds",
       "folder": "accountbalancereadmodel",
       "status": "Planned"
+    },
+    {
+      "id": "3458764665346461849",
+      "slice": "slice: Withdrawal Decline Notified",
+      "index": 21,
+      "context": "Funds",
+      "folder": "withdrawaldeclinenotified",
+      "status": "Planned"
+    },
+    {
+      "id": "3458764666316578346",
+      "slice": "slice: ExchangeRate Calculator",
+      "index": 23,
+      "context": "Reporting",
+      "folder": "exchangeratecalculator",
+      "status": "Planned"
+    },
+    {
+      "id": "3458764666317093624",
+      "slice": "slice: Report Daily BaseTransaction",
+      "index": 25,
+      "context": "Reporting",
+      "folder": "reportdailybasetransaction",
+      "status": "Planned"
+    },
+    {
+      "id": "3458764662604279326",
+      "slice": "slice: Record Funds Withdraw Action",
+      "index": 27,
+      "context": "FraudAnalysis",
+      "folder": "recordfundswithdrawaction",
+      "status": "Planned"
     }
   ]
 }
