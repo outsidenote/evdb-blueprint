@@ -267,21 +267,17 @@ jobs:
         run: |
           START_TIME=$(date +%s)
 
-          PROMPT="You are running in CI to fill in business logic for scaffolded evdb slices.
+          PROMPT="Read and follow the skill instructions in .claude/skills/evdb-dev-v2/SKILL.md exactly.
+
+            Implement the following slices one at a time using the evdb-dev-v2 pipeline:
 
             Context: ${{ matrix.context }}
             Context folder: ${{ matrix.context_pascal }}
-            Slices to implement: ${{ matrix.slices }}
+            Slices: ${{ matrix.slices }}
 
-            The scaffold boilerplate is already generated. You need to:
-            1. Read the slice's TODO_CONTEXT.md for implementation guidance
-            2. Read .claude/skills/evdb-dev-v2/learned_hints.md for domain patterns
-            3. Fill in gwts.ts predicates (replace false stubs with real logic)
-            4. Fill in commandHandler.ts branching logic and computed fields
-            5. Verify tests pass: node --import tsx --test src/BusinessCapabilities/${{ matrix.context_pascal }}/slices/*/tests/command.slice.test.ts
+            The scaffold (Step 1 + Step 2) has already been run. Start from Step 0 (scan session) for each slice, then Step 3 (fill business logic), then Step 4 (assert zero scans).
 
-            Process each slice one at a time. After all slices are done, run:
-            npm run test:slices"
+            After all slices are done, run: npm run test:slices"
 
           # Run with JSON output to capture token usage
           claude --print --dangerously-skip-permissions \
