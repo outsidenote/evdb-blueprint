@@ -103,6 +103,23 @@ DERIVATION_RULES: dict[str, str] = {
     "PROCESSOR_SOURCE_TYPE":
         "Delivery source derived from INBOUND dependency elementType: "
         "EVENT → 'message' (cross-boundary Kafka CDC), READMODEL → 'event' (same-context outbox trigger).",
+
+    "PREDICATE_NAME_FROM_COMMENT":
+        "Spec comment description converted to a valid camelCase JS identifier. "
+        "Example: 'Insufficient Effective Funds' → 'insufficientEffectiveFunds'.",
+
+    "INTERFACE_NAME_PREFIX":
+        "Event class name prefixed with 'I'. Example: 'FundsWithdrawalApproved' → 'IFundsWithdrawalApproved'.",
+
+    "KEBAB_CASE_FROM_CLASS":
+        "PascalCase converted to kebab-case for URL routes. "
+        "Example: 'ApproveWithdrawal' → 'approve-withdrawal'.",
+
+    "READMODEL_NORMALIZATION":
+        "Readmodel fields, dependencies, and key field extracted from readmodels[] array.",
+
+    "SLICE_FLAGS":
+        "Boolean flags derived from slice structure: isProjection, isAutomation, isEnrichment, etc.",
 }
 
 
@@ -166,6 +183,31 @@ def to_field_camel(name: str) -> str:
     if name and name[0].isupper():
         return name[0].lower() + name[1:]
     return name
+
+
+def to_kebab_case(pascal: str) -> str:
+    """'ApproveWithdrawal' → 'approve-withdrawal'"""
+    s = re.sub(r'([A-Z])', r'-\1', pascal).strip('-').lower()
+    return re.sub(r'-+', '-', s)
+
+
+def to_predicate_name(description: str) -> str:
+    """Convert spec description to a valid camelCase JS identifier.
+
+    'Insufficient Effective Funds' → 'insufficientEffectiveFunds'
+    'isVipCustomer' → 'isVipCustomer' (already valid)
+    """
+    if not description:
+        return "unknownPredicate"
+    if re.match(r'^[a-zA-Z_$][a-zA-Z0-9_$]*$', description):
+        return description
+    words = re.split(r'\s+', description.strip())
+    words = [w for w in words if w]
+    if not words:
+        return "unknownPredicate"
+    result = words[0].lower() + ''.join(w.capitalize() for w in words[1:])
+    result = re.sub(r'[^a-zA-Z0-9_$]', '', result)
+    return result or "unknownPredicate"
 
 
 # ---------------------------------------------------------------------------
@@ -286,6 +328,7 @@ def normalize_spec(spec: dict, spec_index: int) -> dict:
         "id": spec.get("id"),
         "title": spec.get("title", ""),
         "comment": comment,
+        "predicateName": to_predicate_name(comment),
         "given": given_norm,
         "when": when_norm,
         "then": then_norm,
@@ -516,8 +559,10 @@ def normalize(slice_path: Path, source_root: Path) -> dict:
             "id": ev.get("id"),
             "title": ev.get("title", ""),
             "className": ev_class,
+            "interfaceName": f"I{ev_class}",
             "aggregate": ev.get("aggregate", ""),
             "createsAggregate": ev.get("createsAggregate", False),
+            "elementContext": ev.get("elementContext", "INTERNAL"),
             "fields": ev_fields,
             "inputFields": [f for f in ev_fields if not f["generated"]],
             "generatedFields": [f for f in ev_fields if f["generated"]],
@@ -552,6 +597,50 @@ def normalize(slice_path: Path, source_root: Path) -> dict:
         for i, p in enumerate(processors_raw)
         if p.get("type") == "AUTOMATION"
     ]
+
+    # ── Readmodels (STATE_VIEW projections) ─────────────────────────────
+    readmodels_raw = raw.get("readmodels", [])
+    readmodels_norm = []
+    for ri, rm in enumerate(readmodels_raw):
+        rm_title = rm.get("title", "")
+        rm_class = to_class_name(rm_title)
+        rm_fields = [normalize_field(f, f"readmodels[{ri}].fields[{fi}]")
+                     for fi, f in enumerate(rm.get("fields", []))]
+
+        rm_inbound = []
+        rm_outbound = []
+        for dep in rm.get("dependencies", []):
+            entry = {"id": dep.get("id"), "title": dep.get("title", ""),
+                     "elementType": dep.get("elementType", ""),
+                     "className": to_class_name(dep.get("title", ""))}
+            if dep.get("type") == "INBOUND":
+                rm_inbound.append(entry)
+            elif dep.get("type") == "OUTBOUND":
+                rm_outbound.append(entry)
+
+        # Key field: first UUID field, or first field
+        rm_key_field = rm_fields[0]["camelName"] if rm_fields else "id"
+        for f in rm_fields:
+            if f["evdbType"] == "UUID":
+                rm_key_field = f["camelName"]
+                break
+
+        readmodels_norm.append({
+            "id": rm.get("id"),
+            "title": rm_title,
+            "className": rm_class,
+            "description": rm.get("description", ""),
+            "fields": rm_fields,
+            "inbound": rm_inbound,
+            "outbound": rm_outbound,
+            "keyField": rm_key_field,
+        })
+
+    if readmodels_norm:
+        prov.record("readmodels",
+                    source="readmodels[]",
+                    value=f"{len(readmodels_norm)} readmodel(s)",
+                    rule="READMODEL_NORMALIZATION")
 
     # ── Backend prompts (codeGen.backendPrompts or processor descriptions) ──
     # In .eventmodel format: slice-level codeGen.backendPrompts[]
@@ -599,13 +688,23 @@ def normalize(slice_path: Path, source_root: Path) -> dict:
             "sliceDir": slice_dir_name,
             "commandClassName": cmd_class,
             "commandHandlerName": cmd_handler,
+            "kebabName": to_kebab_case(cmd_class) if cmd_class else to_kebab_case(slice_class_name),
         },
         "command": command,
         "events": events_norm,
         "specifications": specs_norm,
         "view": view,
         "processors": processors_norm,
+        "readmodels": readmodels_norm,
         "backendPrompts": backend_prompts,
+        "flags": {
+            "isProjection": raw.get("sliceType") == "STATE_VIEW" and bool(readmodels_raw) and not commands,
+            "isAutomation": any(p.get("type") == "AUTOMATION" for p in raw.get("processors", [])),
+            "isEnrichment": bool(backend_prompts) and not commands,
+            "hasSpecs": bool(specs_raw),
+            "hasCommands": bool(commands),
+            "hasBackendPrompts": bool(backend_prompts),
+        },
         # Provenance section: maps every derived key → {source, value, rule, deterministic}
         "_provenance": prov.to_dict(),
         # Rule registry included inline so the file is self-contained

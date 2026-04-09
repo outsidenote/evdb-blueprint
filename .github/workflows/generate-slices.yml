@@ -1,0 +1,337 @@
+name: Generate Slice Code
+
+on:
+  push:
+    paths:
+      # Only trigger on config.json (the Miro import file)
+      - '.eventmodel/config.json'
+      - '.eventmodel2/config.json'
+
+  workflow_dispatch:
+    inputs:
+      em_dir:
+        description: 'Event model directory (.eventmodel or .eventmodel2)'
+        required: false
+        default: '.eventmodel2'
+      context:
+        description: 'Only process a specific context (leave empty for all)'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  # ──────────────────────────────────────────────────────────────────
+  # Phase 1: Deterministic — split config, diff, scaffold
+  # Outputs a matrix of contexts for Phase 2
+  # ──────────────────────────────────────────────────────────────────
+  scaffold:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+      has_contexts: ${{ steps.plan.outputs.has_contexts }}
+      em_dir: ${{ steps.detect.outputs.em_dir }}
+
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Detect event model directory
+        id: detect
+        run: |
+          EM_DIR="${{ github.event.inputs.em_dir }}"
+          if [ -z "$EM_DIR" ]; then
+            if git diff --name-only HEAD~1 HEAD 2>/dev/null | grep -q '.eventmodel2/'; then
+              EM_DIR=".eventmodel2"
+            else
+              EM_DIR=".eventmodel"
+            fi
+          fi
+          echo "em_dir=$EM_DIR" >> "$GITHUB_OUTPUT"
+
+      - name: Check config.json actually changed
+        id: gate
+        run: |
+          EM_DIR="${{ steps.detect.outputs.em_dir }}"
+          CONFIG="$EM_DIR/config.json"
+
+          if [ "${{ github.event_name }}" = "push" ]; then
+            NEW_HASH=$(python3 -c "
+          import json, hashlib
+          with open('$CONFIG') as f:
+              data = json.load(f)
+          slices = data.get('slices', [])
+          for s in slices:
+              s.pop('status', None)
+              s.pop('index', None)
+          print(hashlib.md5(json.dumps(slices, sort_keys=True).encode()).hexdigest())
+          ")
+
+            OLD_HASH=$(git show HEAD~1:"$CONFIG" 2>/dev/null | python3 -c "
+          import json, hashlib, sys
+          try:
+              data = json.load(sys.stdin)
+              slices = data.get('slices', [])
+              for s in slices:
+                  s.pop('status', None)
+                  s.pop('index', None)
+              print(hashlib.md5(json.dumps(slices, sort_keys=True).encode()).hexdigest())
+          except:
+              print('none')
+          " 2>/dev/null || echo "none")
+
+            if [ "$OLD_HASH" = "$NEW_HASH" ]; then
+              echo "changed=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          fi
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Run orchestrator (split + diff + scaffold)
+        if: steps.gate.outputs.changed == 'true'
+        id: generate
+        run: |
+          CONTEXT_ARG=""
+          if [ -n "${{ github.event.inputs.context }}" ]; then
+            CONTEXT_ARG="--context ${{ github.event.inputs.context }}"
+          fi
+
+          # Use current branch as base for codegen branch names
+          BASE_BRANCH="${GITHUB_REF_NAME}"
+
+          python3 .claude/scripts/generate_slices.py \
+            --root . \
+            --em-dir ${{ steps.detect.outputs.em_dir }} \
+            --base-branch "$BASE_BRANCH" \
+            $CONTEXT_ARG > /tmp/generate-output.json
+
+          cat /tmp/generate-output.json
+
+      - name: Build context matrix for Phase 2
+        if: steps.gate.outputs.changed == 'true'
+        id: plan
+        run: |
+          RESULT=$(cat /tmp/generate-output.json)
+          TOTAL=$(echo "$RESULT" | python3 -c "import sys,json; print(json.load(sys.stdin)['total_planned'])")
+
+          if [ "$TOTAL" = "0" ]; then
+            echo "has_contexts=false" >> "$GITHUB_OUTPUT"
+            echo "matrix={}" >> "$GITHUB_OUTPUT"
+            echo "No planned slices found."
+            exit 0
+          fi
+
+          # Build matrix: one job per context
+          MATRIX=$(echo "$RESULT" | python3 -c "
+          import sys, json
+          data = json.load(sys.stdin)
+          base = data['base_branch']
+          contexts = []
+          for ctx, info in data['contexts'].items():
+              if info['planned_slices']:
+                  contexts.append({
+                      'context': ctx,
+                      'context_pascal': info['context_pascal'],
+                      'branch': info['branch'],
+                      'base_branch': base,
+                      'slices': ','.join(info['planned_slices']),
+                      'split_files': ' '.join(info['split_files']),
+                      'index_file': info['index_file'],
+                  })
+          print(json.dumps({'include': contexts}))
+          ")
+
+          echo "has_contexts=true" >> "$GITHUB_OUTPUT"
+          echo "matrix=$MATRIX" >> "$GITHUB_OUTPUT"
+
+      - name: Upload scaffolded workspace
+        if: steps.gate.outputs.changed == 'true' && steps.plan.outputs.has_contexts == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: scaffolded-workspace
+          path: |
+            src/BusinessCapabilities/
+            .eventmodel/
+            .eventmodel2/
+          retention-days: 1
+
+  # ──────────────────────────────────────────────────────────────────
+  # Phase 2: One job per context
+  #   - Downloads scaffolded code
+  #   - Claude Code fills business logic
+  #   - Commits split files + generated code to codegen branch
+  #   - Opens PR targeting the feature branch
+  # ──────────────────────────────────────────────────────────────────
+  codegen:
+    needs: scaffold
+    if: needs.scaffold.outputs.has_contexts == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix: ${{ fromJson(needs.scaffold.outputs.matrix) }}
+      max-parallel: 2
+      fail-fast: false
+
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ matrix.base_branch }}
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Download scaffolded workspace
+        uses: actions/download-artifact@v4
+        with:
+          name: scaffolded-workspace
+
+      - name: Create codegen branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -b "${{ matrix.branch }}"
+
+      - name: Commit split files for this context
+        run: |
+          # Stage the split files for this context
+          git add ${{ matrix.split_files }} || true
+          git add ${{ matrix.index_file }} || true
+
+          if git diff --cached --quiet; then
+            echo "No split files to commit"
+          else
+            git commit -m "chore(${{ matrix.context_pascal }}): split slice definitions from config.json
+
+          Split Miro-exported config.json into per-slice files for the ${{ matrix.context }} context.
+          Slices: ${{ matrix.slices }}"
+          fi
+
+      - name: Commit scaffolded code for this context
+        run: |
+          git add "src/BusinessCapabilities/${{ matrix.context_pascal }}/" || true
+
+          if git diff --cached --quiet; then
+            echo "No scaffolded code to commit"
+          else
+            git commit -m "chore(${{ matrix.context_pascal }}): scaffold boilerplate
+
+          Deterministic scaffold output for slices: ${{ matrix.slices }}
+          Generated by evdb-scaffold (no AI)."
+          fi
+
+      - name: Install Claude Code CLI
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: Fill business logic with Claude Code
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          claude --print --dangerously-skip-permissions \
+            --max-turns 50 \
+            "You are running in CI to fill in business logic for scaffolded evdb slices.
+
+            Context: ${{ matrix.context }}
+            Context folder: ${{ matrix.context_pascal }}
+            Slices to implement: ${{ matrix.slices }}
+
+            The scaffold boilerplate is already generated. You need to:
+            1. Read the slice's TODO_CONTEXT.md for implementation guidance
+            2. Read .claude/skills/evdb-dev-v2/learned_hints.md for domain patterns
+            3. Fill in gwts.ts predicates (replace false stubs with real logic)
+            4. Fill in commandHandler.ts branching logic and computed fields
+            5. Verify tests pass: node --import tsx --test src/BusinessCapabilities/${{ matrix.context_pascal }}/slices/*/tests/command.slice.test.ts
+
+            Process each slice one at a time. After all slices are done, run:
+            npm run test:slices"
+
+      - name: Run verification
+        run: |
+          # Run normalize first to generate .normalized.json files
+          python3 .claude/skills/evdb-normalize/scripts/normalize_slice.py \
+            --root . --all 2>/dev/null || true
+
+          # Verify all normalized slices
+          python3 .claude/skills/evdb-verify/scripts/verify_slice.py \
+            --all --root . || true
+
+      - name: Run slice tests
+        run: npm run test:slices
+
+      - name: Commit business logic
+        run: |
+          git add "src/BusinessCapabilities/${{ matrix.context_pascal }}/" || true
+
+          if git diff --cached --quiet; then
+            echo "No business logic changes to commit"
+          else
+            git commit -m "feat(${{ matrix.context_pascal }}): implement slice business logic
+
+          Slices: ${{ matrix.slices }}
+
+          AI-generated:
+          - Predicate logic in gwts.ts
+          - Command handler branching in commandHandler.ts
+          - Enrichment logic (where applicable)
+          - Tests verified
+
+          Co-Authored-By: Claude Code <noreply@anthropic.com>"
+          fi
+
+      - name: Push and create PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git push -u origin "${{ matrix.branch }}"
+
+          gh pr create \
+            --title "feat(${{ matrix.context_pascal }}): implement planned slices" \
+            --body "$(cat <<'EOF'
+          ## Summary
+          Auto-generated slice implementations for the **${{ matrix.context }}** context.
+
+          **Slices:** ${{ matrix.slices }}
+          **Target:** `${{ matrix.base_branch }}`
+
+          ## Commits
+          1. **Split** — slice definitions extracted from config.json (deterministic)
+          2. **Scaffold** — TypeScript boilerplate generated by evdb-scaffold (deterministic, no AI)
+          3. **Business logic** — predicates, handler branching, enrichment filled by Claude Code (AI)
+
+          ## Review checklist
+          - [ ] Predicate logic in `gwts.ts` matches domain rules
+          - [ ] Command handler branching covers all spec scenarios
+          - [ ] Generated field computations are correct
+          - [ ] Tests pass and cover edge cases
+
+          Generated with evdb CI pipeline
+          EOF
+          )" \
+            --base "${{ matrix.base_branch }}"
