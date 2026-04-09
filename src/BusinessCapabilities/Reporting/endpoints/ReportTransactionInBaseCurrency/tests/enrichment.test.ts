@@ -24,4 +24,19 @@ describe("ReportTransactionInBaseCurrency Enrichment", () => {
     assert.strictEqual(typeof result.exchangeRate, "number");
     assert.ok(result.reportDate instanceof Date);
   });
+
+  it("same-currency shortcut: EUR skips API call and returns rate=1", async () => {
+    const input = {
+      account: "1234",
+      amount: 100,
+      currency: "EUR",
+      session: "0011",
+    };
+
+    const result = await enrich(input);
+
+    assert.strictEqual(result.exchangeRate, 1);
+    assert.strictEqual(result.baseCurrencyAmount, 100);
+    assert.ok(result.reportDate instanceof Date);
+  });
 });
