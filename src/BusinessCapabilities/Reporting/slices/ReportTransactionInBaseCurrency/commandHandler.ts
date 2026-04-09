@@ -11,6 +11,12 @@ export const handleReportTransactionInBaseCurrency: CommandHandler<
   ReportTransactionInBaseCurrency
 > = (stream, command) => {
   stream.appendEventTxnReportedInBaseCurrency({
-    // TODO: map command fields to event payload
+    amount: command.amount,
+    currency: command.currency,
+    session: command.session,
+    baseCurrencyAmount: command.baseCurrencyAmount,
+    exchangeRate: command.exchangeRate,
+    account: command.account,
+    reportDate: command.reportDate,
   });
 };
