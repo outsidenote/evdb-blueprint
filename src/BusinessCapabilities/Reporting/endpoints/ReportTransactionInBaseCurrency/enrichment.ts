@@ -12,11 +12,24 @@ export interface ReportTransactionInBaseCurrencyEnrichmentOutput extends ReportT
 }
 
 export async function enrich(input: ReportTransactionInBaseCurrencyEnrichmentInput): Promise<ReportTransactionInBaseCurrencyEnrichmentOutput> {
-  // TODO: implement enrichment logic — see TODO_CONTEXT.md for backendPrompts instructions
+  if (input.currency === "EUR") {
+    return {
+      ...input,
+      baseCurrencyAmount: input.amount,
+      exchangeRate: 1,
+      reportDate: new Date(),
+    };
+  }
+
+  const res = await fetch(`https://api.frankfurter.app/latest?from=${input.currency}&to=EUR`);
+  const data = await res.json() as { rates: { EUR: number } };
+  const rate = data.rates["EUR"];
+  const baseCurrencyAmount = Math.round(input.amount * rate * 100) / 100;
+
   return {
     ...input,
-    baseCurrencyAmount: 0, // TODO: compute enriched field
-    exchangeRate: 0, // TODO: compute enriched field
-    reportDate: new Date(), // TODO: compute enriched field
+    baseCurrencyAmount,
+    exchangeRate: rate,
+    reportDate: new Date(),
   };
 }
