@@ -271,7 +271,7 @@ jobs:
           fi
 
       - name: Install Claude Code CLI
-        run: npm install -g @anthropic-ai/claude-code@1.0.16
+        run: npm install -g @anthropic-ai/claude-code@latest
 
       - name: Configure Claude provider
         id: provider
