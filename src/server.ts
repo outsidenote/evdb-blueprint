@@ -11,8 +11,8 @@ import { swaggerDocument } from "./swagger.js";
 import { PgBossEndpointFactory } from "./abstractions/endpoints/PgBossEndpointFactory.js";
 import { OutboxIdempotencyGate } from "./abstractions/endpoints/IdempotencyGate.js";
 import { ProjectionFactory } from "./abstractions/projections/ProjectionFactory.js";
-import { createFundsRouter } from "./BusinessCapabilities/Funds/endpoints/routes.js";
 import { discoverAutomations } from "./abstractions/endpoints/discoverAutomations.js";
+import { discoverRoutes } from "./abstractions/endpoints/discoverRoutes.js";
 import { discoverProjections } from "./abstractions/projections/discoverProjections.js";
 import EvDbPostgresPrismaClientFactory from "@eventualize/postgres-storage-adapter/EvDbPostgresPrismaClientFactory";
 import EvDbPrismaStorageAdapter from "@eventualize/relational-storage-adapter/EvDbPrismaStorageAdapter";
@@ -89,7 +89,12 @@ async function main() {
 
   app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
   app.use("/api/projections", createProjectionRouter(projectionRepository, allowedProjections));
-  app.use("/api/funds", createFundsRouter(storageAdapter));
+
+  const routeConfigs = await discoverRoutes();
+  for (const route of routeConfigs) {
+    app.use(route.basePath, route.createRouter(storageAdapter));
+  }
+  console.log(`[Startup] REST routes discovered: ${routeConfigs.map((r) => r.basePath).join(", ")}`);
 
   const httpServer = await startServer(app, config.port);
 
