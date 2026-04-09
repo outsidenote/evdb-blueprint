@@ -12,15 +12,11 @@ on:
       em_dir:
         description: 'Event model directory (.eventmodel or .eventmodel2)'
         required: false
-        default: '.eventmodel'
+        default: '.eventmodel2'
       context:
         description: 'Only process a specific context (leave empty for all)'
         required: false
         default: ''
-      provider:
-        description: 'AI provider: anthropic (direct API) or bedrock (AWS)'
-        required: false
-        default: 'anthropic'
 
 permissions:
   contents: write
@@ -252,103 +248,29 @@ jobs:
           fi
 
       - name: Install Claude Code CLI
-        run: npm install -g @anthropic-ai/claude-code@latest
-
-      - name: Configure Claude provider
-        id: provider
-        run: |
-          PROVIDER="${{ github.event.inputs.provider || 'anthropic' }}"
-          if [ "$PROVIDER" = "bedrock" ]; then
-            echo "model=us.anthropic.claude-opus-4-6-v1@bedrock" >> "$GITHUB_OUTPUT"
-            echo "Using Bedrock provider"
-          else
-            echo "model=" >> "$GITHUB_OUTPUT"
-            echo "Using Anthropic API"
-          fi
-
-      - name: Warm up API cache
-        env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_REGION: ${{ secrets.AWS_REGION || 'us-east-1' }}
-        run: |
-          MODEL_FLAG=""
-          if [ -n "${{ steps.provider.outputs.model }}" ]; then
-            MODEL_FLAG="--model ${{ steps.provider.outputs.model }}"
-          fi
-          claude --print --dangerously-skip-permissions \
-            $MODEL_FLAG \
-            --max-turns 1 \
-            "Reply with OK" > /dev/null 2>&1 || true
+        run: npm install -g @anthropic-ai/claude-code
 
       - name: Fill business logic with Claude Code
-        id: claude
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_REGION: ${{ secrets.AWS_REGION || 'us-east-1' }}
         run: |
-          START_TIME=$(date +%s)
-
-          MODEL_FLAG=""
-          if [ -n "${{ steps.provider.outputs.model }}" ]; then
-            MODEL_FLAG="--model ${{ steps.provider.outputs.model }}"
-          fi
-
-          PROMPT="Read and follow the skill instructions in .claude/skills/evdb-dev-v2/SKILL.md exactly.
-
-            Implement the following slices one at a time using the evdb-dev-v2 pipeline:
+          claude --print --dangerously-skip-permissions \
+            --max-turns 50 \
+            "You are running in CI to fill in business logic for scaffolded evdb slices.
 
             Context: ${{ matrix.context }}
             Context folder: ${{ matrix.context_pascal }}
-            Slices: ${{ matrix.slices }}
+            Slices to implement: ${{ matrix.slices }}
 
-            The scaffold (Step 1 + Step 2) has already been run. Start from Step 0 (scan session) for each slice, then Step 3 (fill business logic), then Step 4 (assert zero scans).
+            The scaffold boilerplate is already generated. You need to:
+            1. Read the slice's TODO_CONTEXT.md for implementation guidance
+            2. Read .claude/skills/evdb-dev-v2/learned_hints.md for domain patterns
+            3. Fill in gwts.ts predicates (replace false stubs with real logic)
+            4. Fill in commandHandler.ts branching logic and computed fields
+            5. Verify tests pass: node --import tsx --test src/BusinessCapabilities/${{ matrix.context_pascal }}/slices/*/tests/command.slice.test.ts
 
-            After all slices are done, run: npm run test:slices"
-
-          # Run with JSON output to capture token usage
-          claude --print --dangerously-skip-permissions \
-            --output-format json \
-            $MODEL_FLAG \
-            --max-turns 50 \
-            "$PROMPT" > /tmp/claude-output.json
-
-          END_TIME=$(date +%s)
-          DURATION=$((END_TIME - START_TIME))
-          MINUTES=$((DURATION / 60))
-          SECONDS=$((DURATION % 60))
-
-          echo "duration=${MINUTES}m ${SECONDS}s" >> "$GITHUB_OUTPUT"
-
-          # Extract stats from JSON output
-          python3 -c "
-          import json
-          # The JSON output may have a warning line before it
-          lines = open('/tmp/claude-output.json').readlines()
-          json_line = next(l for l in lines if l.strip().startswith('{'))
-          data = json.loads(json_line)
-          result = data.get('result', '')
-          usage = data.get('usage', {})
-          input_t = usage.get('input_tokens', 0) + usage.get('cache_read_input_tokens', 0) + usage.get('cache_creation_input_tokens', 0)
-          output_t = usage.get('output_tokens', 0)
-          total_t = input_t + output_t
-          cost = data.get('total_cost_usd', 0)
-          num_turns = data.get('num_turns', 0)
-          api_ms = data.get('duration_api_ms', 0)
-          open('/tmp/claude-summary.txt', 'w').write(result[:1000])
-          open('/tmp/claude-stats.txt', 'w').write(
-              f'input_tokens={input_t}\noutput_tokens={output_t}\ntotal_tokens={total_t}\ncost={cost:.4f}\nnum_turns={num_turns}\napi_time_s={api_ms // 1000}\n')
-          " 2>/dev/null || true
-
-          # Set outputs from stats file
-          if [ -f /tmp/claude-stats.txt ]; then
-            while IFS='=' read -r key val; do
-              echo "$key=$val" >> "$GITHUB_OUTPUT"
-            done < /tmp/claude-stats.txt
-          fi
+            Process each slice one at a time. After all slices are done, run:
+            npm run test:slices"
 
       - name: Run verification
         run: |
@@ -362,10 +284,6 @@ jobs:
 
       - name: Run slice tests
         run: npm run test:slices
-
-      - name: Clean up TODO_CONTEXT.md files
-        run: |
-          find "src/BusinessCapabilities/${{ matrix.context_pascal }}/" -name "TODO_CONTEXT.md" -delete 2>/dev/null || true
 
       - name: Commit business logic
         run: |
@@ -393,7 +311,7 @@ jobs:
         run: |
           git push -u origin "${{ matrix.branch }}"
 
-          PR_URL=$(gh pr create \
+          gh pr create \
             --title "feat(${{ matrix.context_pascal }}): implement planned slices" \
             --body "$(cat <<'EOF'
           ## Summary
@@ -416,38 +334,4 @@ jobs:
           Generated with evdb CI pipeline
           EOF
           )" \
-            --base "${{ matrix.base_branch }}")
-
-          echo "pr_url=$PR_URL" >> "$GITHUB_OUTPUT"
-
-      - name: Add generation stats as PR comment
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          # Get claude summary
-          CLAUDE_SUMMARY=$(cat /tmp/claude-summary.txt 2>/dev/null || echo "No output captured")
-
-          gh pr comment "${{ matrix.branch }}" --body "$(cat <<EOF
-          ## Generation Stats
-
-          | Metric | Value |
-          |--------|-------|
-          | Context | **${{ matrix.context }}** |
-          | Slices | \`${{ matrix.slices }}\` |
-          | Duration | **${{ steps.claude.outputs.duration }}** |
-          | API time | ${{ steps.claude.outputs.api_time_s }}s |
-          | Turns | ${{ steps.claude.outputs.num_turns }} |
-          | Input tokens | ${{ steps.claude.outputs.input_tokens }} |
-          | Output tokens | ${{ steps.claude.outputs.output_tokens }} |
-          | Total tokens | ${{ steps.claude.outputs.total_tokens }} |
-          | Cost | **\$${{ steps.claude.outputs.cost }}** |
-          | Workflow run | [#${{ github.run_number }}](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}) |
-
-          ### Claude Code Summary
-
-          ${CLAUDE_SUMMARY}
-
-          ---
-          *Generated by evdb CI pipeline*
-          EOF
-          )"
+            --base "${{ matrix.base_branch }}"

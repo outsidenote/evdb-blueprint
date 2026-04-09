@@ -260,7 +260,7 @@ def _format_example(f: dict) -> str:
 class DerivedSlice:
     """Precomputed slice metadata passed to all generators.
 
-    Computed once from raw slice_data, avoids redundant derivation.
+    Computed once from raw slice_data or .normalized.json, avoids redundant derivation.
     """
     raw: dict
     slice_name: str
@@ -288,8 +288,18 @@ class DerivedSlice:
     message_type: str
     has_enrichment: bool
 
+    # Slice type flags
+    is_projection: bool = False
+    backend_prompts: list = None
+
     # Cross-slice event resolution
-    event_id_map: dict
+    event_id_map: dict = None
+
+    def __post_init__(self):
+        if self.backend_prompts is None:
+            self.backend_prompts = []
+        if self.event_id_map is None:
+            self.event_id_map = {}
 
 
 def derive_slice(slice_data: dict, event_id_map: dict[str, str] | None = None) -> DerivedSlice:
@@ -311,6 +321,13 @@ def derive_slice(slice_data: dict, event_id_map: dict[str, str] | None = None) -
         any(f.get("generated") for f in payload_fields) and bool(trigger.get("description"))
     ) if is_auto else False
 
+    # Backend prompts
+    bp = slice_data.get("codeGen", {}).get("backendPrompts", [])
+    if not bp:
+        for proc in slice_data.get("processors", []):
+            if proc.get("type") == "AUTOMATION" and proc.get("description"):
+                bp.append(proc["description"])
+
     return DerivedSlice(
         raw=slice_data,
         slice_name=sn,
@@ -331,6 +348,289 @@ def derive_slice(slice_data: dict, event_id_map: dict[str, str] | None = None) -
         trigger_info=trigger,
         message_type=derive_message_type(trigger) if is_auto else "",
         has_enrichment=has_enrich,
+        is_projection=(
+            slice_data.get("sliceType") == "STATE_VIEW"
+            and bool(slice_data.get("readmodels"))
+            and not slice_data.get("commands")
+        ),
+        backend_prompts=bp,
+        event_id_map=event_id_map or {},
+    )
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Normalized JSON consumer (compat shim)
+# ──────────────────────────────────────────────────────────────────────
+
+def _compat_field(nf: dict) -> dict:
+    """Adapt a normalized field back to raw slice.json field shape.
+
+    Generators expect f["name"], f.get("type"), f.get("generated"), f.get("example"),
+    f.get("idAttribute"). Normalized fields use camelName, evdbType, etc.
+    This shim bridges the gap so generators work unchanged.
+    """
+    return {
+        "name": nf.get("name", nf.get("camelName", "")),
+        "type": nf.get("evdbType", "String"),
+        "generated": nf.get("generated", False),
+        "example": nf.get("example", ""),
+        "idAttribute": nf.get("idAttribute", False),
+        "cardinality": nf.get("cardinality", "Single"),
+    }
+
+
+def _compat_fields(nf_list: list) -> list:
+    """Convert a list of normalized fields to raw shape."""
+    return [_compat_field(f) for f in nf_list]
+
+
+def _compat_spec(ns: dict) -> dict:
+    """Adapt a normalized spec back to raw slice.json spec shape."""
+    given = []
+    for g in ns.get("given", []):
+        given.append({
+            "title": g.get("eventTitle", ""),
+            "linkedId": g.get("linkedId"),
+            "fields": _compat_fields(g.get("fields", [])),
+        })
+
+    when = []
+    w = ns.get("when")
+    if w:
+        when.append({
+            "title": w.get("commandTitle", ""),
+            "linkedId": w.get("linkedId"),
+            "fields": _compat_fields(w.get("fields", [])),
+        })
+
+    then = []
+    for t in ns.get("then", []):
+        then.append({
+            "title": t.get("eventTitle", ""),
+            "linkedId": t.get("linkedId"),
+            "fields": _compat_fields(t.get("fields", [])),
+        })
+
+    return {
+        "id": ns.get("id"),
+        "title": ns.get("title", ""),
+        "comments": [{"description": ns.get("comment", "")}] if ns.get("comment") else [],
+        "given": given,
+        "when": when,
+        "then": then,
+    }
+
+
+def _compat_event(ne: dict) -> dict:
+    """Adapt a normalized event back to raw slice.json event shape."""
+    return {
+        "id": ne.get("id"),
+        "title": ne.get("title", ""),
+        "fields": _compat_fields(ne.get("fields", [])),
+        "aggregate": ne.get("aggregate", ""),
+        "createsAggregate": ne.get("createsAggregate", False),
+        "elementContext": ne.get("elementContext", "INTERNAL"),
+    }
+
+
+def _compat_readmodel(nr: dict) -> dict:
+    """Adapt a normalized readmodel back to raw slice.json readmodel shape."""
+    deps = []
+    for d in nr.get("inbound", []):
+        deps.append({"id": d.get("id"), "type": "INBOUND",
+                      "title": d.get("title", ""), "elementType": d.get("elementType", "EVENT")})
+    for d in nr.get("outbound", []):
+        deps.append({"id": d.get("id"), "type": "OUTBOUND",
+                      "title": d.get("title", ""), "elementType": d.get("elementType", "")})
+    return {
+        "id": nr.get("id"),
+        "title": nr.get("title", ""),
+        "description": nr.get("description", ""),
+        "fields": _compat_fields(nr.get("fields", [])),
+        "dependencies": deps,
+    }
+
+
+def _build_raw_compat(norm: dict) -> dict:
+    """Build a raw-compatible dict from normalized data.
+
+    This is stored as ds.raw so that generator functions like gen_projection(),
+    get_enrichment_info(), etc. can read it in the same shape as raw slice.json.
+    """
+    flags = norm.get("flags", {})
+    cmd = norm.get("command", {})
+
+    # Rebuild commands array
+    commands = []
+    if cmd.get("title"):
+        raw_cmd = {
+            "title": cmd["title"],
+            "aggregate": cmd.get("aggregate", ""),
+            "createsAggregate": cmd.get("createsAggregate", False),
+            "fields": _compat_fields(cmd.get("fields", [])),
+            "dependencies": [
+                {"type": "OUTBOUND", "elementType": "EVENT", "title": t}
+                for t in cmd.get("outboundEvents", [])
+            ],
+        }
+        if cmd.get("id"):
+            raw_cmd["id"] = cmd["id"]
+        commands.append(raw_cmd)
+
+    # Rebuild events
+    events = [_compat_event(e) for e in norm.get("events", [])]
+
+    # Rebuild specifications
+    specs = [_compat_spec(s) for s in norm.get("specifications", [])]
+
+    # Rebuild processors
+    processors = []
+    for p in norm.get("processors", []):
+        raw_proc = {
+            "id": p.get("id"),
+            "title": p.get("title", ""),
+            "type": p.get("type", "AUTOMATION"),
+            "fields": _compat_fields(p.get("fields", [])),
+            "dependencies": [],
+            "triggers": p.get("triggers", []),
+            "description": p.get("description", ""),
+        }
+        for d in p.get("inbound", []):
+            raw_proc["dependencies"].append({
+                "id": d.get("id"), "type": "INBOUND",
+                "title": d.get("title", ""), "elementType": d.get("elementType", ""),
+            })
+        for d in p.get("outbound", []):
+            raw_proc["dependencies"].append({
+                "id": d.get("id"), "type": "OUTBOUND",
+                "title": d.get("title", ""), "elementType": d.get("elementType", ""),
+            })
+        processors.append(raw_proc)
+
+    # Rebuild readmodels
+    readmodels = [_compat_readmodel(r) for r in norm.get("readmodels", [])]
+
+    # Rebuild codeGen
+    codegen = {}
+    bp = norm.get("backendPrompts", [])
+    if bp:
+        codegen["backendPrompts"] = bp
+
+    return {
+        "id": norm.get("slice", {}).get("id"),
+        "title": norm.get("slice", {}).get("title", ""),
+        "context": norm.get("slice", {}).get("context", ""),
+        "status": norm.get("slice", {}).get("status", ""),
+        "sliceType": norm.get("slice", {}).get("sliceType", ""),
+        "commands": commands,
+        "events": events,
+        "specifications": specs,
+        "processors": processors,
+        "readmodels": readmodels,
+        "codeGen": codegen,
+    }
+
+
+def build_event_id_map_from_normalized(root: Path, context: str, em_base: str) -> dict[str, str]:
+    """Build event ID → class name map from .normalized.json files."""
+    norm_dir = root / em_base / ".normalized" / context
+    id_map = {}
+    if not norm_dir.exists():
+        return id_map
+    for norm_file in norm_dir.glob("*.normalized.json"):
+        with open(norm_file) as f:
+            nd = json.load(f)
+        for event in nd.get("events", []):
+            eid = str(event.get("id", ""))
+            if eid:
+                id_map[eid] = event["className"]
+    return id_map
+
+
+def derive_slice_from_normalized(norm: dict, event_id_map: dict[str, str] | None = None) -> DerivedSlice:
+    """Build DerivedSlice from .normalized.json — no re-derivation of types/naming.
+
+    Uses _build_raw_compat() to create a raw-compatible dict so that all
+    existing generator functions (gen_projection, _gen_todo_context, etc.)
+    work unchanged via ds.raw.
+    """
+    naming = norm["naming"]
+    cmd = norm.get("command", {})
+    flags = norm.get("flags", {})
+    raw_compat = _build_raw_compat(norm)
+
+    # Build trigger info from processors (same logic as get_trigger_info but from normalized)
+    trigger = {}
+    is_auto = flags.get("isAutomation", False)
+    if is_auto and norm.get("processors"):
+        proc = norm["processors"][0]
+        trigger_event = ""
+        trigger_readmodel = ""
+        target_command = ""
+        for dep in proc.get("inbound", []):
+            if dep.get("elementType") == "EVENT":
+                trigger_event = dep.get("title", "")
+            elif dep.get("elementType") == "READMODEL":
+                trigger_readmodel = dep.get("title", "")
+        for dep in proc.get("outbound", []):
+            if dep.get("elementType") == "COMMAND":
+                target_command = dep.get("title", "")
+
+        trigger = {
+            "trigger_event": trigger_event,
+            "trigger_readmodel": trigger_readmodel,
+            "target_command": target_command,
+            "payload_fields": _compat_fields(proc.get("fields", [])),
+            "processor_title": proc.get("title", ""),
+            "source": proc.get("sourceType", "event"),
+            "kafka_topic": f"events.{pascal_case(trigger_event)}" if trigger_event else None,
+            "triggers": proc.get("triggers", []),
+            "description": proc.get("description", ""),
+        }
+
+    has_enrich = False
+    if trigger:
+        payload_fields = trigger.get("payload_fields", [])
+        has_enrich = any(f.get("generated") for f in payload_fields) and bool(trigger.get("description"))
+
+    # Compat: convert normalized fields back to raw shape for generators
+    cmd_fields_compat = _compat_fields(cmd.get("fields", []))
+    user_compat = _compat_fields(cmd.get("inputFields", []))
+    gen_compat = _compat_fields(cmd.get("generatedFields", []))
+    events_compat = [_compat_event(e) for e in norm.get("events", [])]
+    specs_compat = [_compat_spec(s) for s in norm.get("specifications", [])]
+
+    # Message type for automation slices
+    msg_type = ""
+    if trigger:
+        if trigger.get("trigger_event"):
+            msg_type = pascal_case(trigger["trigger_event"])
+        elif trigger.get("trigger_readmodel"):
+            rm_name = trigger["trigger_readmodel"].replace("TODO", "").replace("To-Do", "").strip()
+            msg_type = pascal_case(rm_name)
+
+    return DerivedSlice(
+        raw=raw_compat,
+        slice_name=naming.get("commandClassName") or naming.get("sliceName", ""),
+        slice_name_camel=naming.get("commandHandlerName") or camel_case(naming.get("sliceName", "")),
+        stream=stream_name(norm["slice"]["context"]),
+        context=norm["slice"]["context"],
+        command=raw_compat["commands"][0] if raw_compat.get("commands") else {},
+        command_fields=cmd_fields_compat,
+        user_fields=user_compat,
+        generated_fields=gen_compat,
+        command_field_names={field_name(f["name"]) for f in cmd_fields_compat},
+        has_commands=flags.get("hasCommands", False),
+        events=events_compat,
+        specs=specs_compat,
+        has_specs=flags.get("hasSpecs", False),
+        predicates=[s.get("predicateName", extract_predicate(_compat_spec(s))) for s in norm.get("specifications", [])],
+        is_automation=is_auto,
+        trigger_info=trigger,
+        message_type=msg_type,
+        has_enrichment=has_enrich,
+        is_projection=flags.get("isProjection", False),
+        backend_prompts=norm.get("backendPrompts", []),
         event_id_map=event_id_map or {},
     )
 
@@ -377,7 +677,8 @@ class SlicePaths:
 # ──────────────────────────────────────────────────────────────────────
 
 def is_automation_slice(slice_data: dict) -> bool:
-    """Detect Pattern 5: automation processor (pg-boss triggered)."""
+    """Detect Pattern 5: automation processor (pg-boss triggered).
+    NOTE: Only used by derive_slice() fallback. Prefer ds.is_automation."""
     for proc in slice_data.get("processors", []):
         if proc.get("type") == "AUTOMATION":
             return True
@@ -387,7 +688,8 @@ def is_automation_slice(slice_data: dict) -> bool:
 def get_trigger_info(slice_data: dict) -> dict:
     """Extract trigger event info from automation processor dependencies.
 
-    Supports both .eventmodel (INBOUND READMODEL) and .eventmodel2 (INBOUND EVENT) patterns.
+    NOTE: Only used by derive_slice() fallback. The normalized path builds
+    trigger info directly in derive_slice_from_normalized().
 
     Returns: { message_type, payload_fields, target_command, source, kafka_topic,
                trigger_readmodel, trigger_event, processor_title, description }
@@ -438,21 +740,6 @@ def get_trigger_info(slice_data: dict) -> dict:
 
     return {}
 
-
-def has_backend_prompts(slice_data: dict) -> bool:
-    """Check if this slice has enrichment instructions.
-
-    Supports both formats:
-    - .eventmodel:  codeGen.backendPrompts[] on the slice
-    - .eventmodel2: description on individual AUTOMATION processors
-    """
-    if slice_data.get("codeGen", {}).get("backendPrompts"):
-        return True
-    # .eventmodel2: check processor descriptions
-    for proc in slice_data.get("processors", []):
-        if proc.get("type") == "AUTOMATION" and proc.get("description"):
-            return True
-    return False
 
 
 def get_enrichment_info(slice_data: dict) -> dict:
@@ -1597,14 +1884,6 @@ def gen_test(ds: DerivedSlice) -> str:
 # Renderers — projections
 # ──────────────────────────────────────────────────────────────────────
 
-def is_projection_slice(slice_data: dict) -> bool:
-    """Detect STATE_VIEW slices (readmodels, no commands)."""
-    return (
-        slice_data.get("sliceType") == "STATE_VIEW"
-        and slice_data.get("readmodels")
-        and not slice_data.get("commands")
-    )
-
 
 def gen_projection(ds: DerivedSlice) -> str:
     """Generate projection index.ts with ProjectionConfig skeleton.
@@ -2072,6 +2351,33 @@ export const routeConfig: RouteConfig = {{
 # Auto-normalize helper
 # ──────────────────────────────────────────────────────────────────────
 
+def _auto_normalize_before_scaffold(root: Path, slice_json_path: Path,
+                                    em_base: str, context: str, folder: str) -> None:
+    """Run the normalizer BEFORE scaffold reads from it.
+
+    Produces .normalized.json so scaffold can consume it as its primary input.
+    Silently skips if the normalizer script is not present.
+    Looks for the normalize script relative to THIS script (not root), so it works
+    in worktree scenarios where root points to an isolated copy.
+    """
+    import subprocess
+    # Find normalize script relative to this scaffold script (sibling skill)
+    this_script_dir = Path(__file__).resolve().parent
+    normalize_script = this_script_dir.parent.parent / "evdb-normalize" / "scripts" / "normalize_slice.py"
+    if not normalize_script.exists():
+        # Fallback: try from root
+        normalize_script = root / ".claude" / "skills" / "evdb-normalize" / "scripts" / "normalize_slice.py"
+    if not normalize_script.exists():
+        return
+    try:
+        subprocess.run(
+            [sys.executable, str(normalize_script), str(slice_json_path), "--root", str(root)],
+            check=False, capture_output=True, text=True,
+        )
+    except Exception:
+        pass  # Normalize failure never blocks scaffolding
+
+
 def _auto_normalize(root: Path, slice_json_path: Path) -> None:
     """Auto-run the normalizer + planner after scaffolding.
 
@@ -2144,9 +2450,20 @@ def scaffold_slice(root: Path, folder: str, dry_run: bool = False) -> dict:
     with open(slice_json_path) as f:
         slice_data = json.load(f)
 
-    # Build event ID map and derive the slice model
-    event_id_map = build_event_id_map(root, context)
-    ds = derive_slice(slice_data, event_id_map)
+    # Run normalize first to produce .normalized.json (if normalizer is available)
+    _auto_normalize_before_scaffold(root, slice_json_path, em_base, context, folder)
+
+    # Try to load from .normalized.json (single source of truth for derivations)
+    norm_path = root / em_base / ".normalized" / context / f"{folder}.normalized.json"
+    if norm_path.exists():
+        with open(norm_path) as f:
+            norm_data = json.load(f)
+        event_id_map = build_event_id_map_from_normalized(root, context, em_base)
+        ds = derive_slice_from_normalized(norm_data, event_id_map)
+    else:
+        # Fallback: derive from raw slice.json (legacy path)
+        event_id_map = build_event_id_map(root, context)
+        ds = derive_slice(slice_data, event_id_map)
 
     paths = SlicePaths(root, context, ds.slice_name, ds.stream)
     files_created = []
@@ -2160,9 +2477,9 @@ def scaffold_slice(root: Path, folder: str, dry_run: bool = False) -> dict:
         path.write_text(content)
         (files_updated if is_update else files_created).append(str(path.relative_to(root)))
 
-    # Detect enrichment-only slice (processor + backendPrompts, no commands)
-    is_enrichment = has_backend_prompts(slice_data) and not slice_data.get("commands")
-    is_projection = is_projection_slice(slice_data)
+    # Detect slice type from DerivedSlice flags
+    is_enrichment = bool(ds.backend_prompts) and not ds.has_commands
+    is_projection = ds.is_projection
 
     if is_projection:
         # ── Projection slice: generate ProjectionConfig + test ────────
@@ -2354,15 +2671,9 @@ def _gen_todo_context(paths: SlicePaths, ds: DerivedSlice,
     sn = ds.slice_name
     stream = ds.stream
     context = ds.context
-    is_enrichment = has_backend_prompts(ds.raw) and not ds.raw.get("commands")
-    is_proj = is_projection_slice(ds.raw)
-
-    # Get backend prompts from slice-level or processor descriptions
-    backend_prompts = ds.raw.get("codeGen", {}).get("backendPrompts", [])
-    if not backend_prompts:
-        for proc in ds.raw.get("processors", []):
-            if proc.get("type") == "AUTOMATION" and proc.get("description"):
-                backend_prompts.append(proc["description"])
+    is_enrichment = bool(ds.backend_prompts) and not ds.has_commands
+    is_proj = ds.is_projection
+    backend_prompts = ds.backend_prompts
 
     lines = [
         f"# TODO Context for {sn}",
