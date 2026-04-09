@@ -10,6 +10,7 @@ const BC_DIR = join(__dirname, "..", "..", "BusinessCapabilities");
 export interface RouteConfig {
   basePath: string;
   createRouter: (storageAdapter: IEvDbStorageAdapter) => Router;
+  swagger?: Record<string, unknown>;
 }
 
 /**

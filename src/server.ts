@@ -7,7 +7,7 @@ import { createServer, type Server } from "node:http";
 
 import { createProjectionRouter } from "./abstractions/router/projections.js";
 import { ProjectionRepository } from "./abstractions/projections/ProjectionRepository.js";
-import { swaggerDocument } from "./swagger.js";
+import { buildSwaggerDocument } from "./swagger.js";
 import { PgBossEndpointFactory } from "./abstractions/endpoints/PgBossEndpointFactory.js";
 import { OutboxIdempotencyGate } from "./abstractions/endpoints/IdempotencyGate.js";
 import { ProjectionFactory } from "./abstractions/projections/ProjectionFactory.js";
@@ -87,7 +87,6 @@ async function main() {
   const projectionRepository = new ProjectionRepository(pool);
   const allowedProjections = new Set(projectionSlices.map((s) => s.projectionName));
 
-  app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
   app.use("/api/projections", createProjectionRouter(projectionRepository, allowedProjections));
 
   const routeConfigs = await discoverRoutes();
@@ -95,6 +94,9 @@ async function main() {
     app.use(route.basePath, route.createRouter(storageAdapter));
   }
   console.log(`[Startup] REST routes discovered: ${routeConfigs.map((r) => r.basePath).join(", ")}`);
+
+  const swaggerDocument = buildSwaggerDocument(routeConfigs);
+  app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 
   const httpServer = await startServer(app, config.port);
 

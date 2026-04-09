@@ -38,6 +38,29 @@ TYPE_MAP = {
 }
 
 
+OPENAPI_TYPE_MAP = {
+    "UUID": ("string", None),
+    "String": ("string", None),
+    "Double": ("number", None),
+    "DateTime": ("string", "date-time"),
+    "Integer": ("integer", None),
+    "Boolean": ("boolean", None),
+    "Int": ("integer", None),
+    "Decimal": ("number", None),
+    "Date": ("string", "date"),
+    "Long": ("integer", None),
+}
+
+
+def openapi_type(field_type: str) -> dict:
+    """Convert event model type to OpenAPI schema type."""
+    t, fmt = OPENAPI_TYPE_MAP.get(field_type, ("string", None))
+    result: dict = {"type": t}
+    if fmt:
+        result["format"] = fmt
+    return result
+
+
 def ts_type(field_type: str) -> str:
     return TYPE_MAP.get(field_type, "string")
 
@@ -697,15 +720,23 @@ def gen_command_handler(ds: DerivedSlice) -> str:
 def gen_adapter(ds: DerivedSlice) -> str:
     """Generate adapter.ts."""
     # Determine stream ID field from aggregate
+    # Priority: idAttribute > first non-generated UUID > first generated UUID > default
     aggregate = ds.command.get("aggregate", "")
     id_field = "account"
+    first_generated_uuid = None
     for f in ds.command.get("fields", []):
         if f.get("idAttribute"):
             id_field = field_name(f["name"])
+            first_generated_uuid = None  # signal we found it
             break
         if f.get("type") == "UUID" and not f.get("generated"):
             id_field = field_name(f["name"])
+            first_generated_uuid = None
             break
+        if f.get("type") == "UUID" and f.get("generated") and first_generated_uuid is None:
+            first_generated_uuid = field_name(f["name"])
+    if first_generated_uuid is not None:
+        id_field = first_generated_uuid
 
     return f'''import type {{ {ds.slice_name} }} from "./command.js";
 import {{ handle{ds.slice_name} }} from "./commandHandler.js";
@@ -1904,8 +1935,31 @@ export type {stream}Views = Readonly<
     return content
 
 
+def _build_swagger_properties(fields: list[dict]) -> str:
+    """Build OpenAPI properties object string from command fields."""
+    props = []
+    required = []
+    for f in fields:
+        if f.get("generated"):
+            continue
+        name = camel_case(f["name"])
+        schema = openapi_type(f.get("type", "String"))
+        example = f.get("example", "")
+        parts = [f'type: "{schema["type"]}"']
+        if "format" in schema:
+            parts.append(f'format: "{schema["format"]}"')
+        if example:
+            if schema["type"] in ("number", "integer"):
+                parts.append(f"example: {example}")
+            else:
+                parts.append(f'example: "{example}"')
+        props.append(f"                    {name}: {{ {', '.join(parts)} }},")
+        required.append(f'"{name}"')
+    return "\n".join(props), ", ".join(required)
+
+
 def update_routes(paths: SlicePaths, slice_data: dict) -> str:
-    """Update routes.ts to register the new endpoint."""
+    """Update routes.ts to register the new endpoint with swagger spec."""
     sn = slice_name_pascal(slice_data)
     context = slice_data["context"]
     content = paths.routes.read_text() if paths.routes.exists() else ""
@@ -1918,18 +1972,75 @@ def update_routes(paths: SlicePaths, slice_data: dict) -> str:
 
     import_line = f'import {{ {adapter_name} }} from "./{sn}/REST/index.js";'
 
+    context_pascal = pascal_case(context)
+    base_path = f"/api/{kebab_case(context_pascal)}"
+    full_path = f"{base_path}/{route_path}"
+
+    # Build swagger properties from command fields
+    commands = slice_data.get("commands", [])
+    input_fields = commands[0].get("fields", []) if commands else []
+    props_str, required_str = _build_swagger_properties(input_fields)
+
+    swagger_entry = f"""    "{full_path}": {{
+      post: {{
+        summary: "{sn}",
+        tags: ["{context_pascal}"],
+        requestBody: {{
+          required: true,
+          content: {{
+            "application/json": {{
+              schema: {{
+                type: "object",
+                required: [{required_str}],
+                properties: {{
+{props_str}
+                }},
+              }},
+            }},
+          }},
+        }},
+        responses: {{
+          "200": {{
+            description: "Command executed",
+            content: {{
+              "application/json": {{
+                schema: {{
+                  type: "object",
+                  properties: {{
+                    streamId: {{ type: "string" }},
+                    emittedEventTypes: {{ type: "array", items: {{ type: "string" }} }},
+                  }},
+                }},
+              }},
+            }},
+          }},
+          "400": {{ description: "Missing required fields" }},
+          "409": {{ description: "Optimistic concurrency violation" }},
+        }},
+      }},
+    }}"""
+
     if not content:
         return f"""import {{ Router }} from "express";
 {import_line}
 import type {{ IEvDbStorageAdapter }} from "@eventualize/core/adapters/IEvDbStorageAdapter";
+import type {{ RouteConfig }} from "../../../abstractions/endpoints/discoverRoutes.js";
 
-export function create{context}Router(storageAdapter: IEvDbStorageAdapter): Router {{
+function create{context_pascal}Router(storageAdapter: IEvDbStorageAdapter): Router {{
   const router = Router();
 
   router.post("/{route_path}", {adapter_name}(storageAdapter));
 
   return router;
 }}
+
+export const routeConfig: RouteConfig = {{
+  basePath: "{base_path}",
+  createRouter: create{context_pascal}Router,
+  swagger: {{
+{swagger_entry},
+  }},
+}};
 """
 
     # Add import
@@ -1946,6 +2057,13 @@ export function create{context}Router(storageAdapter: IEvDbStorageAdapter): Rout
     route_line = f'  router.post("/{route_path}", {adapter_name}(storageAdapter));'
     if route_line not in content:
         content = content.replace("  return router;", f"{route_line}\n\n  return router;")
+
+    # Add swagger entry before closing of swagger object
+    if full_path not in content:
+        content = content.replace(
+            "  },\n};",
+            f"  {swagger_entry},\n  }},\n}};",
+        )
 
     return content
 
@@ -2182,11 +2300,12 @@ def scaffold_slice(root: Path, folder: str, dry_run: bool = False) -> dict:
             if updated != existing:
                 write_file(paths.views_type, updated, is_update=True)
 
-        # 11. Update routes (REST only — automation slices don't have routes)
-        if not ds.is_automation and paths.routes.exists():
+        # 11. Update routes (REST only — only slices with commands get routes)
+        if ds.has_commands and not ds.is_automation:
+            existing = paths.routes.read_text() if paths.routes.exists() else ""
             updated = update_routes(paths, slice_data)
-            if updated != paths.routes.read_text():
-                write_file(paths.routes, updated, is_update=True)
+            if updated != existing:
+                write_file(paths.routes, updated, is_update=paths.routes.exists())
 
     # 11b. Update per-context automations.ts (automation slices only)
     if not is_enrichment and ds.is_automation and not dry_run:
