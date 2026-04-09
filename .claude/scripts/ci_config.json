@@ -1,0 +1,74 @@
+{
+  "repair": {
+    "max_repair_passes": 1,
+    "max_ai_turns_per_repair": 10,
+    "allow_ai_classification_fallback": true,
+    "ai_classification_min_output_lines": 10
+  },
+  "confidence": {
+    "weights": {
+      "verify_pass": 35,
+      "test_pass": 35,
+      "no_todos_remaining": 10,
+      "no_repair_needed": 10,
+      "repair_succeeded": 5,
+      "diff_boundary_clean": 5,
+      "scan_session_clean": 5,
+      "token_anomaly_penalty": -5,
+      "turn_anomaly_penalty": -5
+    },
+    "thresholds": {
+      "token_anomaly": 80000,
+      "turn_anomaly": 30
+    },
+    "bands": {
+      "HIGH": 80,
+      "MEDIUM": 50,
+      "LOW": 20,
+      "BLOCKED": 0
+    },
+    "recommendations": {
+      "HIGH": "Ready for review",
+      "MEDIUM": "Review with attention to flagged areas",
+      "LOW": "Significant concerns — manual inspection required",
+      "BLOCKED": "Do not merge — critical failures unresolved"
+    }
+  },
+  "repair_strategies": {
+    "import_error": {
+      "deterministic": true,
+      "allowed_files": ["*.ts"],
+      "description": "Fix import paths (.js extensions, relative prefixes)"
+    },
+    "type_error": {
+      "deterministic": true,
+      "allowed_files": ["command.ts", "gwts.ts", "commandHandler.ts", "state.ts"],
+      "description": "Patch field types based on verify detail"
+    },
+    "path_error": {
+      "deterministic": true,
+      "allowed_files": ["*"],
+      "description": "Rename or move files to expected paths"
+    },
+    "predicate_mismatch": {
+      "deterministic": false,
+      "allowed_files": ["gwts.ts"],
+      "description": "AI repair restricted to gwts.ts"
+    },
+    "missing_handler_branch": {
+      "deterministic": false,
+      "allowed_files": ["commandHandler.ts"],
+      "description": "AI repair restricted to commandHandler.ts"
+    },
+    "verification_failure": {
+      "deterministic": false,
+      "allowed_files": ["gwts.ts", "commandHandler.ts", "adapter.ts"],
+      "description": "AI repair for generic verification failures"
+    },
+    "test_failure": {
+      "deterministic": false,
+      "allowed_files": ["gwts.ts", "commandHandler.ts"],
+      "description": "AI repair for test failures (never touch test files)"
+    }
+  }
+}
