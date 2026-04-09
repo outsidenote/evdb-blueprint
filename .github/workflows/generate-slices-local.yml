@@ -1,0 +1,205 @@
+name: Generate Slice Code (Local Act Test)
+
+# Single-job version for local testing with act.
+# Simulates the full flow: scaffold → Claude Code → commit per context.
+#
+# Usage:
+#   act workflow_dispatch \
+#     -W .github/workflows/generate-slices-local.yml \
+#     --input em_dir=.eventmodel2 \
+#     --secret-file .secrets \
+#     --container-architecture linux/amd64
+
+on:
+  workflow_dispatch:
+    inputs:
+      em_dir:
+        description: 'Event model directory'
+        required: false
+        default: '.eventmodel'
+      context:
+        description: 'Only process a specific context (leave empty for all)'
+        required: false
+        default: ''
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: npm ci
+
+      # ── Phase 1: Deterministic ──
+
+      - name: Run orchestrator (split + diff + scaffold)
+        id: generate
+        run: |
+          CONTEXT_ARG=""
+          if [ -n "${{ github.event.inputs.context }}" ]; then
+            CONTEXT_ARG="--context ${{ github.event.inputs.context }}"
+          fi
+
+          BASE_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+
+          python3 .claude/scripts/generate_slices.py \
+            --root . \
+            --em-dir ${{ github.event.inputs.em_dir }} \
+            --base-branch "$BASE_BRANCH" \
+            $CONTEXT_ARG > /tmp/generate-output.json
+
+          cat /tmp/generate-output.json
+
+          TOTAL=$(python3 -c "import sys,json; print(json.load(sys.stdin)['total_planned'])" < /tmp/generate-output.json)
+          echo "total=$TOTAL" >> "$GITHUB_OUTPUT"
+
+          if [ "$TOTAL" = "0" ]; then
+            echo "No planned slices. Done."
+            exit 0
+          fi
+
+          # Build context:slices pairs
+          python3 -c "
+          import sys, json
+          data = json.load(sys.stdin)
+          for ctx, info in data['contexts'].items():
+              if info['planned_slices']:
+                  slices = ','.join(info['planned_slices'])
+                  split = ' '.join(info['split_files'])
+                  pascal = info['context_pascal']
+                  branch = info['branch']
+                  idx = info['index_file']
+                  print(f'{ctx}|{pascal}|{slices}|{split}|{branch}|{idx}')
+          " < /tmp/generate-output.json > /tmp/context-pairs.txt
+
+          cat /tmp/context-pairs.txt
+
+      # ── Phase 2: Claude Code per context ──
+
+      - name: Install Claude Code CLI
+        if: steps.generate.outputs.total != '0'
+        run: |
+          npm install -g @anthropic-ai/claude-code
+          useradd -m ciuser 2>/dev/null || true
+          chown -R ciuser:ciuser . 2>/dev/null || true
+
+      - name: Process each context
+        if: steps.generate.outputs.total != '0'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          BASE_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+
+          while IFS='|' read -r CTX CTX_PASCAL SLICES SPLIT_FILES BRANCH INDEX_FILE; do
+            [ -z "$CTX" ] && continue
+            echo ""
+            echo "============================================"
+            echo "=== Context: $CTX ($CTX_PASCAL)"
+            echo "=== Branch:  $BRANCH"
+            echo "=== Slices:  $SLICES"
+            echo "============================================"
+
+            # Create codegen branch from current state
+            git checkout -b "$BRANCH" 2>/dev/null || git checkout "$BRANCH"
+
+            # Commit 1: split files
+            git add $SPLIT_FILES $INDEX_FILE 2>/dev/null || true
+            if ! git diff --cached --quiet; then
+              git commit -m "chore($CTX_PASCAL): split slice definitions from config.json
+
+          Slices: $SLICES"
+              echo "  Committed split files"
+            fi
+
+            # Commit 2: scaffolded code
+            git add "src/BusinessCapabilities/$CTX_PASCAL/" 2>/dev/null || true
+            if ! git diff --cached --quiet; then
+              git commit -m "chore($CTX_PASCAL): scaffold boilerplate
+
+          Slices: $SLICES"
+              echo "  Committed scaffold"
+            fi
+
+            # Commit 3: Claude Code fills business logic
+            echo "  Running Claude Code..."
+            CLAUDE_CMD="claude --print --dangerously-skip-permissions \
+              --max-turns 50 \
+              \"You are running in CI to fill in business logic for scaffolded evdb slices.
+
+              Context: $CTX
+              Context folder: $CTX_PASCAL
+              Slices to implement: $SLICES
+
+              The scaffold boilerplate is already generated. You need to:
+              1. Read the slice's TODO_CONTEXT.md for implementation guidance
+              2. Read .claude/skills/evdb-dev-v2/learned_hints.md for domain patterns
+              3. Fill in gwts.ts predicates (replace false stubs with real logic)
+              4. Fill in commandHandler.ts branching logic and computed fields
+              5. Verify tests pass: node --import tsx --test src/BusinessCapabilities/$CTX_PASCAL/slices/*/tests/command.slice.test.ts
+
+              Process each slice one at a time. After all slices are done, run:
+              npm run test:slices\""
+
+            if [ "$(id -u)" = "0" ]; then
+              su -s /bin/bash -c "export ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY && export PATH=$PATH && $CLAUDE_CMD" ciuser
+            else
+              eval "$CLAUDE_CMD"
+            fi
+
+            # Commit 3: business logic
+            git add "src/BusinessCapabilities/$CTX_PASCAL/" 2>/dev/null || true
+            if ! git diff --cached --quiet; then
+              git commit -m "feat($CTX_PASCAL): implement slice business logic
+
+          Slices: $SLICES
+          Co-Authored-By: Claude Code <noreply@anthropic.com>"
+              echo "  Committed business logic"
+            fi
+
+            # Verify — normalize first, then verify all
+            echo "  Normalizing..."
+            python3 .claude/skills/evdb-normalize/scripts/normalize_slice.py \
+              --root . --all 2>/dev/null || true
+            echo "  Verifying..."
+            python3 .claude/skills/evdb-verify/scripts/verify_slice.py \
+              --all --root . || true
+
+            echo "  Running tests..."
+            npm run test:slices || true
+
+            # Show what was committed
+            echo ""
+            echo "  Commits on $BRANCH:"
+            git log --oneline "$BASE_BRANCH".."$BRANCH" 2>/dev/null || true
+            echo ""
+
+            # Return to base branch for next context
+            git checkout "$BASE_BRANCH"
+
+          done < /tmp/context-pairs.txt
+
+      - name: Summary
+        if: steps.generate.outputs.total != '0'
+        run: |
+          echo ""
+          echo "=== Codegen branches created ==="
+          git branch | grep codegen || echo "  (none)"
+          echo ""
+          echo "In real CI, each branch would have a PR targeting the feature branch."
