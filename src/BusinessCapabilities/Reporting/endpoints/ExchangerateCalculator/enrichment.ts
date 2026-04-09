@@ -12,11 +12,24 @@ export interface ExchangerateCalculatorEnrichmentOutput extends ExchangerateCalc
 }
 
 export async function enrich(input: ExchangerateCalculatorEnrichmentInput): Promise<ExchangerateCalculatorEnrichmentOutput> {
-  // TODO: implement enrichment logic — see TODO_CONTEXT.md for backendPrompts instructions
+  if (input.currency === "EUR") {
+    return {
+      ...input,
+      exchangeRate: 1,
+      baseCurrencyAmount: input.amount,
+      reportDate: new Date(),
+    };
+  }
+
+  const res = await fetch(`https://api.frankfurter.app/latest?from=${input.currency}&to=EUR`);
+  const data = await res.json() as { rates: { EUR: number } };
+  const rate = data.rates.EUR;
+  const baseCurrencyAmount = Math.round(input.amount * rate * 100) / 100;
+
   return {
     ...input,
-    baseCurrencyAmount: 0, // TODO: compute enriched field
-    exchangeRate: 0, // TODO: compute enriched field
-    reportDate: new Date(), // TODO: compute enriched field
+    exchangeRate: rate,
+    baseCurrencyAmount,
+    reportDate: new Date(),
   };
 }
