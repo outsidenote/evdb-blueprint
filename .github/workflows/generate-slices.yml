@@ -17,6 +17,10 @@ on:
         description: 'Only process a specific context (leave empty for all)'
         required: false
         default: ''
+      provider:
+        description: 'AI provider: anthropic (direct API) or bedrock (AWS)'
+        required: false
+        default: 'anthropic'
 
 permissions:
   contents: write
@@ -250,13 +254,31 @@ jobs:
       - name: Install Claude Code CLI
         run: npm install -g @anthropic-ai/claude-code@latest
 
+      - name: Configure Claude provider
+        id: provider
+        run: |
+          PROVIDER="${{ github.event.inputs.provider || 'anthropic' }}"
+          if [ "$PROVIDER" = "bedrock" ]; then
+            echo "model=us.anthropic.claude-opus-4-6-v1@bedrock" >> "$GITHUB_OUTPUT"
+            echo "Using Bedrock provider"
+          else
+            echo "model=" >> "$GITHUB_OUTPUT"
+            echo "Using Anthropic API"
+          fi
+
       - name: Warm up API cache
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ secrets.AWS_REGION || 'us-east-1' }}
         run: |
-          # Prime the prompt cache — system prompt + project context gets cached
-          # for ~5 min, so the real run hits cache reads instead of cold input.
+          MODEL_FLAG=""
+          if [ -n "${{ steps.provider.outputs.model }}" ]; then
+            MODEL_FLAG="--model ${{ steps.provider.outputs.model }}"
+          fi
           claude --print --dangerously-skip-permissions \
+            $MODEL_FLAG \
             --max-turns 1 \
             "Reply with OK" > /dev/null 2>&1 || true
 
@@ -264,8 +286,16 @@ jobs:
         id: claude
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ secrets.AWS_REGION || 'us-east-1' }}
         run: |
           START_TIME=$(date +%s)
+
+          MODEL_FLAG=""
+          if [ -n "${{ steps.provider.outputs.model }}" ]; then
+            MODEL_FLAG="--model ${{ steps.provider.outputs.model }}"
+          fi
 
           PROMPT="Read and follow the skill instructions in .claude/skills/evdb-dev-v2/SKILL.md exactly.
 
@@ -282,6 +312,7 @@ jobs:
           # Run with JSON output to capture token usage
           claude --print --dangerously-skip-permissions \
             --output-format json \
+            $MODEL_FLAG \
             --max-turns 50 \
             "$PROMPT" > /tmp/claude-output.json
 
