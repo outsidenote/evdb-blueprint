@@ -1,0 +1,28 @@
+{
+  "slices": [
+    {
+      "id": "3458764666316956067",
+      "slice": "slice:Withdrawals Pending Currency Reporting TODO",
+      "index": 1,
+      "context": "Reporting",
+      "folder": "withdrawalspendingcurrencyreportingtodo",
+      "status": "Planned"
+    },
+    {
+      "id": "3458764666316578346",
+      "slice": "slice: ExchangeRate Calculator",
+      "index": 3,
+      "context": "Reporting",
+      "folder": "exchangeratecalculator",
+      "status": "Planned"
+    },
+    {
+      "id": "3458764666317093624",
+      "slice": "slice: Report Daily BaseTransaction",
+      "index": 5,
+      "context": "Reporting",
+      "folder": "reportdailybasetransaction",
+      "status": "Planned"
+    }
+  ]
+}

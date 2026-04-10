@@ -1,0 +1,12 @@
+{
+  "slices": [
+    {
+      "id": "9999999999999000001",
+      "slice": "slice: Daily Currency Report",
+      "index": 1,
+      "context": "Reporting",
+      "folder": "dailycurrencyreport",
+      "status": "Planned"
+    }
+  ]
+}

@@ -4,6 +4,20 @@ import { buildQueueName } from "./PgBossEndpointIdentity.js";
 import { createEndpointConfig, type PgBossEndpointConfigBase } from "./PgBossEndpointConfig.js";
 import type { CommandHandlerOrchestratorResult } from "../commands/commandHandler.js";
 
+// ── Self-registration registry ──────────────────────────────────────
+// Every call to defineAutomationEndpoint() automatically registers the
+// endpoint. At startup, call discoverAutomations() to collect them all.
+
+const registry: AutomationEndpoint[] = [];
+
+/**
+ * Returns all automation endpoints that were registered via defineAutomationEndpoint().
+ * Modules must be imported (side-effect) before calling this.
+ */
+export function getRegisteredAutomations(): readonly AutomationEndpoint[] {
+  return registry;
+}
+
 /**
  * Configuration for an automation endpoint that bridges a message
  * to a command slice via pg-boss.
@@ -105,7 +119,7 @@ export function defineAutomationEndpoint<TPayload, TCommand>(
     queueName,
   };
 
-  return {
+  const endpoint: AutomationEndpoint = {
     endpointIdentity,
 
     create(storageAdapter: IEvDbStorageAdapter): PgBossEndpointConfigBase {
@@ -132,4 +146,7 @@ export function defineAutomationEndpoint<TPayload, TCommand>(
       });
     },
   };
+
+  registry.push(endpoint);
+  return endpoint;
 }

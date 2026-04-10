@@ -1,0 +1,117 @@
+{
+  "id": "3458764666316578346",
+  "status": "Created",
+  "title": "slice: ExchangeRate Calculator",
+  "context": "Reporting",
+  "sliceType": "UNDEFINED",
+  "commands": [],
+  "events": [],
+  "readmodels": [],
+  "screens": [],
+  "screenImages": [],
+  "screenLayouts": [],
+  "processors": [
+    {
+      "id": "3458764666314638992",
+      "tags": [],
+      "groupId": "3458764666314638999",
+      "elementContext": "INTERNAL",
+      "modelContext": "Reporting",
+      "context": "INTERNAL",
+      "slice": "slice: ExchangeRate Calculator",
+      "title": "automation",
+      "fields": [
+        {
+          "name": "Account",
+          "type": "UUID",
+          "example": "1234",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "Amount",
+          "type": "Double",
+          "example": "21",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "baseCurrencyAmount",
+          "type": "Double",
+          "cardinality": "Single",
+          "subfields": [],
+          "generated": true,
+          "idAttribute": false
+        },
+        {
+          "name": "Currency",
+          "type": "String",
+          "example": "USD",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "exchangeRate",
+          "type": "Decimal",
+          "cardinality": "Single",
+          "subfields": [],
+          "generated": true,
+          "idAttribute": false
+        },
+        {
+          "name": "reportDate",
+          "type": "Date",
+          "cardinality": "Single",
+          "subfields": [],
+          "generated": true,
+          "idAttribute": false
+        },
+        {
+          "name": "session",
+          "type": "String",
+          "example": "0011",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        }
+      ],
+      "type": "AUTOMATION",
+      "description": "",
+      "aggregate": "default",
+      "aggregateDependencies": [],
+      "dependencies": [
+        {
+          "id": "3458764666314895988",
+          "type": "OUTBOUND",
+          "title": "Report transaction in base currency",
+          "elementType": "COMMAND"
+        },
+        {
+          "id": "3458764666315470668",
+          "type": "INBOUND",
+          "title": "Withdrawals Reporting",
+          "elementType": "READMODEL"
+        }
+      ],
+      "createsAggregate": false,
+      "triggers": [],
+      "sketched": false,
+      "prototype": {
+        "activeByDefault": false
+      }
+    }
+  ],
+  "tables": [],
+  "specifications": [],
+  "actors": [],
+  "codeGen": {
+    "backendPrompts": [
+      "Enrichment: Exchange Rate Calculator\n\nFetch the current exchange rate between the incoming transaction currency and the base reporting currency (default: EUR) using the Frankfurter API.\n\nAPI: GET https://api.frankfurter.app/latest?from={currency}&to=EUR\n\nExample request: GET https://api.frankfurter.app/latest?from=USD&to=EUR\n\nExample response:\n\n\n{ \"base\": \"USD\", \"date\": \"2026-04-02\", \"rates\": { \"EUR\": 0.92 } }\nSteps:\n\nIf currency equals EUR, set exchangeRate = 1, baseCurrencyAmount = amount, skip to step 4\nCall https://api.frankfurter.app/latest?from={currency}&to=EUR\nExtract rate, calculate baseCurrencyAmount = amount * rate, round to 2 decimal places\nReturn: exchangeRate, baseCurrencyAmount, baseCurrency = \"EUR\""
+    ],
+    "uiPrompts": []
+  },
+  "aggregates": []
+}

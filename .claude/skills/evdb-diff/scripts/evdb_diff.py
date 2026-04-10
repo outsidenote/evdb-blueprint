@@ -50,8 +50,41 @@ def fuzzy_match(a: str, b: str) -> bool:
     return False
 
 
+def normalize_for_hash(obj: Any) -> Any:
+    """
+    Recursively normalize a JSON structure so that reordering of array elements
+    does not change the hash. Arrays of dicts are sorted by 'name', 'id', or 'title'
+    (first available). Primitive arrays are sorted directly.
+    """
+    if isinstance(obj, dict):
+        return {k: normalize_for_hash(v) for k, v in sorted(obj.items())}
+    elif isinstance(obj, list):
+        normalized = [normalize_for_hash(item) for item in obj]
+        if not normalized:
+            return normalized
+        if isinstance(normalized[0], dict):
+            # Sort by stable key: name > id > title
+            for key in ("name", "id", "title"):
+                if key in normalized[0]:
+                    return sorted(normalized, key=lambda x: str(x.get(key, "")))
+            # No stable key found — sort by serialized form as fallback
+            return sorted(normalized, key=lambda x: json.dumps(x, sort_keys=True))
+        else:
+            # Primitive list — sort directly
+            try:
+                return sorted(normalized)
+            except TypeError:
+                return normalized
+    else:
+        return obj
+
+
 def compute_slice_hash(config_path: Path, slice_id: str) -> str | None:
-    """Compute MD5 hash of a slice's config entry (excluding volatile fields)."""
+    """Compute MD5 hash of a slice's config entry (excluding volatile fields).
+
+    Normalizes array ordering so that field/event/spec reordering in Miro
+    does not produce false positive drift detection.
+    """
     with open(config_path) as f:
         config = json.load(f)
 
@@ -59,8 +92,9 @@ def compute_slice_hash(config_path: Path, slice_id: str) -> str | None:
     for s in config.get("slices", []):
         if s.get("id") == slice_id:
             spec = {k: v for k, v in s.items() if k not in excluded}
+            normalized = normalize_for_hash(spec)
             return hashlib.md5(
-                json.dumps(spec, sort_keys=True, separators=(",", ":")).encode()
+                json.dumps(normalized, sort_keys=True, separators=(",", ":")).encode()
             ).hexdigest()
     return None
 

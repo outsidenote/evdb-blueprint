@@ -2,7 +2,7 @@ import * as assert from "node:assert";
 import { test, describe } from "node:test";
 import express from "express";
 import request from "supertest";
-import { createFundsRouter } from "#BusinessCapabilities/Funds/endpoints/routes.js";
+import { routeConfig } from "#BusinessCapabilities/Funds/endpoints/routes.js";
 import InMemoryStorageAdapter from "./InMemoryStorageAdapter.js";
 
 function createTestApp() {
@@ -10,7 +10,7 @@ function createTestApp() {
 
   const app = express();
   app.use(express.json());
-  app.use("/api/funds", createFundsRouter(adapter));
+  app.use(routeConfig.basePath, routeConfig.createRouter(adapter));
   return app;
 }
 

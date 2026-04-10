@@ -1,0 +1,179 @@
+{
+  "id": "zero-scan-002",
+  "status": "Planned",
+  "title": "slice: Deposit Funds",
+  "context": "Funds",
+  "sliceType": "STATE_CHANGE",
+  "commands": [
+    {
+      "id": "zero-scan-cmd-002",
+      "tags": [],
+      "elementContext": "INTERNAL",
+      "modelContext": "Funds",
+      "context": "INTERNAL",
+      "slice": "slice: Deposit Funds",
+      "title": "Deposit Funds",
+      "fields": [
+        { "name": "accountId",   "type": "UUID",     "example": "acc-001",  "subfields": [], "cardinality": "Single", "idAttribute": false },
+        { "name": "amount",      "type": "Double",   "example": "100.00",   "subfields": [], "cardinality": "Single", "idAttribute": false },
+        { "name": "currency",    "type": "String",   "example": "USD",      "subfields": [], "cardinality": "Single", "idAttribute": false },
+        { "name": "depositedAt", "type": "DateTime", "example": "2025-01-02 09:00", "generated": true, "subfields": [], "cardinality": "Single", "idAttribute": false }
+      ],
+      "type": "COMMAND",
+      "description": "",
+      "aggregate": "account",
+      "aggregateDependencies": ["account"],
+      "dependencies": [
+        { "id": "zero-scan-evt-003", "type": "OUTBOUND", "title": "Funds Deposited", "elementType": "EVENT" }
+      ],
+      "createsAggregate": false,
+      "triggers": [],
+      "sketched": false,
+      "prototype": { "activeByDefault": false }
+    }
+  ],
+  "events": [
+    {
+      "id": "zero-scan-evt-003",
+      "tags": [],
+      "elementContext": "INTERNAL",
+      "modelContext": "Funds",
+      "context": "INTERNAL",
+      "slice": "slice: Deposit Funds",
+      "title": "Funds Deposited",
+      "fields": [
+        { "name": "accountId",   "type": "UUID",     "example": "acc-001", "subfields": [], "cardinality": "Single", "idAttribute": false },
+        { "name": "amount",      "type": "Double",   "example": "100.00",  "subfields": [], "cardinality": "Single", "idAttribute": false },
+        { "name": "currency",    "type": "String",   "example": "USD",     "subfields": [], "cardinality": "Single", "idAttribute": false },
+        { "name": "depositedAt", "type": "DateTime", "example": "2025-01-02 09:00", "generated": true, "subfields": [], "cardinality": "Single", "idAttribute": false }
+      ],
+      "type": "EVENT",
+      "description": "",
+      "aggregate": "account",
+      "aggregateDependencies": ["account"],
+      "dependencies": [],
+      "createsAggregate": false,
+      "triggers": [],
+      "sketched": false,
+      "prototype": { "activeByDefault": false }
+    },
+    {
+      "id": "zero-scan-evt-004",
+      "tags": [],
+      "elementContext": "INTERNAL",
+      "modelContext": "Funds",
+      "context": "INTERNAL",
+      "slice": "slice: Deposit Funds",
+      "title": "Deposit Rejected",
+      "fields": [
+        { "name": "accountId", "type": "UUID",   "example": "acc-001",                  "subfields": [], "cardinality": "Single", "idAttribute": false },
+        { "name": "amount",    "type": "Double", "example": "0.00",                     "subfields": [], "cardinality": "Single", "idAttribute": false },
+        { "name": "reason",    "type": "String", "example": "Amount must be greater than zero", "generated": true, "subfields": [], "cardinality": "Single", "idAttribute": false }
+      ],
+      "type": "EVENT",
+      "description": "",
+      "aggregate": "account",
+      "aggregateDependencies": ["account"],
+      "dependencies": [],
+      "createsAggregate": false,
+      "triggers": [],
+      "sketched": false,
+      "prototype": { "activeByDefault": false }
+    }
+  ],
+  "readmodels": [],
+  "screens": [],
+  "screenImages": [],
+  "screenLayouts": [],
+  "processors": [],
+  "tables": [],
+  "specifications": [
+    {
+      "vertical": false,
+      "id": "zero-scan-spec-003",
+      "sliceName": "slice: Deposit Funds",
+      "title": "spec: invalid deposit",
+      "given": [],
+      "when": [
+        {
+          "title": "Deposit Funds",
+          "tags": [],
+          "id": "zero-scan-spec-003-when",
+          "index": 0,
+          "specRow": -1,
+          "type": "SPEC_COMMAND",
+          "fields": [
+            { "name": "accountId",   "type": "UUID",     "example": "acc-001", "subfields": [], "cardinality": "Single" },
+            { "name": "amount",      "type": "Double",   "example": "0",       "subfields": [], "cardinality": "Single" },
+            { "name": "currency",    "type": "String",   "example": "USD",     "subfields": [], "cardinality": "Single" },
+            { "name": "depositedAt", "type": "DateTime", "example": "",        "generated": true, "subfields": [], "cardinality": "Single" }
+          ],
+          "linkedId": "zero-scan-cmd-002"
+        }
+      ],
+      "then": [
+        {
+          "title": "Deposit Rejected",
+          "tags": [],
+          "id": "zero-scan-spec-003-then",
+          "index": 0,
+          "specRow": -1,
+          "type": "SPEC_EVENT",
+          "fields": [
+            { "name": "accountId", "type": "UUID",   "example": "acc-001", "subfields": [], "cardinality": "Single" },
+            { "name": "amount",    "type": "Double", "example": "0.00",    "subfields": [], "cardinality": "Single" },
+            { "name": "reason",    "type": "String", "example": "Amount must be greater than zero", "generated": true, "subfields": [], "cardinality": "Single" }
+          ],
+          "linkedId": "zero-scan-evt-004"
+        }
+      ],
+      "comments": [{ "description": "amount is zero or negative" }],
+      "linkedId": "zero-scan-002"
+    },
+    {
+      "vertical": false,
+      "id": "zero-scan-spec-004",
+      "sliceName": "slice: Deposit Funds",
+      "title": "spec: valid deposit",
+      "given": [],
+      "when": [
+        {
+          "title": "Deposit Funds",
+          "tags": [],
+          "id": "zero-scan-spec-004-when",
+          "index": 0,
+          "specRow": -1,
+          "type": "SPEC_COMMAND",
+          "fields": [
+            { "name": "accountId",   "type": "UUID",     "example": "acc-001",         "subfields": [], "cardinality": "Single" },
+            { "name": "amount",      "type": "Double",   "example": "100.00",          "subfields": [], "cardinality": "Single" },
+            { "name": "currency",    "type": "String",   "example": "USD",             "subfields": [], "cardinality": "Single" },
+            { "name": "depositedAt", "type": "DateTime", "example": "2025-01-02 09:00","generated": true, "subfields": [], "cardinality": "Single" }
+          ],
+          "linkedId": "zero-scan-cmd-002"
+        }
+      ],
+      "then": [
+        {
+          "title": "Funds Deposited",
+          "tags": [],
+          "id": "zero-scan-spec-004-then",
+          "index": 0,
+          "specRow": -1,
+          "type": "SPEC_EVENT",
+          "fields": [
+            { "name": "accountId",   "type": "UUID",     "example": "acc-001",         "subfields": [], "cardinality": "Single" },
+            { "name": "amount",      "type": "Double",   "example": "100.00",          "subfields": [], "cardinality": "Single" },
+            { "name": "currency",    "type": "String",   "example": "USD",             "subfields": [], "cardinality": "Single" },
+            { "name": "depositedAt", "type": "DateTime", "example": "2025-01-02 09:00","generated": true, "subfields": [], "cardinality": "Single" }
+          ],
+          "linkedId": "zero-scan-evt-003"
+        }
+      ],
+      "comments": [{ "description": "amount is positive" }],
+      "linkedId": "zero-scan-002"
+    }
+  ],
+  "actors": [],
+  "aggregates": ["account"]
+}

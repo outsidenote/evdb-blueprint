@@ -1,0 +1,20 @@
+{
+  "slices": [
+    {
+      "id": "zero-scan-001",
+      "slice": "slice: Open Account",
+      "index": 1,
+      "context": "Account",
+      "folder": "openaccount",
+      "status": "Planned"
+    },
+    {
+      "id": "zero-scan-002",
+      "slice": "slice: Deposit Funds",
+      "index": 2,
+      "context": "Funds",
+      "folder": "depositfunds",
+      "status": "Planned"
+    }
+  ]
+}

@@ -1,0 +1,28 @@
+{
+  "description": "Pending Withdrawal Lookup spec was changed (new 'priority' field added) but implementation-hashes.json still has the old hash. Pass 4 should detect spec drift and block the slice.",
+  "expected_statuses": {
+    "funddeposit": "Planned",
+    "withdrawalapproval": "Planned",
+    "pendingwithdrawallookup": "Blocked",
+    "withdrawalpendingcommissioncalculationtodo": "Review",
+    "withdrawalcommissionprocessor": "Review",
+    "calculatecommission": "Planned",
+    "fundstowithdrawto-dolist": "Review",
+    "withdrawfunds": "Blocked",
+    "withdrawfundsprocessor": "Review",
+    "accountbalancereadmodel": "Review"
+  },
+  "assertions": [
+    "drift-detected: pendingwithdrawallookup must be Blocked due to spec hash mismatch",
+    "other-hashes-match: all other hashed slices remain Review (no drift on unchanged specs)",
+    "hash-not-updated: the stale hash for pendingwithdrawallookup is NOT overwritten — it stays until re-implementation"
+  ],
+  "expected_actions": [
+    {
+      "slice": "Pending Withdrawal Lookup",
+      "folder": "pendingwithdrawallookup",
+      "action": "re-implement",
+      "reason": "Spec hash drift detected"
+    }
+  ]
+}

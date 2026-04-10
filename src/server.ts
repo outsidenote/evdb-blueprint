@@ -5,18 +5,15 @@ import { PgBoss } from "pg-boss";
 import pg from "pg";
 import { createServer, type Server } from "node:http";
 
-import { createFundsRouter } from "./BusinessCapabilities/Funds/endpoints/routes.js";
 import { createProjectionRouter } from "./abstractions/router/projections.js";
 import { ProjectionRepository } from "./abstractions/projections/ProjectionRepository.js";
-import { swaggerDocument } from "./swagger.js";
+import { buildSwaggerDocument } from "./swagger.js";
 import { PgBossEndpointFactory } from "./abstractions/endpoints/PgBossEndpointFactory.js";
 import { OutboxIdempotencyGate } from "./abstractions/endpoints/IdempotencyGate.js";
 import { ProjectionFactory } from "./abstractions/projections/ProjectionFactory.js";
-import { createFundsWithdrawalApprovedWorker } from "./BusinessCapabilities/Funds/endpoints/CalculateWithdrawComission/pg-boss/index.js";
-import { createWithdrawCommissionCalculatedWorker } from "./BusinessCapabilities/Funds/endpoints/WithdrawFunds/pg-boss/index.js";
-import { createFundsWithdrawnWorker } from "./BusinessCapabilities/FraudAnalysis/endpoints/RecordFundWithdrawAction/pg-boss/index.js";
-import { pendingWithdrawalLookupSlice } from "./BusinessCapabilities/Funds/slices/PendingWithdrawalLookup/index.js";
-import { accountBalanceReadModelSlice } from "./BusinessCapabilities/Funds/slices/AccountBalanceReadModel/index.js";
+import { discoverAutomations } from "./abstractions/endpoints/discoverAutomations.js";
+import { discoverRoutes } from "./abstractions/endpoints/discoverRoutes.js";
+import { discoverProjections } from "./abstractions/projections/discoverProjections.js";
 import EvDbPostgresPrismaClientFactory from "@eventualize/postgres-storage-adapter/EvDbPostgresPrismaClientFactory";
 import EvDbPrismaStorageAdapter from "@eventualize/relational-storage-adapter/EvDbPrismaStorageAdapter";
 
@@ -64,18 +61,15 @@ async function main() {
 
   const idempotencyGate = new OutboxIdempotencyGate(pool);
 
-  const pgBossFactory = await PgBossEndpointFactory.startAll(boss, [
-    createFundsWithdrawalApprovedWorker(storageAdapter),
-    createWithdrawCommissionCalculatedWorker(storageAdapter),
-    createFundsWithdrawnWorker(storageAdapter),
-  ], idempotencyGate, kafka);
+  const pgBossFactory = await PgBossEndpointFactory.startAll(
+    boss,
+    await discoverAutomations(storageAdapter),
+    idempotencyGate,
+    kafka,
+  );
   console.log("[Startup] pg-boss workers registered");
 
-  const projectionSlices = [
-    pendingWithdrawalLookupSlice,
-    accountBalanceReadModelSlice,
-  ];
-
+  const projectionSlices = await discoverProjections();
   const projectionFactory = await ProjectionFactory.startAll(kafka, pool, projectionSlices);
   console.log("[Startup] projections registered");
 
@@ -93,9 +87,16 @@ async function main() {
   const projectionRepository = new ProjectionRepository(pool);
   const allowedProjections = new Set(projectionSlices.map((s) => s.projectionName));
 
-  app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
   app.use("/api/projections", createProjectionRouter(projectionRepository, allowedProjections));
-  app.use("/api/funds", createFundsRouter(storageAdapter));
+
+  const routeConfigs = await discoverRoutes();
+  for (const route of routeConfigs) {
+    app.use(route.basePath, route.createRouter(storageAdapter));
+  }
+  console.log(`[Startup] REST routes discovered: ${routeConfigs.map((r) => r.basePath).join(", ")}`);
+
+  const swaggerDocument = buildSwaggerDocument(routeConfigs);
+  app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 
   const httpServer = await startServer(app, config.port);
 

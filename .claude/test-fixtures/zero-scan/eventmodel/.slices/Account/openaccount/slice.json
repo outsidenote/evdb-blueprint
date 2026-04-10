@@ -1,0 +1,193 @@
+{
+  "id": "zero-scan-001",
+  "status": "Planned",
+  "title": "slice: Open Account",
+  "context": "Account",
+  "sliceType": "STATE_CHANGE",
+  "commands": [
+    {
+      "id": "zero-scan-cmd-001",
+      "tags": [],
+      "elementContext": "INTERNAL",
+      "modelContext": "Account",
+      "context": "INTERNAL",
+      "slice": "slice: Open Account",
+      "title": "Open Account",
+      "fields": [
+        { "name": "accountId", "type": "UUID", "example": "acc-001", "subfields": [], "cardinality": "Single", "idAttribute": false },
+        { "name": "ownerId",   "type": "UUID", "example": "owner-001", "subfields": [], "cardinality": "Single", "idAttribute": false },
+        { "name": "currency",  "type": "String", "example": "USD", "subfields": [], "cardinality": "Single", "idAttribute": false },
+        { "name": "openedAt",  "type": "DateTime", "example": "2025-01-01 10:00", "generated": true, "subfields": [], "cardinality": "Single", "idAttribute": false }
+      ],
+      "type": "COMMAND",
+      "description": "",
+      "aggregate": "account",
+      "aggregateDependencies": ["account"],
+      "dependencies": [
+        { "id": "zero-scan-evt-001", "type": "OUTBOUND", "title": "Account Opened", "elementType": "EVENT" }
+      ],
+      "createsAggregate": true,
+      "triggers": [],
+      "sketched": false,
+      "prototype": { "activeByDefault": false }
+    }
+  ],
+  "events": [
+    {
+      "id": "zero-scan-evt-001",
+      "tags": [],
+      "elementContext": "INTERNAL",
+      "modelContext": "Account",
+      "context": "INTERNAL",
+      "slice": "slice: Open Account",
+      "title": "Account Opened",
+      "fields": [
+        { "name": "accountId", "type": "UUID", "example": "acc-001", "subfields": [], "cardinality": "Single", "idAttribute": false },
+        { "name": "ownerId",   "type": "UUID", "example": "owner-001", "subfields": [], "cardinality": "Single", "idAttribute": false },
+        { "name": "currency",  "type": "String", "example": "USD", "subfields": [], "cardinality": "Single", "idAttribute": false },
+        { "name": "openedAt",  "type": "DateTime", "example": "2025-01-01 10:00", "generated": true, "subfields": [], "cardinality": "Single", "idAttribute": false }
+      ],
+      "type": "EVENT",
+      "description": "",
+      "aggregate": "account",
+      "aggregateDependencies": ["account"],
+      "dependencies": [],
+      "createsAggregate": true,
+      "triggers": [],
+      "sketched": false,
+      "prototype": { "activeByDefault": false }
+    },
+    {
+      "id": "zero-scan-evt-002",
+      "tags": [],
+      "elementContext": "INTERNAL",
+      "modelContext": "Account",
+      "context": "INTERNAL",
+      "slice": "slice: Open Account",
+      "title": "Account Opening Rejected",
+      "fields": [
+        { "name": "accountId", "type": "UUID", "example": "acc-001", "subfields": [], "cardinality": "Single", "idAttribute": false },
+        { "name": "reason",    "type": "String", "example": "Account already exists", "generated": true, "subfields": [], "cardinality": "Single", "idAttribute": false }
+      ],
+      "type": "EVENT",
+      "description": "",
+      "aggregate": "account",
+      "aggregateDependencies": ["account"],
+      "dependencies": [],
+      "createsAggregate": false,
+      "triggers": [],
+      "sketched": false,
+      "prototype": { "activeByDefault": false }
+    }
+  ],
+  "readmodels": [],
+  "screens": [],
+  "screenImages": [],
+  "screenLayouts": [],
+  "processors": [],
+  "tables": [],
+  "specifications": [
+    {
+      "vertical": false,
+      "id": "zero-scan-spec-001",
+      "sliceName": "slice: Open Account",
+      "title": "spec: account already exists",
+      "given": [
+        {
+          "title": "Account Opened",
+          "tags": [],
+          "id": "zero-scan-spec-001-given",
+          "index": 0,
+          "specRow": -1,
+          "type": "SPEC_EVENT",
+          "fields": [
+            { "name": "accountId", "type": "UUID", "example": "acc-001", "subfields": [], "cardinality": "Single" },
+            { "name": "ownerId",   "type": "UUID", "example": "owner-001", "subfields": [], "cardinality": "Single" },
+            { "name": "currency",  "type": "String", "example": "USD", "subfields": [], "cardinality": "Single" },
+            { "name": "openedAt",  "type": "DateTime", "example": "2025-01-01 09:00", "generated": true, "subfields": [], "cardinality": "Single" }
+          ],
+          "linkedId": "zero-scan-evt-001"
+        }
+      ],
+      "when": [
+        {
+          "title": "Open Account",
+          "tags": [],
+          "id": "zero-scan-spec-001-when",
+          "index": 0,
+          "specRow": -1,
+          "type": "SPEC_COMMAND",
+          "fields": [
+            { "name": "accountId", "type": "UUID", "example": "acc-001", "subfields": [], "cardinality": "Single" },
+            { "name": "ownerId",   "type": "UUID", "example": "owner-001", "subfields": [], "cardinality": "Single" },
+            { "name": "currency",  "type": "String", "example": "USD", "subfields": [], "cardinality": "Single" },
+            { "name": "openedAt",  "type": "DateTime", "example": "", "generated": true, "subfields": [], "cardinality": "Single" }
+          ],
+          "linkedId": "zero-scan-cmd-001"
+        }
+      ],
+      "then": [
+        {
+          "title": "Account Opening Rejected",
+          "tags": [],
+          "id": "zero-scan-spec-001-then",
+          "index": 0,
+          "specRow": -1,
+          "type": "SPEC_EVENT",
+          "fields": [
+            { "name": "accountId", "type": "UUID", "example": "acc-001", "subfields": [], "cardinality": "Single" },
+            { "name": "reason",    "type": "String", "example": "Account already exists", "generated": true, "subfields": [], "cardinality": "Single" }
+          ],
+          "linkedId": "zero-scan-evt-002"
+        }
+      ],
+      "comments": [{ "description": "account already exists" }],
+      "linkedId": "zero-scan-001"
+    },
+    {
+      "vertical": false,
+      "id": "zero-scan-spec-002",
+      "sliceName": "slice: Open Account",
+      "title": "spec: account does not exist",
+      "given": [],
+      "when": [
+        {
+          "title": "Open Account",
+          "tags": [],
+          "id": "zero-scan-spec-002-when",
+          "index": 0,
+          "specRow": -1,
+          "type": "SPEC_COMMAND",
+          "fields": [
+            { "name": "accountId", "type": "UUID", "example": "acc-002", "subfields": [], "cardinality": "Single" },
+            { "name": "ownerId",   "type": "UUID", "example": "owner-002", "subfields": [], "cardinality": "Single" },
+            { "name": "currency",  "type": "String", "example": "GBP", "subfields": [], "cardinality": "Single" },
+            { "name": "openedAt",  "type": "DateTime", "example": "2025-01-01 10:00", "generated": true, "subfields": [], "cardinality": "Single" }
+          ],
+          "linkedId": "zero-scan-cmd-001"
+        }
+      ],
+      "then": [
+        {
+          "title": "Account Opened",
+          "tags": [],
+          "id": "zero-scan-spec-002-then",
+          "index": 0,
+          "specRow": -1,
+          "type": "SPEC_EVENT",
+          "fields": [
+            { "name": "accountId", "type": "UUID", "example": "acc-002", "subfields": [], "cardinality": "Single" },
+            { "name": "ownerId",   "type": "UUID", "example": "owner-002", "subfields": [], "cardinality": "Single" },
+            { "name": "currency",  "type": "String", "example": "GBP", "subfields": [], "cardinality": "Single" },
+            { "name": "openedAt",  "type": "DateTime", "example": "2025-01-01 10:00", "generated": true, "subfields": [], "cardinality": "Single" }
+          ],
+          "linkedId": "zero-scan-evt-001"
+        }
+      ],
+      "comments": [{ "description": "account does not exist" }],
+      "linkedId": "zero-scan-001"
+    }
+  ],
+  "actors": [],
+  "aggregates": ["account"]
+}
