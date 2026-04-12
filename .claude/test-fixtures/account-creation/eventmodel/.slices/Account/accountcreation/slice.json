@@ -1,0 +1,373 @@
+{
+  "id": "3458764667154229953",
+  "status": "Planned",
+  "index": 1,
+  "title": "slice: Account Creation",
+  "context": "Account",
+  "sliceType": "STATE_CHANGE",
+  "commands": [
+    {
+      "id": "3458764667153499684",
+      "tags": [],
+      "elementContext": "INTERNAL",
+      "context": "INTERNAL",
+      "slice": "slice: Account Creation",
+      "title": "Create Account",
+      "fields": [
+        {
+          "name": "name",
+          "type": "String",
+          "example": "John Doe",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "currency",
+          "type": "String",
+          "example": "USD",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "accountId",
+          "type": "UUID",
+          "example": "acc-001",
+          "generated": true,
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        }
+      ],
+      "type": "COMMAND",
+      "description": "",
+      "aggregate": "account",
+      "aggregateDependencies": [
+        "account"
+      ],
+      "dependencies": [
+        {
+          "id": "3458764667153961491",
+          "type": "OUTBOUND",
+          "title": "Account Created",
+          "elementType": "EVENT"
+        },
+        {
+          "id": "3458764667153961492",
+          "type": "OUTBOUND",
+          "title": "Account Creation Rejected",
+          "elementType": "EVENT"
+        }
+      ],
+      "createsAggregate": true,
+      "triggers": [],
+      "sketched": false,
+      "prototype": {
+        "activeByDefault": false
+      }
+    }
+  ],
+  "events": [
+    {
+      "id": "3458764667153961491",
+      "tags": [],
+      "elementContext": "INTERNAL",
+      "context": "INTERNAL",
+      "slice": "slice: Account Creation",
+      "title": "Account Created",
+      "fields": [
+        {
+          "name": "name",
+          "type": "String",
+          "example": "John Doe",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "currency",
+          "type": "String",
+          "example": "USD",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "accountId",
+          "type": "UUID",
+          "example": "acc-001",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        }
+      ],
+      "type": "EVENT",
+      "description": "",
+      "aggregate": "account",
+      "aggregateDependencies": [
+        "account"
+      ],
+      "dependencies": [
+        {
+          "id": "3458764667153499684",
+          "type": "INBOUND",
+          "title": "Create Account",
+          "elementType": "COMMAND"
+        }
+      ],
+      "createsAggregate": false,
+      "triggers": [],
+      "sketched": false,
+      "prototype": {
+        "activeByDefault": false
+      }
+    },
+    {
+      "id": "3458764667153961492",
+      "tags": [],
+      "elementContext": "INTERNAL",
+      "context": "INTERNAL",
+      "slice": "slice: Account Creation",
+      "title": "Account Creation Rejected",
+      "fields": [
+        {
+          "name": "name",
+          "type": "String",
+          "example": "John Doe",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "currency",
+          "type": "String",
+          "example": "USD",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "reason",
+          "type": "String",
+          "example": "Account already exists",
+          "generated": true,
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        }
+      ],
+      "type": "EVENT",
+      "description": "",
+      "aggregate": "account",
+      "aggregateDependencies": [
+        "account"
+      ],
+      "dependencies": [
+        {
+          "id": "3458764667153499684",
+          "type": "INBOUND",
+          "title": "Create Account",
+          "elementType": "COMMAND"
+        }
+      ],
+      "createsAggregate": false,
+      "triggers": [],
+      "sketched": false,
+      "prototype": {
+        "activeByDefault": false
+      }
+    }
+  ],
+  "readmodels": [],
+  "screens": [],
+  "screenImages": [],
+  "screenLayouts": [],
+  "processors": [],
+  "tables": [],
+  "specifications": [
+    {
+      "vertical": false,
+      "id": "9000000000000000001",
+      "sliceName": "slice: Account Creation",
+      "title": "spec: New account is created successfully",
+      "given": [],
+      "when": [
+        {
+          "title": "Create Account",
+          "tags": [],
+          "examples": [],
+          "id": "9000000000000000002",
+          "index": 0,
+          "specRow": -1,
+          "type": "SPEC_COMMAND",
+          "fields": [
+            {
+              "name": "name",
+              "type": "String",
+              "example": "John Doe",
+              "subfields": [],
+              "cardinality": "Single"
+            },
+            {
+              "name": "currency",
+              "type": "String",
+              "example": "USD",
+              "subfields": [],
+              "cardinality": "Single"
+            }
+          ]
+        }
+      ],
+      "then": [
+        {
+          "title": "Account Created",
+          "tags": [],
+          "id": "9000000000000000003",
+          "index": 0,
+          "specRow": -1,
+          "type": "SPEC_EVENT",
+          "fields": [
+            {
+              "name": "name",
+              "type": "String",
+              "example": "John Doe",
+              "subfields": [],
+              "cardinality": "Single"
+            },
+            {
+              "name": "currency",
+              "type": "String",
+              "example": "USD",
+              "subfields": [],
+              "cardinality": "Single"
+            },
+            {
+              "name": "accountId",
+              "type": "UUID",
+              "example": "acc-001",
+              "subfields": [],
+              "cardinality": "Single"
+            }
+          ]
+        }
+      ],
+      "comments": [
+        {
+          "description": "isNewAccount"
+        }
+      ],
+      "linkedId": "3458764667154229953"
+    },
+    {
+      "vertical": false,
+      "id": "9000000000000000004",
+      "sliceName": "slice: Account Creation",
+      "title": "spec: Duplicate account is rejected",
+      "given": [
+        {
+          "title": "Account Created",
+          "tags": [],
+          "id": "9000000000000000005",
+          "index": 0,
+          "specRow": -1,
+          "type": "SPEC_EVENT",
+          "fields": [
+            {
+              "name": "name",
+              "type": "String",
+              "example": "John Doe",
+              "subfields": [],
+              "cardinality": "Single"
+            },
+            {
+              "name": "currency",
+              "type": "String",
+              "example": "USD",
+              "subfields": [],
+              "cardinality": "Single"
+            },
+            {
+              "name": "accountId",
+              "type": "UUID",
+              "example": "acc-001",
+              "subfields": [],
+              "cardinality": "Single"
+            }
+          ],
+          "linkedId": "3458764667153961491"
+        }
+      ],
+      "when": [
+        {
+          "title": "Create Account",
+          "tags": [],
+          "examples": [],
+          "id": "9000000000000000006",
+          "index": 0,
+          "specRow": -1,
+          "type": "SPEC_COMMAND",
+          "fields": [
+            {
+              "name": "name",
+              "type": "String",
+              "example": "John Doe",
+              "subfields": [],
+              "cardinality": "Single"
+            },
+            {
+              "name": "currency",
+              "type": "String",
+              "example": "USD",
+              "subfields": [],
+              "cardinality": "Single"
+            }
+          ]
+        }
+      ],
+      "then": [
+        {
+          "title": "Account Creation Rejected",
+          "tags": [],
+          "id": "9000000000000000007",
+          "index": 0,
+          "specRow": -1,
+          "type": "SPEC_EVENT",
+          "fields": [
+            {
+              "name": "name",
+              "type": "String",
+              "example": "John Doe",
+              "subfields": [],
+              "cardinality": "Single"
+            },
+            {
+              "name": "currency",
+              "type": "String",
+              "example": "USD",
+              "subfields": [],
+              "cardinality": "Single"
+            },
+            {
+              "name": "reason",
+              "type": "String",
+              "example": "Account already exists",
+              "subfields": [],
+              "cardinality": "Single"
+            }
+          ]
+        }
+      ],
+      "comments": [
+        {
+          "description": "isDuplicateAccount"
+        }
+      ],
+      "linkedId": "3458764667154229953"
+    }
+  ],
+  "actors": [],
+  "aggregates": [
+    "account"
+  ]
+}

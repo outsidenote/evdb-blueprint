@@ -1,0 +1,14 @@
+{
+  "description": "Account Creation slice — standalone, no prior code. Tests scaffold + behaviour test generation for a simple STATE_CHANGE slice in a non-Funds context.",
+  "expected_statuses": {
+    "accountcreation": "Planned"
+  },
+  "expected_actions": [
+    {
+      "slice": "Account Creation",
+      "folder": "accountcreation",
+      "action": "implement",
+      "reason": "New slice in model, no code exists"
+    }
+  ]
+}

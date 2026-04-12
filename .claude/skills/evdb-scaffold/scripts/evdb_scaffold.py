@@ -1134,6 +1134,89 @@ def gen_rest_endpoint(ds: DerivedSlice) -> str:
     return "\n".join(lines)
 
 
+def gen_rest_behaviour_test(ds: DerivedSlice) -> str:
+    """Generate behaviour.test.ts — HTTP-level test for a REST endpoint using supertest."""
+    route_path = kebab_case(ds.slice_name)
+    context_pascal = pascal_case(ds.context)
+    base_path = f"/api/{kebab_case(context_pascal)}"
+    full_path = f"{base_path}/{route_path}"
+
+    # Required fields (same logic as gen_rest_endpoint)
+    required = []
+    for f in ds.user_fields:
+        fn = field_name(f["name"])
+        if f.get("type") == "UUID" or fn == "account":
+            required.append(fn)
+    if not required and ds.user_fields:
+        required = [field_name(ds.user_fields[0]["name"])]
+
+    lines = [
+        'import * as assert from "node:assert";',
+        'import { test, describe } from "node:test";',
+        'import express from "express";',
+        'import request from "supertest";',
+        f'import {{ routeConfig }} from "#BusinessCapabilities/{ds.context}/endpoints/routes.js";',
+        'import InMemoryStorageAdapter from "../../../../tests/InMemoryStorageAdapter.js";',
+        "",
+        "function createTestApp() {",
+        "  const adapter = new InMemoryStorageAdapter();",
+        "  const app = express();",
+        "  app.use(express.json());",
+        "  app.use(routeConfig.basePath, routeConfig.createRouter(adapter));",
+        "  return app;",
+        "}",
+        "",
+        f'describe("{ds.slice_name} — Behaviour Tests", () => {{',
+    ]
+
+    # Test 1: Valid request returns 200
+    lines.append(f'  test("POST {full_path} with valid payload returns 200", async () => {{')
+    lines.append("    const app = createTestApp();")
+    lines.append("")
+    lines.append("    const res = await request(app)")
+    lines.append(f'      .post("{full_path}")')
+    lines.append("      .send({")
+    for f in ds.user_fields:
+        fn = field_name(f["name"])
+        lines.append(f"        {fn}: {_format_example(f)},")
+    lines.append("      });")
+    lines.append("")
+    lines.append("    assert.strictEqual(res.status, 200);")
+    lines.append('    assert.ok(res.body.streamId, "Response should include streamId");')
+    lines.append('    assert.ok(Array.isArray(res.body.emittedEventTypes), "Response should include emittedEventTypes");')
+    lines.append("  });")
+    lines.append("")
+
+    # Test 2: Missing required fields returns 400
+    if required:
+        lines.append(f'  test("POST {full_path} with missing required fields returns 400", async () => {{')
+        lines.append("    const app = createTestApp();")
+        lines.append("")
+        lines.append("    const res = await request(app)")
+        lines.append(f'      .post("{full_path}")')
+
+        # Send payload with required fields removed
+        non_required = [f for f in ds.user_fields if field_name(f["name"]) not in required]
+        if non_required:
+            lines.append("      .send({")
+            for f in non_required[:2]:
+                fn = field_name(f["name"])
+                lines.append(f"        {fn}: {_format_example(f)},")
+            lines.append("      });")
+        else:
+            lines.append("      .send({});")
+
+        lines.append("")
+        lines.append("    assert.strictEqual(res.status, 400);")
+        lines.append('    assert.ok(res.body.error, "Response should include error message");')
+        lines.append("  });")
+        lines.append("")
+
+    lines.append("});")
+    lines.append("")
+    return "\n".join(lines)
+
+
 def gen_pgboss_endpoint(ds: DerivedSlice) -> str:
     """Generate pg-boss automation endpoint index.ts.
 
@@ -1885,6 +1968,36 @@ def gen_test(ds: DerivedSlice) -> str:
 # ──────────────────────────────────────────────────────────────────────
 
 
+def gen_event_message(event_name: str, event_iface: str, event_fields: list[dict]) -> str:
+    """Generate a message producer file for an event.
+
+    Creates a simple pass-through that writes the event payload to the outbox
+    as a CDC message (channel 'default'), making it available to Kafka consumers
+    like projections.
+    """
+    payload_fields = []
+    for f in event_fields:
+        fn = field_name(f["name"])
+        payload_fields.append(f"      {fn}: payload.{fn},")
+
+    return f'''import type {{ {event_iface} }} from "../events/{event_name}.js";
+import type IEvDbEventMetadata from "@eventualize/types/events/IEvDbEventMetadata";
+import EvDbMessage from "@eventualize/types/messages/EvDbMessage";
+
+export const {camel_case(event_name)}Messages = (
+  payload: Readonly<{event_iface}>,
+  _views: unknown,
+  metadata: IEvDbEventMetadata,
+) => {{
+  return [
+    EvDbMessage.createFromMetadata(metadata, "{event_name}", {{
+{chr(10).join(payload_fields)}
+    }}),
+  ];
+}};
+'''
+
+
 def gen_projection(ds: DerivedSlice) -> str:
     """Generate projection index.ts with ProjectionConfig skeleton.
 
@@ -2176,6 +2289,57 @@ def update_stream_factory(paths: SlicePaths, slice_data: dict, events: list[dict
     return "\n".join(result)
 
 
+def wire_messages_on_stream(paths: SlicePaths, event_names: list[str]) -> str:
+    """Add .withMessages() calls and message imports to the stream factory.
+
+    For each event, adds:
+      - import { <camel>Messages } from "./messages/<eventName>Messages.js";
+      - .withMessages("<EventName>", <camel>Messages) before .build()
+    """
+    content = paths.stream_factory.read_text() if paths.stream_factory.exists() else ""
+    if not content:
+        return content
+
+    new_imports = []
+    new_messages = []
+
+    for en in event_names:
+        msg_var = f"{camel_case(en)}Messages"
+        import_line = f'import {{ {msg_var} }} from "./messages/{en}Messages.js";'
+        message_line = f'  .withMessages("{en}", {msg_var})'
+
+        if msg_var not in content:
+            new_imports.append(import_line)
+        if f'.withMessages("{en}"' not in content:
+            new_messages.append(message_line)
+
+    if not new_imports and not new_messages:
+        return content
+
+    # Insert imports before StreamFactoryBuilder line
+    lines = content.split("\n")
+    builder_idx = None
+    for i, line in enumerate(lines):
+        if "new StreamFactoryBuilder" in line:
+            builder_idx = i
+            break
+
+    if builder_idx is None:
+        return content
+
+    result = lines[:builder_idx]
+    for imp in new_imports:
+        if imp not in content:
+            result.append(imp)
+
+    remaining = "\n".join(lines[builder_idx:])
+    for msg_line in new_messages:
+        remaining = remaining.replace("  .build();", f"{msg_line}\n  .build();", 1)
+
+    result.append(remaining)
+    return "\n".join(result)
+
+
 def update_views_type(paths: SlicePaths, slice_data: dict, view_name: str) -> str:
     """Update or create <Stream>Views.ts."""
     stream = stream_name(slice_data["context"])
@@ -2450,6 +2614,10 @@ def scaffold_slice(root: Path, folder: str, dry_run: bool = False) -> dict:
     with open(slice_json_path) as f:
         slice_data = json.load(f)
 
+    # Ensure context is available in slice_data (it comes from index.json, not slice.json)
+    if "context" not in slice_data:
+        slice_data["context"] = context
+
     # Run normalize first to produce .normalized.json (if normalizer is available)
     _auto_normalize_before_scaffold(root, slice_json_path, em_base, context, folder)
 
@@ -2499,6 +2667,53 @@ def scaffold_slice(root: Path, folder: str, dry_run: bool = False) -> dict:
             existing = projections_path.read_text() if projections_path.exists() else ""
             if updated != existing:
                 write_file(projections_path, updated, is_update=bool(existing))
+
+        # ── Message producers: wire inbound events to the outbox ──────
+        # For each event this projection consumes, generate a message file
+        # and register .withMessages() on the stream factory so events flow
+        # through outbox → CDC → Kafka → this projection.
+        readmodel = ds.raw.get("readmodels", [{}])[0]
+        inbound_event_names = []
+        for dep in readmodel.get("dependencies", []):
+            if dep.get("type") == "INBOUND" and dep.get("elementType") == "EVENT":
+                inbound_event_names.append(pascal_case(dep["title"]))
+
+        if inbound_event_names:
+            messages_dir = paths.swimlane / "messages"
+            wired_events = []
+
+            for en in inbound_event_names:
+                msg_path = messages_dir / f"{en}Messages.ts"
+                if not msg_path.exists():
+                    # Find event fields from all slice.json files in this context
+                    event_fields = []
+                    slices_dir = root / em_base / ".slices" / context
+                    if slices_dir.exists():
+                        for sj in slices_dir.rglob("slice.json"):
+                            sd = json.load(open(sj))
+                            for ev in sd.get("events", []):
+                                if pascal_case(ev["title"]) == en:
+                                    event_fields = ev.get("fields", [])
+                                    break
+                            if event_fields:
+                                break
+
+                    iface = interface_name(en)
+                    # Ensure the event interface file exists
+                    event_file = paths.events_dir / f"{en}.ts"
+                    if not event_file.exists() and event_fields:
+                        write_file(event_file, gen_event_interface({"title": en, "fields": event_fields}))
+
+                    write_file(msg_path, gen_event_message(en, iface, event_fields))
+                    wired_events.append(en)
+
+            # Wire .withMessages() on the stream factory
+            if wired_events and paths.stream_factory.exists():
+                updated = wire_messages_on_stream(paths, wired_events)
+                if updated != paths.stream_factory.read_text():
+                    if not dry_run:
+                        paths.stream_factory.write_text(updated)
+                    files_updated.append(str(paths.stream_factory.relative_to(root)))
 
     elif is_enrichment:
         # ── Enrichment-only slice: generate enrichment.ts + test ────────
@@ -2586,6 +2801,11 @@ def scaffold_slice(root: Path, folder: str, dry_run: bool = False) -> dict:
                 endpoint_path = paths.rest_endpoint_dir / "index.ts"
                 if not endpoint_path.exists():
                     write_file(endpoint_path, gen_rest_endpoint(ds))
+
+                # 7c. REST behaviour test (HTTP-level test with supertest)
+                behaviour_test_path = paths.rest_endpoint_dir / "behaviour.test.ts"
+                if not behaviour_test_path.exists():
+                    write_file(behaviour_test_path, gen_rest_behaviour_test(ds))
 
         # 8. Tests (only if slice has commands)
         if has_commands:

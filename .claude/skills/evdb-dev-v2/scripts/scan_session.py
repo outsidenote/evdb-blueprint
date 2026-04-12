@@ -15,11 +15,12 @@ logs every Read call and flags paths outside the allowed set as violations.
 
 Allowed paths (computed from --slice, --context, --root):
   {root}/.eventmodel/                                         (event model input)
-  {root}/src/BusinessCapabilities/{context}/slices/{SliceName}/  (scaffold output)
+  {root}/src/BusinessCapabilities/{context}/                   (all files in the current context)
+  {root}/.claude/skills/evdb-dev-v2/learned_hints.md           (learned patterns)
 
-Anything else is a violation — the AI should not need to read existing code
-to fill in business logic. If it does, that pattern should be encoded into
-TODO_CONTEXT.md or SKILL.md so future runs don't need to scan.
+Reading files in OTHER business capability contexts is a violation — the AI
+should not need to scan existing code outside its context. If it does, that
+pattern should be encoded into TODO_CONTEXT.md or learned_hints.md.
 """
 import argparse
 import json
@@ -90,7 +91,8 @@ def cmd_start(args: argparse.Namespace) -> None:
 
     allowed_prefixes = [
         str(root / ".eventmodel") + "/",
-        str(root / "src" / "BusinessCapabilities" / args.context / "slices" / slice_name) + "/",
+        str(root / "src" / "BusinessCapabilities" / args.context) + "/",
+        str(root / ".claude" / "skills" / "evdb-dev-v2" / "learned_hints.md"),
     ]
 
     session = {
