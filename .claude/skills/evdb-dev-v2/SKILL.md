@@ -184,7 +184,13 @@ python3 .claude/skills/evdb-dev-v2/scripts/scan_session.py stop
 
 **After every successful run (zero violations, tests green):**
 
-Reflect: was anything you figured out NOT already in `learned_hints.md` or `TODO_CONTEXT.md`?
+Stamp the implementation hash — this records the spec version the code was generated from:
+
+```bash
+python3 .claude/skills/evdb-dev-v2/scripts/stamp_hash.py --root . --slice <folderName>
+```
+
+Then reflect: was anything you figured out NOT already in `learned_hints.md` or `TODO_CONTEXT.md`?
 If yes — encode it so the next slice benefits:
 
 ```bash

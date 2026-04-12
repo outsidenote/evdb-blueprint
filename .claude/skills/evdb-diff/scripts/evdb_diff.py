@@ -646,10 +646,9 @@ def run_diff(root: Path, verbose: bool = False) -> dict:
                                 )
 
         if verified:
-            current_hash = compute_slice_hash(config_path, slice_id, slices_dir, context, folder)
-            if current_hash:
-                new_hashes[slice_id] = current_hash
-            vlog(f"  {folder}: verified, hash stamped ({'; '.join(verification_notes)})")
+            # Do NOT stamp hash here — hash is stamped by the scaffold after
+            # successful generation + AI fill + tests pass. The diff only compares.
+            vlog(f"  {folder}: verified ({'; '.join(verification_notes)})")
         else:
             s["status"] = "Blocked"
             # Build human-readable explanation and recommendation
