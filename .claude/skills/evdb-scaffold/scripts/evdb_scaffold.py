@@ -2184,7 +2184,7 @@ def gen_projection_test(ds: DerivedSlice) -> str:
             "    const payload = {",
             *payload_entries,
             "    };",
-            f'    const meta = {{ outboxId: "test-id", projectionName: "{ds.slice_name}" }};',
+            f'    const meta = {{ outboxId: "test-id", storedAt: new Date(), projectionName: "{ds.slice_name}" }};',
             f"    const result = {ds.slice_name_camel}Slice.handlers.{event_name}!(payload, meta)!;",
             "",
             "    assert.ok(result.length > 0, 'should have at least one SQL statement');",
