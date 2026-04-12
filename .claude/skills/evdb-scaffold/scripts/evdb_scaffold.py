@@ -1062,68 +1062,78 @@ export function create{ds.slice_name}Adapter(storageAdapter: IEvDbStorageAdapter
 '''
 
 
-def gen_rest_endpoint(ds: DerivedSlice) -> str:
-    """Generate REST endpoint index.ts."""
-    # Required fields (first UUID or the first field)
-    required = []
+def _zod_field(f: dict) -> str:
+    """Map a field to its Zod schema validator."""
+    ft = f.get("type", "String")
+    optional = f.get("optional", False)
+
+    if ft in ("Double", "Integer", "Int", "Decimal", "Long"):
+        base = "z.number()"
+    elif ft == "Boolean":
+        base = "z.boolean()"
+    elif ft in ("DateTime", "Date"):
+        base = "z.coerce.date()"
+    else:
+        # String / UUID
+        base = "z.string().min(1)" if not optional else "z.string()"
+
+    if optional:
+        base += ".optional()"
+    return base
+
+
+def gen_zod_schema(ds: DerivedSlice) -> str:
+    """Generate command.schema.ts with Zod validation schema for user-facing fields."""
+    lines = [
+        'import { z } from "zod";',
+        "",
+        f"export const {ds.slice_name}Schema = z.object({{",
+    ]
     for f in ds.user_fields:
         fn = field_name(f["name"])
-        if f.get("type") == "UUID" or fn == "account":
-            required.append(fn)
-    if not required and ds.user_fields:
-        required = [field_name(ds.user_fields[0]["name"])]
+        lines.append(f"  {fn}: {_zod_field(f)},")
+    lines.extend([
+        "});",
+        "",
+        f"export type {ds.slice_name}Input = z.infer<typeof {ds.slice_name}Schema>;",
+        "",
+    ])
+    return "\n".join(lines)
 
-    # Destructure
-    destructure_fields = [field_name(f["name"]) for f in ds.user_fields]
 
+def gen_rest_endpoint(ds: DerivedSlice) -> str:
+    """Generate REST endpoint index.ts with Zod validation."""
     lines = [
         'import type { Request, Response } from "express";',
         'import { randomUUID } from "node:crypto";',
         f'import {{ create{ds.slice_name}Adapter }} from "#BusinessCapabilities/{ds.context}/slices/{ds.slice_name}/adapter.js";',
         'import type { IEvDbStorageAdapter } from "@eventualize/core/adapters/IEvDbStorageAdapter";',
+        f'import {{ {ds.slice_name}Schema }} from "../../../slices/{ds.slice_name}/command.schema.js";',
         "",
         f"export const create{ds.slice_name}RestAdapter = (storageAdapter: IEvDbStorageAdapter) => {{",
         f"  const {ds.slice_name_camel} = create{ds.slice_name}Adapter(storageAdapter);",
         "",
         "  return async (req: Request, res: Response) => {",
         "    try {",
-        f"      const {{",
+        f"      const parsed = {ds.slice_name}Schema.safeParse(req.body);",
+        "      if (!parsed.success) {",
+        '        res.status(400).json({ error: parsed.error.issues });',
+        "        return;",
+        "      }",
+        "",
+        "      const command = {",
+        f'        commandType: "{ds.slice_name}" as const,',
+        "        ...parsed.data,",
     ]
-    for fn in destructure_fields:
-        lines.append(f"        {fn},")
-    lines.append("      } = req.body;")
-    lines.append("")
-
-    # Validation
-    if required:
-        conditions = " || ".join(f"!{fn}" for fn in required)
-        required_str = " and ".join(required)
-        lines.append(f'      if ({conditions}) {{')
-        lines.append(f'        res.status(400).json({{ error: "{required_str} is required" }});')
-        lines.append(f'        return;')
-        lines.append(f'      }}')
-        lines.append("")
-
-    lines.append("      const command = {")
-    lines.append(f'        commandType: "{ds.slice_name}" as const,')
-    for f in ds.user_fields:
-        fn = field_name(f["name"])
-        ft = f.get("type", "String")
-        if ft == "Double":
-            lines.append(f"        {fn}: Number({fn}),")
-        elif fn == "transactionId":
-            lines.append(f"        {fn}: {fn} ?? randomUUID(),")
-        else:
-            lines.append(f"        {fn},")
 
     for f in ds.generated_fields:
         fn = field_name(f["name"])
         ft = f.get("type", "String")
-        if ft == "DateTime":
+        if ft in ("DateTime", "Date"):
             lines.append(f"        {fn}: new Date(),")
         elif ft == "UUID":
             lines.append(f"        {fn}: randomUUID(),")
-        elif ft == "Double":
+        elif ft in ("Double", "Integer", "Int", "Decimal"):
             lines.append(f"        {fn}: 0, // TODO: compute generated field")
         else:
             lines.append(f'        {fn}: "", // TODO: compute generated field')
@@ -2832,6 +2842,12 @@ def scaffold_slice(root: Path, folder: str, dry_run: bool = False) -> dict:
             cmd_path = paths.slice_dir / "command.ts"
             if not cmd_path.exists():
                 write_file(cmd_path, gen_command(ds))
+
+            # 3b. Zod schema (only for slices with REST endpoints, not automations)
+            if not ds.is_automation:
+                schema_path = paths.slice_dir / "command.schema.ts"
+                if not schema_path.exists():
+                    write_file(schema_path, gen_zod_schema(ds))
 
         # 4. GWTS (only if specs)
         if ds.has_specs:

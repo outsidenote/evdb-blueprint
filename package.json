@@ -35,18 +35,19 @@
     "express": "^4.21.0",
     "pg": "^8.0.0",
     "pg-boss": "^12.14.0",
-    "swagger-ui-express": "^5.0.0"
+    "swagger-ui-express": "^5.0.0",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@eventualize/eslint-plugin": "^6.0.0",
-    "@typescript-eslint/utils": "^8.0.0",
     "@testcontainers/postgresql": "^11.12.0",
     "@types/express": "^5.0.0",
     "@types/node": "^24.0.0",
     "@types/pg": "^8.18.0",
     "@types/supertest": "^6.0.3",
     "@types/swagger-ui-express": "^4.1.0",
+    "@typescript-eslint/utils": "^8.0.0",
     "eslint": "^10.0.3",
     "kafkajs": "^2.2.4",
     "rimraf": "^6.0.0",
