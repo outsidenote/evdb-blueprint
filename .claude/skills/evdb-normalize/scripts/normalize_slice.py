@@ -634,6 +634,7 @@ def normalize(slice_path: Path, source_root: Path) -> dict:
             "inbound": rm_inbound,
             "outbound": rm_outbound,
             "keyField": rm_key_field,
+            "todoList": rm.get("todoList", False),
         })
 
     if readmodels_norm:

@@ -20,8 +20,14 @@ from typing import Any
 
 
 def to_pascal_case(title: str) -> str:
-    """Convert "Funds Withdrawal Approved" to "FundsWithdrawalApproved"."""
-    return "".join(word.capitalize() for word in title.split())
+    """Convert "Funds Withdrawal Approved" to "FundsWithdrawalApproved".
+    If the title has no spaces (already PascalCase like "LoanAddedToPortfolio"),
+    return it as-is to avoid .capitalize() lowercasing interior capitals.
+    """
+    words = title.split()
+    if len(words) == 1:
+        return words[0]
+    return "".join(word.capitalize() for word in words)
 
 
 def fuzzy_match(a: str, b: str) -> bool:
@@ -190,6 +196,26 @@ def run_diff(root: Path, verbose: bool = False) -> dict:
 
         context = s.get("context", "")
         folder = s.get("folder", "")
+
+        # Skip non-implementable slices: TODO list read models and standalone processors
+        slice_json_path = root / ".eventmodel" / ".slices" / context / folder / "slice.json"
+        if slice_json_path.exists():
+            try:
+                _sd = json.load(open(slice_json_path))
+                _stype = _sd.get("sliceType", "")
+                # UNDEFINED slices (standalone processor fragments) — not implementable
+                if _stype == "UNDEFINED":
+                    vlog(f"  {folder}: skipped (UNDEFINED slice type)")
+                    continue
+                # TODO list read models (automation work queues) — handled by pg-boss
+                if _stype == "STATE_VIEW" and any(
+                    rm.get("todoList") for rm in _sd.get("readmodels", [])
+                ):
+                    vlog(f"  {folder}: skipped (TODO list for automation)")
+                    continue
+            except Exception:
+                pass
+
         context_dir = src / context
 
         if not context_dir.is_dir():

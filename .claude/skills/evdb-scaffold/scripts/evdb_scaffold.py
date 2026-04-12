@@ -180,10 +180,16 @@ def split_fields(fields: list[dict]) -> tuple[list[dict], list[dict]]:
 
 
 def extract_predicate(spec: dict) -> str:
-    """Extract predicate name from a spec's comments."""
+    """Extract predicate name from a spec's comments, falling back to spec title."""
     comments = spec.get("comments", [])
     if comments and comments[0].get("description"):
         return predicate_name(comments[0]["description"])
+    # Fallback: derive from spec title (strip "spec: " prefix, camelCase it)
+    title = spec.get("title", "")
+    if title:
+        title = re.sub(r'^spec:\s*', '', title, flags=re.IGNORECASE).strip()
+        if title:
+            return predicate_name(title)
     return "unknownPredicate"
 
 
@@ -352,6 +358,8 @@ def derive_slice(slice_data: dict, event_id_map: dict[str, str] | None = None) -
             slice_data.get("sliceType") == "STATE_VIEW"
             and bool(slice_data.get("readmodels"))
             and not slice_data.get("commands")
+            # Exclude TODO lists (automation work queues — handled by pg-boss, not Kafka)
+            and not any(rm.get("todoList") for rm in slice_data.get("readmodels", []))
         ),
         backend_prompts=bp,
         event_id_map=event_id_map or {},
@@ -448,6 +456,7 @@ def _compat_readmodel(nr: dict) -> dict:
         "description": nr.get("description", ""),
         "fields": _compat_fields(nr.get("fields", [])),
         "dependencies": deps,
+        "todoList": nr.get("todoList", False),
     }
 
 
@@ -629,7 +638,11 @@ def derive_slice_from_normalized(norm: dict, event_id_map: dict[str, str] | None
         trigger_info=trigger,
         message_type=msg_type,
         has_enrichment=has_enrich,
-        is_projection=flags.get("isProjection", False),
+        is_projection=(
+            flags.get("isProjection", False)
+            # Exclude TODO lists (automation work queues — handled by pg-boss, not Kafka)
+            and not any(rm.get("todoList") for rm in raw_compat.get("readmodels", []))
+        ),
         backend_prompts=norm.get("backendPrompts", []),
         event_id_map=event_id_map or {},
     )
@@ -2387,7 +2400,7 @@ def _build_swagger_properties(fields: list[dict]) -> str:
             continue
         name = camel_case(f["name"])
         schema = openapi_type(f.get("type", "String"))
-        example = f.get("example", "")
+        example = f.get("example", "").strip('"').strip("'")
         parts = [f'type: "{schema["type"]}"']
         if "format" in schema:
             parts.append(f'format: "{schema["format"]}"')
@@ -2793,7 +2806,56 @@ def scaffold_slice(root: Path, folder: str, dry_run: bool = False) -> dict:
                     if not enrichment_test_path.exists():
                         write_file(enrichment_test_path, gen_enrichment_test(ds))
 
-                # 7b. Automation endpoint test
+                # 7b. Message producer for the trigger event (so it reaches pg-boss via outbox)
+                # The trigger event comes from either:
+                # - trigger_info.trigger_event (cross-boundary Kafka pattern)
+                # - The TODO readmodel's INBOUND event (same-context outbox pattern)
+                trigger_event = ds.trigger_info.get("trigger_event", "")
+                if not trigger_event and ds.trigger_info.get("trigger_readmodel"):
+                    # Look up the TODO readmodel's inbound event from slice.json files
+                    todo_rm_title = ds.trigger_info["trigger_readmodel"]
+                    slices_dir_rm = root / em_base / ".slices" / context
+                    if slices_dir_rm.exists():
+                        for sj in slices_dir_rm.rglob("slice.json"):
+                            sd_rm = json.load(open(sj))
+                            for rm in sd_rm.get("readmodels", []):
+                                if rm.get("title", "").strip() == todo_rm_title.strip():
+                                    for dep in rm.get("dependencies", []):
+                                        if dep.get("type") == "INBOUND" and dep.get("elementType") == "EVENT":
+                                            trigger_event = dep["title"]
+                                            break
+                                if trigger_event:
+                                    break
+                            if trigger_event:
+                                break
+                if trigger_event:
+                    trigger_en = pascal_case(trigger_event)
+                    msg_path = paths.swimlane / "messages" / f"{trigger_en}Messages.ts"
+                    if not msg_path.exists():
+                        # Find trigger event fields from slice.json files in this context
+                        trigger_fields = []
+                        slices_dir = root / em_base / ".slices" / context
+                        if slices_dir.exists():
+                            for sj in slices_dir.rglob("slice.json"):
+                                sd_tmp = json.load(open(sj))
+                                for ev in sd_tmp.get("events", []):
+                                    if pascal_case(ev["title"]) == trigger_en:
+                                        trigger_fields = ev.get("fields", [])
+                                        break
+                                if trigger_fields:
+                                    break
+                        iface = interface_name(trigger_en)
+                        write_file(msg_path, gen_event_message(trigger_en, iface, trigger_fields))
+                    # Wire .withMessages() on the stream factory
+                    if paths.stream_factory.exists():
+                        updated = wire_messages_on_stream(paths, [trigger_en])
+                        existing_sf = paths.stream_factory.read_text()
+                        if updated != existing_sf:
+                            if not dry_run:
+                                paths.stream_factory.write_text(updated)
+                            files_updated.append(str(paths.stream_factory.relative_to(root)))
+
+                # 7c. Automation endpoint test
                 auto_test_path = paths.bc / "endpoints" / ds.slice_name / "tests" / "automation.endpoint.test.ts"
                 if not auto_test_path.exists():
                     write_file(auto_test_path, gen_automation_endpoint_test(ds))
