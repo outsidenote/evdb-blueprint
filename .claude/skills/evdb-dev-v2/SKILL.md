@@ -51,10 +51,16 @@ for user input. Just read the JSON output to identify which slices are "Planned"
 
 ### Step 2: Run the scaffold tool
 
-For each `"Planned"` slice, run the deterministic scaffold generator:
+Scaffold all planned slices in one command:
 
 ```bash
-python3 .claude/skills/evdb-scaffold/scripts/evdb_scaffold.py --root . --slice <folder>
+python3 .claude/skills/evdb-scaffold/scripts/evdb_scaffold.py --root . --all-planned
+```
+
+If working on a specific context, add `--context <ContextName>`:
+
+```bash
+python3 .claude/skills/evdb-scaffold/scripts/evdb_scaffold.py --root . --all-planned --context Portfolio
 ```
 
 This generates **all boilerplate files** deterministically with no AI:

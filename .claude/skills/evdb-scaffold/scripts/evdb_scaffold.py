@@ -2011,6 +2011,47 @@ export const {camel_case(event_name)}Messages = (
 '''
 
 
+def gen_automation_trigger_message(event_name: str, event_iface: str, event_fields: list[dict],
+                                   context: str, automation_slice_name: str) -> str:
+    """Generate a message producer for an event that triggers an automation (pg-boss).
+
+    Creates BOTH:
+    - pg-boss queue message (routes to the automation worker)
+    - CDC message (for projections that also consume this event)
+    """
+    payload_fields = []
+    for f in event_fields:
+        fn = field_name(f["name"])
+        payload_fields.append(f"      {fn}: payload.{fn},")
+
+    return f'''import type {{ {event_iface} }} from "../events/{event_name}.js";
+import type IEvDbEventMetadata from "@eventualize/types/events/IEvDbEventMetadata";
+import EvDbMessage from "@eventualize/types/messages/EvDbMessage";
+import {{ endpointIdentity }} from "#BusinessCapabilities/{context}/endpoints/{automation_slice_name}/pg-boss/index.js";
+import {{ createPgBossQueueMessageFromMetadata }} from "#abstractions/endpoints/queueMessage.js";
+
+export const {camel_case(event_name)}Messages = (
+  payload: Readonly<{event_iface}>,
+  _views: unknown,
+  metadata: IEvDbEventMetadata,
+) => {{
+  return [
+    createPgBossQueueMessageFromMetadata(
+      [endpointIdentity.queueName],
+      metadata,
+      "{automation_slice_name}",
+      {{
+{chr(10).join(payload_fields)}
+      }},
+    ),
+    EvDbMessage.createFromMetadata(metadata, "{event_name}", {{
+{chr(10).join(payload_fields)}
+    }}),
+  ];
+}};
+'''
+
+
 def gen_projection(ds: DerivedSlice) -> str:
     """Generate projection index.ts with ProjectionConfig skeleton.
 
@@ -2026,12 +2067,17 @@ def gen_projection(ds: DerivedSlice) -> str:
         if dep.get("type") == "INBOUND" and dep.get("elementType") == "EVENT":
             inbound_events.append(pascal_case(dep["title"]))
 
-    # Determine projection key field (first UUID field or 'account')
+    # Determine projection key field: idAttribute > first UUID > 'account'
     key_field = "account"
     for f in rm_fields:
-        if f.get("type") == "UUID":
+        if f.get("idAttribute"):
             key_field = field_name(f["name"])
             break
+    else:
+        for f in rm_fields:
+            if f.get("type") == "UUID":
+                key_field = field_name(f["name"])
+                break
 
     # Build payload type for each event
     payload_fields_ts = []
@@ -2398,7 +2444,7 @@ def _build_swagger_properties(fields: list[dict]) -> str:
     for f in fields:
         if f.get("generated"):
             continue
-        name = camel_case(f["name"])
+        name = field_name(f["name"])
         schema = openapi_type(f.get("type", "String"))
         example = f.get("example", "").strip('"').strip("'")
         parts = [f'type: "{schema["type"]}"']
@@ -2845,7 +2891,8 @@ def scaffold_slice(root: Path, folder: str, dry_run: bool = False) -> dict:
                                 if trigger_fields:
                                     break
                         iface = interface_name(trigger_en)
-                        write_file(msg_path, gen_event_message(trigger_en, iface, trigger_fields))
+                        write_file(msg_path, gen_automation_trigger_message(
+                            trigger_en, iface, trigger_fields, context, ds.slice_name))
                     # Wire .withMessages() on the stream factory
                     if paths.stream_factory.exists():
                         updated = wire_messages_on_stream(paths, [trigger_en])
@@ -3240,11 +3287,26 @@ def _gen_todo_context(paths: SlicePaths, ds: DerivedSlice,
         lines.append("// WRONG: flat { eventType, account, amount }")
         lines.append("```")
         lines.append("")
+        lines.append("### View test format (ViewSliceTester)")
+        lines.append("```typescript")
+        lines.append("ViewSliceTester.run(viewConfig, [")
+        lines.append("  {")
+        lines.append('    description: "event updates state correctly",')
+        lines.append("    given: [")
+        lines.append('      { eventType: "EventName", payload: { field: value } },')
+        lines.append("    ],")
+        lines.append("    then: { field: expectedValue }, // expected state after folding")
+        lines.append("  },")
+        lines.append("]);")
+        lines.append("// 'given' = events to fold, 'then' = expected view state after folding")
+        lines.append("// For accumulation: two given events, 'then' has accumulated value")
+        lines.append("// For overwrite: 'then' matches last event's value")
+        lines.append("```")
+        lines.append("")
         lines.append("### Other patterns")
         lines.append("- `commandHandler.ts`: pure function, only `stream.appendEvent*()` calls, no I/O")
         lines.append("- `gwts.ts`: `(state, command) => boolean` — compare state fields vs command fields")
         lines.append("- View handlers: `(state, event) => ({ ...state, field: event.field })`")
-        lines.append("- Tests use `SliceTester.testCommandHandler()` and `ViewSliceTester.run()`")
         lines.append("- All event payloads in tests must include ALL fields from the event interface")
         lines.append("")
 
@@ -3271,6 +3333,7 @@ def main():
     parser.add_argument("--root", default=".", help="Project root")
     parser.add_argument("--slice", default=None, help="Slice folder name to scaffold")
     parser.add_argument("--all-planned", action="store_true", help="Scaffold all Planned slices")
+    parser.add_argument("--context", default=None, help="Only scaffold slices in this context (use with --all-planned)")
     parser.add_argument("--dry-run", action="store_true", help="Show what would be created without writing")
     parser.add_argument("--json", action="store_true", help="Output as JSON")
     args = parser.parse_args()
@@ -3290,6 +3353,10 @@ def main():
                 idx = json.load(f)
             for s in sorted(idx["slices"], key=lambda x: x["index"]):
                 if s["status"] in scaffoldable_statuses:
+                    if args.context and s.get("context") != args.context:
+                        continue
+                    if args.context and s.get("context") != args.context:
+                        continue
                     planned.append(s["folder"])
 
         results = []
