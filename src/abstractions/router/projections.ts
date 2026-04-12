@@ -92,6 +92,14 @@ export function createProjectionRouter(
           respondItems(res, rows);
           return;
         }
+        case "byPrefix": {
+          const page = await repository.byPrefix(query.projectionName, query.prefix, {
+            limit: query.limit,
+            afterKey: query.afterKey,
+          });
+          respondPage(res, page.rows, page.hasMore);
+          return;
+        }
         case "betweenKeys": {
           const page = await repository.betweenKeys(query.projectionName, query.from, query.to, {
             limit: query.limit,

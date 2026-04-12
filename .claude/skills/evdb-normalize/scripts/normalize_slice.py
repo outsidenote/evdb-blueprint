@@ -271,6 +271,7 @@ def normalize_spec_fields(fields: list) -> list:
         {
             "name": f.get("name", ""),
             "camelName": to_field_camel(f.get("name", "")),
+            "evdbType": f.get("type", "String"),
             "tsType": to_ts_type(f.get("type", "String")),
             "example": f.get("example", ""),
             "generated": f.get("generated", False),

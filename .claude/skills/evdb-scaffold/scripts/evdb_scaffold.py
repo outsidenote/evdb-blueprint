@@ -244,7 +244,7 @@ def _format_example(f: dict) -> str:
             return str(float(example)) if "." in str(example) else str(int(example))
         except (ValueError, TypeError):
             return "0"
-    if ft == "DateTime":
+    if ft in ("DateTime", "Date"):
         if not example:
             return 'new Date("2025-01-01T11:00:00Z")'
         # Normalize "YYYY-MM-DD HH:MM" (space separator, no timezone) → ISO UTC
@@ -254,8 +254,13 @@ def _format_example(f: dict) -> str:
         return f'new Date("{example}")'
     if ft == "Boolean":
         return "true" if example.lower() in ("true", "1", "yes") else "false"
-    # String / UUID
-    return f'"{example}"' if example else '""'
+    # String / UUID — generate sensible default when no example
+    if example:
+        return f'"{example}"'
+    fn = field_name(f.get("name", ""))
+    if ft == "UUID":
+        return f'"test-{fn}-001"'
+    return f'"test-{fn}"'
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -1001,11 +1006,12 @@ def gen_command_handler(ds: DerivedSlice) -> str:
             lines.append(f"    }});")
         lines.append("  }")
     else:
-        # No specs — single event, simple flow
+        # No specs — single event, simple flow. Map all event fields from command.
         if ds.events:
             en = event_name_from_title(ds.events[0]["title"], "")
             lines.append(f"  stream.appendEvent{en}({{")
-            lines.append(f"    // TODO: map command fields to event payload")
+            for f in ds.events[0].get("fields", []):
+                lines.append(map_event_field_line(f, ds.command_field_names, "    "))
             lines.append(f"  }});")
 
     lines.append("};")
@@ -1169,7 +1175,7 @@ def gen_rest_behaviour_test(ds: DerivedSlice) -> str:
         'import express from "express";',
         'import request from "supertest";',
         f'import {{ routeConfig }} from "#BusinessCapabilities/{ds.context}/endpoints/routes.js";',
-        'import InMemoryStorageAdapter from "../../../../tests/InMemoryStorageAdapter.js";',
+        'import InMemoryStorageAdapter from "../../../../../tests/InMemoryStorageAdapter.js";',
         "",
         "function createTestApp() {",
         "  const adapter = new InMemoryStorageAdapter();",
@@ -2067,17 +2073,27 @@ def gen_projection(ds: DerivedSlice) -> str:
         if dep.get("type") == "INBOUND" and dep.get("elementType") == "EVENT":
             inbound_events.append(pascal_case(dep["title"]))
 
-    # Determine projection key field: idAttribute > first UUID > 'account'
-    key_field = "account"
-    for f in rm_fields:
-        if f.get("idAttribute"):
-            key_field = field_name(f["name"])
-            break
+    # Determine projection key from idAttribute fields.
+    # Multiple idAttribute fields → composite key (e.g. portfolioId:loanId)
+    # Single idAttribute → simple key
+    # No idAttribute → first UUID > 'account'
+    id_fields = [field_name(f["name"]) for f in rm_fields if f.get("idAttribute")]
+
+    if len(id_fields) > 1:
+        # Composite key from multiple idAttribute fields
+        parts = ":".join(f"${{p.{fn}}}" for fn in id_fields)
+        key_expr = f"`{parts}`"
+    elif len(id_fields) == 1:
+        key_expr = f"p.{id_fields[0]}"
     else:
+        # Fallback: first UUID > 'account'
+        key_name = "account"
         for f in rm_fields:
             if f.get("type") == "UUID":
-                key_field = field_name(f["name"])
+                key_name = field_name(f["name"])
                 break
+        key_expr = f"p.{key_name}"
+        key_expr = f"p.{key_name}"
 
     # Build payload type for each event
     payload_fields_ts = []
@@ -2106,7 +2122,7 @@ def gen_projection(ds: DerivedSlice) -> str:
         lines.extend([
             f"    {event_name}: (payload, {{ projectionName }}) => {{",
             f"      const p = payload as {ds.slice_name}Payload;",
-            f'      const key = p.{key_field};',
+            f'      const key = {key_expr};',
             "      return [",
             "        {",
             '          sql: `',
@@ -2169,9 +2185,8 @@ def gen_projection_test(ds: DerivedSlice) -> str:
             *payload_entries,
             "    };",
             f'    const meta = {{ outboxId: "test-id", projectionName: "{ds.slice_name}" }};',
-            f"    const result = {ds.slice_name_camel}Slice.handlers.{event_name}!(payload, meta);",
+            f"    const result = {ds.slice_name_camel}Slice.handlers.{event_name}!(payload, meta)!;",
             "",
-            "    assert.ok(result, 'handler should return SQL statements');",
             "    assert.ok(result.length > 0, 'should have at least one SQL statement');",
             "    assert.ok(result[0].sql.length > 0, 'SQL should not be empty');",
             "    assert.ok(result[0].params.length > 0, 'params should not be empty');",

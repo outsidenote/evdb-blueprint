@@ -205,12 +205,14 @@ def run_diff(root: Path, verbose: bool = False) -> dict:
                 _stype = _sd.get("sliceType", "")
                 # UNDEFINED slices (standalone processor fragments) — not implementable
                 if _stype == "UNDEFINED":
+                    s["status"] = "Done"
                     vlog(f"  {folder}: skipped (UNDEFINED slice type)")
                     continue
                 # TODO list read models (automation work queues) — handled by pg-boss
                 if _stype == "STATE_VIEW" and any(
                     rm.get("todoList") for rm in _sd.get("readmodels", [])
                 ):
+                    s["status"] = "Done"
                     vlog(f"  {folder}: skipped (TODO list for automation)")
                     continue
             except Exception:
@@ -228,7 +230,10 @@ def run_diff(root: Path, verbose: bool = False) -> dict:
         if slices_code_dir.is_dir():
             for d in slices_code_dir.iterdir():
                 if d.is_dir() and d.name.lower() == folder.lower():
-                    found = True
+                    # Only count as found if there are actual .ts implementation files
+                    has_ts = any(f.suffix == ".ts" for f in d.rglob("*") if f.is_file() and f.name != "TODO_CONTEXT.md")
+                    if has_ts:
+                        found = True
                     break
 
         if found:
