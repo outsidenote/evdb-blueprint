@@ -30,6 +30,7 @@ import argparse
 import json
 import subprocess
 import sys
+from datetime import datetime
 from pathlib import Path
 
 
@@ -149,7 +150,7 @@ def main():
         ctx_result = {
             "planned_slices": folders,
             "scaffolded": [],
-            "branch": f"{base_branch}-codegen/{ctx_pascal}",
+            "branch": f"{base_branch}-codegen/{ctx_pascal}-{datetime.now().strftime('%Y%m%d-%H%M')}",
             "context_pascal": ctx_pascal,
             "split_files": split_files,
             "index_file": f"{em_dir}/.slices/index.json",
