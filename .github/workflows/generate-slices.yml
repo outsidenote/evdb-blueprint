@@ -337,20 +337,10 @@ jobs:
 
           # Run with JSON output to capture token usage
           claude --print --dangerously-skip-permissions \
-            --output-format stream-json \
+            --output-format json \
             $MODEL_FLAG \
             --max-turns 30 \
-            "$PROMPT" > /tmp/claude-output.jsonl
-
-          # Show summary of what Claude did (last message)
-          tail -1 /tmp/claude-output.jsonl | python3 -c "
-          import sys, json
-          try:
-              d = json.loads(sys.stdin.read())
-              print(d.get('result', '')[:1000])
-          except: pass
-          " || true
-
+            "$PROMPT" > /tmp/claude-output.json
           END_TIME=$(date +%s)
           DURATION=$((END_TIME - START_TIME))
           MINUTES=$((DURATION / 60))
@@ -358,11 +348,11 @@ jobs:
 
           echo "duration=${MINUTES}m ${SECONDS}s" >> "$GITHUB_OUTPUT"
 
-          # Extract stats from stream-json output (last line has the final result)
+          # Extract stats from JSON output
           python3 -c "
           import json
-          lines = open('/tmp/claude-output.jsonl').readlines()
-          json_line = next(l for l in reversed(lines) if l.strip().startswith('{'))
+          lines = open('/tmp/claude-output.json').readlines()
+          json_line = next(l for l in lines if l.strip().startswith('{'))
           data = json.loads(json_line)
           result = data.get('result', '')
           usage = data.get('usage', {})
