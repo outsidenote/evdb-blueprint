@@ -30,6 +30,25 @@ export const portfolioLoanDetailsSlice: ProjectionConfig = {
     LoanRiskAssessed: (payload, { projectionName }) => {
       const p = payload as PortfolioLoanDetailsPayload;
       const key = `${p.portfolioId}:${p.loanId}`;
+      const loanPayload = {
+        portfolioId: p.portfolioId,
+        loanId: p.loanId,
+        acquisitionDate: p.acquisitionDate,
+        borrowerName: p.borrowerName,
+        capitalRequirement: p.capitalRequirement,
+        creditRating: p.creditRating,
+        expectedLoss: p.expectedLoss,
+        interestRate: p.interestRate,
+        loanAmount: p.loanAmount,
+        maturityDate: p.maturityDate,
+        probabilityOfDefault: p.probabilityOfDefault,
+        riskBand: p.riskBand,
+        expectedPortfolioLoss: p.expectedPortfolioLoss,
+        riskNarrative: p.riskNarrative,
+        simulatedDefaultRate: p.simulatedDefaultRate,
+        tailRiskLoss: p.tailRiskLoss,
+        worstCaseLoss: p.worstCaseLoss,
+      };
       return [
         {
           sql: `
@@ -40,7 +59,7 @@ export const portfolioLoanDetailsSlice: ProjectionConfig = {
           params: [
             projectionName,
             key,
-            JSON.stringify(p), // TODO: select specific fields to store
+            JSON.stringify(loanPayload),
           ],
         },
       ];
