@@ -21,10 +21,6 @@ on:
         description: 'AI provider: anthropic (direct API) or bedrock (AWS)'
         required: false
         default: 'anthropic'
-      model:
-        description: 'AI model: sonnet (default, cheaper) or opus (complex slices)'
-        required: false
-        default: 'sonnet'
 
 permissions:
   contents: write
@@ -273,22 +269,12 @@ jobs:
         id: provider
         run: |
           PROVIDER="${{ github.event.inputs.provider || 'anthropic' }}"
-          MODEL="${{ github.event.inputs.model || 'sonnet' }}"
-
           if [ "$PROVIDER" = "bedrock" ]; then
-            if [ "$MODEL" = "opus" ]; then
-              echo "model=us.anthropic.claude-opus-4-6-v1@bedrock" >> "$GITHUB_OUTPUT"
-            else
-              echo "model=us.anthropic.claude-sonnet-4-6-v1@bedrock" >> "$GITHUB_OUTPUT"
-            fi
-            echo "Using Bedrock ($MODEL)"
+            echo "model=us.anthropic.claude-opus-4-6-v1@bedrock" >> "$GITHUB_OUTPUT"
+            echo "Using Bedrock provider"
           else
-            if [ "$MODEL" = "opus" ]; then
-              echo "model=claude-opus-4-6" >> "$GITHUB_OUTPUT"
-            else
-              echo "model=claude-sonnet-4-6" >> "$GITHUB_OUTPUT"
-            fi
-            echo "Using Anthropic API ($MODEL)"
+            echo "model=" >> "$GITHUB_OUTPUT"
+            echo "Using Anthropic API"
           fi
 
       - name: "🔥 Warm up API"
@@ -323,59 +309,24 @@ jobs:
             MODEL_FLAG="--model ${{ steps.provider.outputs.model }}"
           fi
 
-          CONTEXT="${{ matrix.context_pascal }}"
+          PROMPT="Read and follow the skill instructions in .claude/skills/evdb-dev-v2/SKILL.md exactly.
 
-          # Run one conversation per slice — keeps context small, reduces cost
-          IFS=',' read -ra SLICE_ARRAY <<< "${{ matrix.slices }}"
-          for SLICE in "${SLICE_ARRAY[@]}"; do
-            echo ""
-            echo "============================================"
-            echo "  Filling: $SLICE"
-            echo "============================================"
+            Implement the following slices one at a time using the evdb-dev-v2 pipeline:
 
-            PROMPT="Read .claude/skills/evdb-dev-v2/SKILL.md for conventions.
+            Context: ${{ matrix.context }}
+            Context folder: ${{ matrix.context_pascal }}
+            Slices: ${{ matrix.slices }}
 
-              Context: $CONTEXT
-              Slice: $SLICE
+            The scaffold (Step 1 + Step 2) has already been run. Start from Step 0 (scan session) for each slice, then Step 3 (fill business logic), then Step 4 (assert zero scans).
 
-              Steps 1 and 2 (diff and scaffold) already ran — skip them.
-              Run Step 0 (scan session), then Step 3 (fill TODOs), then Step 4 (assert + stamp hash).
-              Run the slice test after filling."
+            After all slices are done, run: npm run test:slices"
 
-            claude --print --dangerously-skip-permissions \
-              --output-format json \
-              --exclude-dynamic-system-prompt-sections \
-              --max-budget-usd 1.50 \
-              $MODEL_FLAG \
-              --max-turns 25 \
-              "$PROMPT" > /tmp/claude-$SLICE.json 2>&1 || true
-
-            # Extract per-slice stats
-            python3 -c "
-          import json
-          try:
-              lines = open('/tmp/claude-$SLICE.json').readlines()
-              data = json.loads(next(l for l in lines if l.strip().startswith('{')))
-              u = data.get('usage', {})
-              inp = u.get('input_tokens', 0) + u.get('cache_read_input_tokens', 0) + u.get('cache_creation_input_tokens', 0)
-              out = u.get('output_tokens', 0)
-              cost = data.get('total_cost_usd', 0)
-              turns = data.get('num_turns', 0)
-              print(f'  Turns: {turns}, Cost: \${cost:.2f}, Input: {inp:,}, Output: {out:,}')
-              open('/tmp/slice-stats-$SLICE.txt', 'w').write(f'{cost},{turns},{inp},{out}')
-          except Exception as e:
-              print(f'  Stats error: {e}')
-              open('/tmp/slice-stats-$SLICE.txt', 'w').write('0,0,0,0')
-          " || true
-
-          done
-
-          # Final combined test
-          echo ""
-          echo "============================================"
-          echo "  Final test: all slices"
-          echo "============================================"
-          npm run test:slices 2>&1 || true
+          # Run with JSON output to capture token usage
+          claude --print --dangerously-skip-permissions \
+            --output-format json \
+            $MODEL_FLAG \
+            --max-turns 50 \
+            "$PROMPT" > /tmp/claude-output.json
 
           END_TIME=$(date +%s)
           DURATION=$((END_TIME - START_TIME))
@@ -384,20 +335,31 @@ jobs:
 
           echo "duration=${MINUTES}m ${SECONDS}s" >> "$GITHUB_OUTPUT"
 
-          # Aggregate stats across all slices
+          # Extract stats from JSON output
           python3 -c "
-          import glob
-          tc, tt, ti, to = 0, 0, 0, 0
-          for f in sorted(glob.glob('/tmp/slice-stats-*.txt')):
-              p = open(f).read().strip().split(',')
-              tc += float(p[0]); tt += int(p[1]); ti += int(p[2]); to += int(p[3])
-          for kv in [f'input_tokens={ti}',f'output_tokens={to}',f'total_tokens={ti+to}',f'cost={tc:.4f}',f'num_turns={tt}',f'api_time_s=0']:
-              print(kv)
-          open('/tmp/claude-summary.txt', 'w').write(f'{tt} turns across slices, \${tc:.2f} total')
-          open('/tmp/claude-stats.txt', 'w').write(f'input_tokens={ti}\noutput_tokens={to}\ntotal_tokens={ti+to}\ncost={tc:.4f}\nnum_turns={tt}\napi_time_s=0\n')
-          " >> "$GITHUB_OUTPUT" 2>/dev/null || true
-          echo '{"result":"Per-slice execution","total_cost_usd":0}' > /tmp/claude-output.json
+          import json
+          # The JSON output may have a warning line before it
+          lines = open('/tmp/claude-output.json').readlines()
+          json_line = next(l for l in lines if l.strip().startswith('{'))
+          data = json.loads(json_line)
+          result = data.get('result', '')
+          usage = data.get('usage', {})
+          input_t = usage.get('input_tokens', 0) + usage.get('cache_read_input_tokens', 0) + usage.get('cache_creation_input_tokens', 0)
+          output_t = usage.get('output_tokens', 0)
+          total_t = input_t + output_t
+          cost = data.get('total_cost_usd', 0)
+          num_turns = data.get('num_turns', 0)
+          api_ms = data.get('duration_api_ms', 0)
+          open('/tmp/claude-summary.txt', 'w').write(result[:1000])
+          open('/tmp/claude-stats.txt', 'w').write(
+              f'input_tokens={input_t}\noutput_tokens={output_t}\ntotal_tokens={total_t}\ncost={cost:.4f}\nnum_turns={num_turns}\napi_time_s={api_ms // 1000}\n')
+          " 2>/dev/null || true
 
+          # Set outputs from stats file
+          if [ -f /tmp/claude-stats.txt ]; then
+            while IFS='=' read -r key val; do
+              echo "$key=$val" >> "$GITHUB_OUTPUT"
+            done < /tmp/claude-stats.txt
           fi
 
       - name: "💰 Check cost guardrail"
@@ -430,15 +392,6 @@ jobs:
         run: |
           npm run test:slices 2>&1 | tee /tmp/test-output.txt
         continue-on-error: true
-
-      # ── Stamp implementation hashes (deterministic, no AI) ──────
-      - name: "🔏 Stamp implementation hashes"
-        if: steps.tests.outcome == 'success'
-        run: |
-          IFS=',' read -ra SLICE_ARRAY <<< "${{ matrix.slices }}"
-          for slice in "${SLICE_ARRAY[@]}"; do
-            python3 .claude/skills/evdb-dev-v2/scripts/stamp_hash.py --root . --slice "$slice"
-          done
 
       # ── Self-Healing Pipeline ────────────────────────────────────
       - name: "🏷️ Classify failures"
