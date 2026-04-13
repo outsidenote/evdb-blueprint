@@ -162,13 +162,17 @@ def kebab_case(s: str) -> str:
 # Field helpers (centralised)
 # ──────────────────────────────────────────────────────────────────────
 
-def field_ts_decl(f: dict) -> str:
+def field_ts_decl(f: dict, pgboss_payload: bool = False) -> str:
     """Generate a single TypeScript interface field declaration.
 
     Returns e.g. '  readonly accountId: string;'
+    For pg-boss payloads, Date fields become 'string | Date' since JSON
+    serialization converts dates to strings.
     """
     fn = field_name(f["name"])
     ft = ts_type(f.get("type", "String"))
+    if pgboss_payload and ft == "Date":
+        ft = "string | Date"
     return f"  readonly {fn}: {ft};"
 
 
@@ -1262,8 +1266,11 @@ def gen_pgboss_endpoint(ds: DerivedSlice) -> str:
     # Build payload interface fields (only non-generated = what comes from the trigger event)
     input_fields = [f for f in payload_fields if not f.get("generated")]
     payload_lines = []
+    date_fields = []
     for f in input_fields:
-        payload_lines.append(field_ts_decl(f))
+        payload_lines.append(field_ts_decl(f, pgboss_payload=True))
+        if f.get("type") in ("DateTime", "Date"):
+            date_fields.append(field_name(f["name"]))
 
     # Build command mapping — match processor fields to command fields
     # Build set of enriched field names from the processor (generated: true on processor fields)
@@ -1290,7 +1297,10 @@ def gen_pgboss_endpoint(ds: DerivedSlice) -> str:
             # Check if field exists in processor payload
             proc_field_names = {field_name(pf["name"]) for pf in payload_fields}
             if fn in proc_field_names:
-                map_lines.append(f"    {fn}: payload.{fn},")
+                if ft in ("DateTime", "Date"):
+                    map_lines.append(f"    {fn}: new Date(payload.{fn}),")
+                else:
+                    map_lines.append(f"    {fn}: payload.{fn},")
             else:
                 map_lines.append(f'    {fn}: "", // TODO: not in trigger payload')
 
@@ -1335,7 +1345,12 @@ def gen_pgboss_endpoint(ds: DerivedSlice) -> str:
     # Map payload to command
     if ds.has_enrichment:
         lines.append(f"  mapPayloadToCommand: async (payload: {payload_interface_name}) => {{")
-        lines.append(f"    const enriched = await enrich(payload);")
+        if date_fields:
+            coerce_parts = ", ".join(f"{fn}: new Date(payload.{fn})" for fn in date_fields)
+            lines.append(f"    const coerced = {{ ...payload, {coerce_parts} }};")
+            lines.append(f"    const enriched = await enrich(coerced);")
+        else:
+            lines.append(f"    const enriched = await enrich(payload);")
         lines.append(f"    return {{")
         lines.extend(map_lines)
         lines.append(f"    }};")
