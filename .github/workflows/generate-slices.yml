@@ -309,22 +309,47 @@ jobs:
             MODEL_FLAG="--model ${{ steps.provider.outputs.model }}"
           fi
 
-          PROMPT="Read .claude/skills/evdb-dev-v2/SKILL.md for conventions and patterns.
+          SLICES="${{ matrix.slices }}"
+          CONTEXT="${{ matrix.context_pascal }}"
 
-            Context: ${{ matrix.context }}
-            Slices: ${{ matrix.slices }}
+          PROMPT="Fill TODO placeholders in scaffolded code for context: $CONTEXT
 
-            Steps 1 and 2 (diff and scaffold) have already been run — skip them.
-            For each slice: run Step 0 (scan session), then Step 3 (fill business logic), then Step 4.
+            First: read .claude/skills/evdb-dev-v2/learned_hints.md for domain patterns.
 
-            After all slices, run: npm run test:slices"
+            For each slice ($SLICES):
+            1. Start scan session: python3 .claude/skills/evdb-dev-v2/scripts/scan_session.py start --slice <folder> --context $CONTEXT --root .
+            2. Read slices/<SliceName>/TODO_CONTEXT.md (or endpoints/<SliceName>/TODO_CONTEXT.md for enrichment)
+            3. Edit ONLY files listed under 'Files with TODOs'
+            4. Run the slice test to verify
+            5. Assert scan: python3 .claude/skills/evdb-dev-v2/scripts/scan_session.py assert && python3 .claude/skills/evdb-dev-v2/scripts/scan_session.py stop
+
+            Rules:
+            - Do NOT read code outside src/BusinessCapabilities/$CONTEXT/ — scan guard is watching
+            - Do NOT run evdb-diff or evdb-scaffold — already done
+            - Do NOT create or modify files the scaffold already generated correctly
+            - appendEvent syntax: stream.appendEvent{Name}({ field: value })
+            - Date fields from pg-boss arrive as strings — coerce with new Date()
+
+            After all slices: npm run test:slices
+
+            If any non-obvious pattern was discovered, encode it:
+            python3 .claude/skills/evdb-dev-v2/scripts/scan_learn.py append --category '<category>' --hint '<pattern>' --slice <folder>"
 
           # Run with JSON output to capture token usage
           claude --print --dangerously-skip-permissions \
-            --output-format json \
+            --output-format stream-json \
             $MODEL_FLAG \
             --max-turns 30 \
-            "$PROMPT" > /tmp/claude-output.json
+            "$PROMPT" > /tmp/claude-output.jsonl
+
+          # Show summary of what Claude did (last message)
+          tail -1 /tmp/claude-output.jsonl | python3 -c "
+          import sys, json
+          try:
+              d = json.loads(sys.stdin.read())
+              print(d.get('result', '')[:1000])
+          except: pass
+          " || true
 
           END_TIME=$(date +%s)
           DURATION=$((END_TIME - START_TIME))
@@ -333,12 +358,11 @@ jobs:
 
           echo "duration=${MINUTES}m ${SECONDS}s" >> "$GITHUB_OUTPUT"
 
-          # Extract stats from JSON output
+          # Extract stats from stream-json output (last line has the final result)
           python3 -c "
           import json
-          # The JSON output may have a warning line before it
-          lines = open('/tmp/claude-output.json').readlines()
-          json_line = next(l for l in lines if l.strip().startswith('{'))
+          lines = open('/tmp/claude-output.jsonl').readlines()
+          json_line = next(l for l in reversed(lines) if l.strip().startswith('{'))
           data = json.loads(json_line)
           result = data.get('result', '')
           usage = data.get('usage', {})
@@ -390,6 +414,15 @@ jobs:
         run: |
           npm run test:slices 2>&1 | tee /tmp/test-output.txt
         continue-on-error: true
+
+      # ── Stamp implementation hashes (deterministic, no AI) ──────
+      - name: "🔏 Stamp implementation hashes"
+        if: steps.tests.outcome == 'success'
+        run: |
+          IFS=',' read -ra SLICE_ARRAY <<< "${{ matrix.slices }}"
+          for slice in "${SLICE_ARRAY[@]}"; do
+            python3 .claude/skills/evdb-dev-v2/scripts/stamp_hash.py --root . --slice "$slice"
+          done
 
       # ── Self-Healing Pipeline ────────────────────────────────────
       - name: "🏷️ Classify failures"
