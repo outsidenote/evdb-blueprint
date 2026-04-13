@@ -81,6 +81,13 @@ jobs:
           EM_DIR="${{ steps.detect.outputs.em_dir }}"
           CONFIG="$EM_DIR/config.json"
 
+          # Skip if config.json was deleted
+          if [ ! -f "$CONFIG" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "config.json not found — skipping (likely deleted)"
+            exit 0
+          fi
+
           if [ "${{ github.event_name }}" = "push" ]; then
             NEW_HASH=$(python3 -c "
           import json, hashlib
