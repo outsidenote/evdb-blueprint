@@ -324,12 +324,43 @@ jobs:
             echo "  Filling: $SLICE"
             echo "============================================"
 
+            # Resolve lowercase folder name to actual PascalCase directory
+            # Scaffold creates PascalCase dirs (AddLoanToPortfolio) but index uses lowercase (addloantoportfolio)
+            SLICE_DIR=""
+            for candidate in "src/BusinessCapabilities/$CONTEXT/slices/"*/; do
+              base=$(basename "$candidate")
+              if [ "$(echo "$base" | tr '[:upper:]' '[:lower:]')" = "$SLICE" ]; then
+                SLICE_DIR="$base"
+                break
+              fi
+            done
+
+            # Also check endpoints/ for enrichment slices
+            ENDPOINT_DIR=""
+            for candidate in "src/BusinessCapabilities/$CONTEXT/endpoints/"*/; do
+              base=$(basename "$candidate")
+              if [ "$(echo "$base" | tr '[:upper:]' '[:lower:]')" = "$SLICE" ]; then
+                ENDPOINT_DIR="$base"
+                break
+              fi
+            done
+
+            if [ -z "$SLICE_DIR" ] && [ -z "$ENDPOINT_DIR" ]; then
+              echo "  SKIP: No directory found for $SLICE"
+              echo "0,0,0,0" > "/tmp/slice-stats-$SLICE.txt"
+              continue
+            fi
+
+            echo "  Resolved: slices/$SLICE_DIR endpoints/$ENDPOINT_DIR"
+
             # Find TODO_CONTEXT.md (slices/ or endpoints/)
             TODO_CONTENT=""
-            for dir in "src/BusinessCapabilities/$CONTEXT/slices/$SLICE" \
-                       "src/BusinessCapabilities/$CONTEXT/endpoints/$SLICE"; do
-              if [ -f "$dir/TODO_CONTEXT.md" ]; then
+            TODO_FILE=""
+            for dir in "src/BusinessCapabilities/$CONTEXT/slices/$SLICE_DIR" \
+                       "src/BusinessCapabilities/$CONTEXT/endpoints/$ENDPOINT_DIR"; do
+              if [ -n "$(basename "$dir")" ] && [ -f "$dir/TODO_CONTEXT.md" ]; then
                 TODO_CONTENT=$(cat "$dir/TODO_CONTEXT.md")
+                TODO_FILE="$dir/TODO_CONTEXT.md"
                 break
               fi
             done
@@ -340,11 +371,13 @@ jobs:
               continue
             fi
 
+            echo "  Found: $TODO_FILE"
+
             # Find the test file
             TEST_CMD="echo 'no test found'"
-            for tf in "src/BusinessCapabilities/$CONTEXT/slices/$SLICE/tests/command.slice.test.ts" \
-                      "src/BusinessCapabilities/$CONTEXT/slices/$SLICE/tests/projection.test.ts" \
-                      "src/BusinessCapabilities/$CONTEXT/endpoints/$SLICE/tests/enrichment.test.ts"; do
+            for tf in "src/BusinessCapabilities/$CONTEXT/slices/$SLICE_DIR/tests/command.slice.test.ts" \
+                      "src/BusinessCapabilities/$CONTEXT/slices/$SLICE_DIR/tests/projection.test.ts" \
+                      "src/BusinessCapabilities/$CONTEXT/endpoints/$ENDPOINT_DIR/tests/enrichment.test.ts"; do
               if [ -f "$tf" ]; then
                 TEST_CMD="node --import tsx --test $tf"
                 break
