@@ -48,6 +48,7 @@ export interface IProjectionRepository {
   byKey(projectionName: string, key: string): Promise<ProjectionRow | null>;
   byKeys(projectionName: string, keys: Iterable<string>): AsyncGenerator<ProjectionRow[]>;
   betweenKeys(projectionName: string, from: string, to: string, options?: RangeOptions): Promise<ProjectionPage>;
+  byPrefix(projectionName: string, prefix: string, options?: { limit?: number; afterKey?: string }): Promise<ProjectionPage>;
 }
 
 /**
@@ -133,6 +134,32 @@ export class ProjectionRepository implements IProjectionRepository {
        WHERE name = $1 AND key ${fromOp} $2 AND key ${toOp} $3
        ORDER BY key LIMIT $4`,
       [projectionName, from, to, limit + 1],
+    );
+    return toPage(rows, limit);
+  }
+
+  async byPrefix(projectionName: string, prefix: string, options: { limit?: number; afterKey?: string } = {}): Promise<ProjectionPage> {
+    assertNonEmpty(projectionName, "projectionName");
+    assertNonEmpty(prefix, "prefix");
+
+    const limit = options.limit ?? ProjectionRepository.DEFAULT_LIMIT;
+    const pattern = prefix.replace(/%/g, "\\%").replace(/_/g, "\\_") + "%";
+
+    if (options.afterKey != null) {
+      const { rows } = await this.db.query(
+        `SELECT key, payload, updated_at FROM projections
+         WHERE name = $1 AND key LIKE $2 AND key > $3
+         ORDER BY key LIMIT $4`,
+        [projectionName, pattern, options.afterKey, limit + 1],
+      );
+      return toPage(rows, limit);
+    }
+
+    const { rows } = await this.db.query(
+      `SELECT key, payload, updated_at FROM projections
+       WHERE name = $1 AND key LIKE $2
+       ORDER BY key LIMIT $3`,
+      [projectionName, pattern, limit + 1],
     );
     return toPage(rows, limit);
   }

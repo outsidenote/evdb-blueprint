@@ -14,14 +14,21 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import sys
 from pathlib import Path
 from typing import Any
 
 
 def to_pascal_case(title: str) -> str:
-    """Convert "Funds Withdrawal Approved" to "FundsWithdrawalApproved"."""
-    return "".join(word.capitalize() for word in title.split())
+    """Convert "Funds Withdrawal Approved" to "FundsWithdrawalApproved".
+    If the title has no spaces (already PascalCase like "LoanAddedToPortfolio"),
+    return it as-is to avoid .capitalize() lowercasing interior capitals.
+    """
+    words = title.split()
+    if len(words) == 1:
+        return words[0]
+    return "".join(word.capitalize() for word in words)
 
 
 def fuzzy_match(a: str, b: str) -> bool:
@@ -79,16 +86,31 @@ def normalize_for_hash(obj: Any) -> Any:
         return obj
 
 
-def compute_slice_hash(config_path: Path, slice_id: str) -> str | None:
-    """Compute MD5 hash of a slice's config entry (excluding volatile fields).
+def compute_slice_hash(config_path: Path, slice_id: str, slices_dir: Path = None, context: str = "", folder: str = "") -> str | None:
+    """Compute MD5 hash of a slice definition (excluding volatile fields).
 
+    Prefers slice.json (per-slice file) over config.json for accuracy.
     Normalizes array ordering so that field/event/spec reordering in Miro
     does not produce false positive drift detection.
     """
+    excluded = {"status", "index"}
+
+    # Try slice.json first (more accurate — what the scaffold reads)
+    if slices_dir and context and folder:
+        slice_json = slices_dir / context / folder / "slice.json"
+        if slice_json.exists():
+            with open(slice_json) as f:
+                spec = json.load(f)
+            spec = {k: v for k, v in spec.items() if k not in excluded}
+            normalized = normalize_for_hash(spec)
+            return hashlib.md5(
+                json.dumps(normalized, sort_keys=True, separators=(",", ":")).encode()
+            ).hexdigest()
+
+    # Fallback: config.json
     with open(config_path) as f:
         config = json.load(f)
 
-    excluded = {"status", "index"}
     for s in config.get("slices", []):
         if s.get("id") == slice_id:
             spec = {k: v for k, v in s.items() if k not in excluded}
@@ -149,7 +171,7 @@ def run_diff(root: Path, verbose: bool = False) -> dict:
     slices_dir = eventmodel / ".slices"
     index_path = slices_dir / "index.json"
     config_path = eventmodel / "config.json"
-    hashes_path = eventmodel / "implementation-hashes.json"
+    hashes_dir = root / ".implementation-hashes"
     src = root / "src" / "BusinessCapabilities"
 
     # Load index
@@ -158,11 +180,21 @@ def run_diff(root: Path, verbose: bool = False) -> dict:
 
     slices = index_data.get("slices", [])
 
-    # Load existing hashes
+    # Load existing hashes from per-context files
     stored_hashes: dict[str, str] = {}
-    if hashes_path.exists():
-        with open(hashes_path) as f:
-            stored_hashes = json.load(f)
+    if hashes_dir.is_dir():
+        for hf in hashes_dir.glob("*.json"):
+            try:
+                stored_hashes.update(json.load(open(hf)))
+            except Exception:
+                pass
+    # Legacy: also check old single-file location
+    legacy_hashes = eventmodel / "implementation-hashes.json"
+    if legacy_hashes.exists():
+        try:
+            stored_hashes.update(json.load(open(legacy_hashes)))
+        except Exception:
+            pass
 
     # Pre-pass: record originally blocked slices
     originally_blocked = [s for s in slices if s.get("status") == "Blocked"]
@@ -190,6 +222,28 @@ def run_diff(root: Path, verbose: bool = False) -> dict:
 
         context = s.get("context", "")
         folder = s.get("folder", "")
+
+        # Skip non-implementable slices: TODO list read models and standalone processors
+        slice_json_path = root / ".eventmodel" / ".slices" / context / folder / "slice.json"
+        if slice_json_path.exists():
+            try:
+                _sd = json.load(open(slice_json_path))
+                _stype = _sd.get("sliceType", "")
+                # UNDEFINED slices (standalone processor fragments) — not implementable
+                if _stype == "UNDEFINED":
+                    s["status"] = "Done"
+                    vlog(f"  {folder}: skipped (UNDEFINED slice type)")
+                    continue
+                # TODO list read models (automation work queues) — handled by pg-boss
+                if _stype == "STATE_VIEW" and any(
+                    rm.get("todoList") for rm in _sd.get("readmodels", [])
+                ):
+                    s["status"] = "Done"
+                    vlog(f"  {folder}: skipped (TODO list for automation)")
+                    continue
+            except Exception:
+                pass
+
         context_dir = src / context
 
         if not context_dir.is_dir():
@@ -202,7 +256,10 @@ def run_diff(root: Path, verbose: bool = False) -> dict:
         if slices_code_dir.is_dir():
             for d in slices_code_dir.iterdir():
                 if d.is_dir() and d.name.lower() == folder.lower():
-                    found = True
+                    # Only count as found if there are actual .ts implementation files
+                    has_ts = any(f.suffix == ".ts" for f in d.rglob("*") if f.is_file() and f.name != "TODO_CONTEXT.md")
+                    if has_ts:
+                        found = True
                     break
 
         if found:
@@ -374,15 +431,35 @@ def run_diff(root: Path, verbose: bool = False) -> dict:
 
         # 4a: Spec drift (has stored hash)
         if has_stored_hash:
-            current_hash = compute_slice_hash(config_path, slice_id)
+            current_hash = compute_slice_hash(config_path, slice_id, slices_dir, context, folder)
             if current_hash and current_hash != stored_hashes[slice_id]:
-                s["status"] = "Blocked"
-                vlog(f"  {folder}: Review → Blocked (spec drift: hash mismatch)")
+                # Spec changed in event model — delete generated code and regenerate
+                # Find and delete the slice's code directories
+                deleted_dirs = []
+                slices_code_dir = src / context / "slices"
+                endpoints_dir = src / context / "endpoints"
+                if slices_code_dir.is_dir():
+                    for d in slices_code_dir.iterdir():
+                        if d.is_dir() and d.name.lower() == folder.lower():
+                            shutil.rmtree(d)
+                            deleted_dirs.append(str(d.relative_to(root)))
+                            break
+                if endpoints_dir.is_dir():
+                    for d in endpoints_dir.iterdir():
+                        if d.is_dir() and d.name.lower() == folder.lower():
+                            shutil.rmtree(d)
+                            deleted_dirs.append(str(d.relative_to(root)))
+                            break
+                # Remove stale hash so scaffold stamps a fresh one
+                new_hashes.pop(slice_id, None)
+                s["status"] = "Planned"
+                vlog(f"  {folder}: spec drift detected → Planned (deleted: {', '.join(deleted_dirs) or 'no dirs found'})")
                 actions.append({
                     "slice": s.get("slice", ""),
                     "folder": folder,
-                    "action": "re-implement",
-                    "reason": "Spec hash drift detected",
+                    "action": "regenerate",
+                    "reason": "Spec drift detected — code deleted, will be regenerated by scaffold",
+                    "deleted": deleted_dirs,
                 })
                 continue
             else:
@@ -393,7 +470,7 @@ def run_diff(root: Path, verbose: bool = False) -> dict:
         slice_json_path = slices_dir / context / folder / "slice.json"
         if not slice_json_path.exists():
             # Implicit slice (todo-list or automation) — treat as verified
-            current_hash = compute_slice_hash(config_path, slice_id)
+            current_hash = compute_slice_hash(config_path, slice_id, slices_dir, context, folder)
             if current_hash:
                 new_hashes[slice_id] = current_hash
                 vlog(f"  {folder}: implicit slice, hash stamped")
@@ -417,7 +494,7 @@ def run_diff(root: Path, verbose: bool = False) -> dict:
 
         if not has_code_dir:
             # No code directory but status is Review — must have been set by Pass 2 or 3
-            current_hash = compute_slice_hash(config_path, slice_id)
+            current_hash = compute_slice_hash(config_path, slice_id, slices_dir, context, folder)
             if current_hash:
                 new_hashes[slice_id] = current_hash
                 vlog(f"  {folder}: implicit slice (no code dir), hash stamped")
@@ -579,10 +656,9 @@ def run_diff(root: Path, verbose: bool = False) -> dict:
                                 )
 
         if verified:
-            current_hash = compute_slice_hash(config_path, slice_id)
-            if current_hash:
-                new_hashes[slice_id] = current_hash
-            vlog(f"  {folder}: verified, hash stamped ({'; '.join(verification_notes)})")
+            # Do NOT stamp hash here — hash is stamped by the scaffold after
+            # successful generation + AI fill + tests pass. The diff only compares.
+            vlog(f"  {folder}: verified ({'; '.join(verification_notes)})")
         else:
             s["status"] = "Blocked"
             # Build human-readable explanation and recommendation
@@ -671,11 +747,22 @@ def run_diff(root: Path, verbose: bool = False) -> dict:
         json.dump(index_data, f, indent=2)
         f.write("\n")
 
-    # Write hashes
+    # Write hashes per-context
     if new_hashes:
-        with open(hashes_path, "w") as f:
-            json.dump(dict(sorted(new_hashes.items())), f, indent=2)
-            f.write("\n")
+        # Group hashes by context (look up context from index)
+        id_to_context: dict[str, str] = {}
+        for s in slices:
+            id_to_context[str(s.get("id", ""))] = s.get("context", "default")
+
+        per_context: dict[str, dict[str, str]] = {}
+        for sid, h in new_hashes.items():
+            ctx = id_to_context.get(sid, "default")
+            per_context.setdefault(ctx, {})[sid] = h
+
+        hashes_dir.mkdir(exist_ok=True)
+        for ctx, ctx_hashes in per_context.items():
+            ctx_path = hashes_dir / f"{ctx}.json"
+            ctx_path.write_text(json.dumps(dict(sorted(ctx_hashes.items())), indent=2) + "\n")
 
     # Build result
     result = {

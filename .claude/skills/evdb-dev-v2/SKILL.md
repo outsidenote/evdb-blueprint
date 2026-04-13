@@ -16,6 +16,10 @@ source of truth** — implement only what is modelled there.
 
 ## Pipeline (4 steps — follow this order exactly)
 
+**This pipeline MUST run end-to-end without stopping for confirmation. Process ALL planned
+slices automatically, one at a time. Never pause between steps to summarize or ask for input.
+This is critical because the pipeline runs unattended in CI.**
+
 ### Step 0: Start scan session
 
 Before doing anything else, start a scan session for the slice you are about to implement.
@@ -33,17 +37,30 @@ Example: `python3 .claude/skills/evdb-dev-v2/scripts/scan_session.py start --sli
 If you do not know the slice yet, run Step 1 first to find the Planned slice, then come
 back and start the session before Step 2.
 
-### Step 1: Invoke `evdb-diff`
+### Step 1: Run `evdb-diff` (directly — do NOT use the Skill tool)
 
-Run the evdb-diff skill and wait for it to complete. This audits the codebase and updates
-every slice status in `.eventmodel/.slices/index.json`.
+Run the diff script directly (do NOT invoke it as a skill — that causes a pause):
+
+```bash
+python3 .claude/skills/evdb-diff/scripts/evdb_diff.py --root . --json --verbose
+```
+
+This audits the codebase and updates every slice status in `.eventmodel/.slices/index.json`.
+After this completes, **immediately** proceed to Step 2. Do NOT summarize results or wait
+for user input. Just read the JSON output to identify which slices are "Planned" and continue.
 
 ### Step 2: Run the scaffold tool
 
-For each `"Planned"` slice, run the deterministic scaffold generator:
+Scaffold all planned slices in one command:
 
 ```bash
-python3 .claude/skills/evdb-scaffold/scripts/evdb_scaffold.py --root . --slice <folder>
+python3 .claude/skills/evdb-scaffold/scripts/evdb_scaffold.py --root . --all-planned
+```
+
+If working on a specific context, add `--context <ContextName>`:
+
+```bash
+python3 .claude/skills/evdb-scaffold/scripts/evdb_scaffold.py --root . --all-planned --context Portfolio
 ```
 
 This generates **all boilerplate files** deterministically with no AI:
@@ -167,7 +184,13 @@ python3 .claude/skills/evdb-dev-v2/scripts/scan_session.py stop
 
 **After every successful run (zero violations, tests green):**
 
-Reflect: was anything you figured out NOT already in `learned_hints.md` or `TODO_CONTEXT.md`?
+Stamp the implementation hash — this records the spec version the code was generated from:
+
+```bash
+python3 .claude/skills/evdb-dev-v2/scripts/stamp_hash.py --root . --slice <folderName>
+```
+
+Then reflect: was anything you figured out NOT already in `learned_hints.md` or `TODO_CONTEXT.md`?
 If yes — encode it so the next slice benefits:
 
 ```bash

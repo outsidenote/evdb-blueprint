@@ -180,10 +180,16 @@ def split_fields(fields: list[dict]) -> tuple[list[dict], list[dict]]:
 
 
 def extract_predicate(spec: dict) -> str:
-    """Extract predicate name from a spec's comments."""
+    """Extract predicate name from a spec's comments, falling back to spec title."""
     comments = spec.get("comments", [])
     if comments and comments[0].get("description"):
         return predicate_name(comments[0]["description"])
+    # Fallback: derive from spec title (strip "spec: " prefix, camelCase it)
+    title = spec.get("title", "")
+    if title:
+        title = re.sub(r'^spec:\s*', '', title, flags=re.IGNORECASE).strip()
+        if title:
+            return predicate_name(title)
     return "unknownPredicate"
 
 
@@ -238,7 +244,7 @@ def _format_example(f: dict) -> str:
             return str(float(example)) if "." in str(example) else str(int(example))
         except (ValueError, TypeError):
             return "0"
-    if ft == "DateTime":
+    if ft in ("DateTime", "Date"):
         if not example:
             return 'new Date("2025-01-01T11:00:00Z")'
         # Normalize "YYYY-MM-DD HH:MM" (space separator, no timezone) → ISO UTC
@@ -248,8 +254,13 @@ def _format_example(f: dict) -> str:
         return f'new Date("{example}")'
     if ft == "Boolean":
         return "true" if example.lower() in ("true", "1", "yes") else "false"
-    # String / UUID
-    return f'"{example}"' if example else '""'
+    # String / UUID — generate sensible default when no example
+    if example:
+        return f'"{example}"'
+    fn = field_name(f.get("name", ""))
+    if ft == "UUID":
+        return f'"test-{fn}-001"'
+    return f'"test-{fn}"'
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -260,7 +271,7 @@ def _format_example(f: dict) -> str:
 class DerivedSlice:
     """Precomputed slice metadata passed to all generators.
 
-    Computed once from raw slice_data, avoids redundant derivation.
+    Computed once from raw slice_data or .normalized.json, avoids redundant derivation.
     """
     raw: dict
     slice_name: str
@@ -288,8 +299,18 @@ class DerivedSlice:
     message_type: str
     has_enrichment: bool
 
+    # Slice type flags
+    is_projection: bool = False
+    backend_prompts: list = None
+
     # Cross-slice event resolution
-    event_id_map: dict
+    event_id_map: dict = None
+
+    def __post_init__(self):
+        if self.backend_prompts is None:
+            self.backend_prompts = []
+        if self.event_id_map is None:
+            self.event_id_map = {}
 
 
 def derive_slice(slice_data: dict, event_id_map: dict[str, str] | None = None) -> DerivedSlice:
@@ -311,6 +332,13 @@ def derive_slice(slice_data: dict, event_id_map: dict[str, str] | None = None) -
         any(f.get("generated") for f in payload_fields) and bool(trigger.get("description"))
     ) if is_auto else False
 
+    # Backend prompts
+    bp = slice_data.get("codeGen", {}).get("backendPrompts", [])
+    if not bp:
+        for proc in slice_data.get("processors", []):
+            if proc.get("type") == "AUTOMATION" and proc.get("description"):
+                bp.append(proc["description"])
+
     return DerivedSlice(
         raw=slice_data,
         slice_name=sn,
@@ -331,6 +359,296 @@ def derive_slice(slice_data: dict, event_id_map: dict[str, str] | None = None) -
         trigger_info=trigger,
         message_type=derive_message_type(trigger) if is_auto else "",
         has_enrichment=has_enrich,
+        is_projection=(
+            slice_data.get("sliceType") == "STATE_VIEW"
+            and bool(slice_data.get("readmodels"))
+            and not slice_data.get("commands")
+            # Exclude TODO lists (automation work queues — handled by pg-boss, not Kafka)
+            and not any(rm.get("todoList") for rm in slice_data.get("readmodels", []))
+        ),
+        backend_prompts=bp,
+        event_id_map=event_id_map or {},
+    )
+
+
+# ──────────────────────────────────────────────────────────────────────
+# Normalized JSON consumer (compat shim)
+# ──────────────────────────────────────────────────────────────────────
+
+def _compat_field(nf: dict) -> dict:
+    """Adapt a normalized field back to raw slice.json field shape.
+
+    Generators expect f["name"], f.get("type"), f.get("generated"), f.get("example"),
+    f.get("idAttribute"). Normalized fields use camelName, evdbType, etc.
+    This shim bridges the gap so generators work unchanged.
+    """
+    return {
+        "name": nf.get("name", nf.get("camelName", "")),
+        "type": nf.get("evdbType", "String"),
+        "generated": nf.get("generated", False),
+        "example": nf.get("example", ""),
+        "idAttribute": nf.get("idAttribute", False),
+        "cardinality": nf.get("cardinality", "Single"),
+    }
+
+
+def _compat_fields(nf_list: list) -> list:
+    """Convert a list of normalized fields to raw shape."""
+    return [_compat_field(f) for f in nf_list]
+
+
+def _compat_spec(ns: dict) -> dict:
+    """Adapt a normalized spec back to raw slice.json spec shape."""
+    given = []
+    for g in ns.get("given", []):
+        given.append({
+            "title": g.get("eventTitle", ""),
+            "linkedId": g.get("linkedId"),
+            "fields": _compat_fields(g.get("fields", [])),
+        })
+
+    when = []
+    w = ns.get("when")
+    if w:
+        when.append({
+            "title": w.get("commandTitle", ""),
+            "linkedId": w.get("linkedId"),
+            "fields": _compat_fields(w.get("fields", [])),
+        })
+
+    then = []
+    for t in ns.get("then", []):
+        then.append({
+            "title": t.get("eventTitle", ""),
+            "linkedId": t.get("linkedId"),
+            "fields": _compat_fields(t.get("fields", [])),
+        })
+
+    return {
+        "id": ns.get("id"),
+        "title": ns.get("title", ""),
+        "comments": [{"description": ns.get("comment", "")}] if ns.get("comment") else [],
+        "given": given,
+        "when": when,
+        "then": then,
+    }
+
+
+def _compat_event(ne: dict) -> dict:
+    """Adapt a normalized event back to raw slice.json event shape."""
+    return {
+        "id": ne.get("id"),
+        "title": ne.get("title", ""),
+        "fields": _compat_fields(ne.get("fields", [])),
+        "aggregate": ne.get("aggregate", ""),
+        "createsAggregate": ne.get("createsAggregate", False),
+        "elementContext": ne.get("elementContext", "INTERNAL"),
+    }
+
+
+def _compat_readmodel(nr: dict) -> dict:
+    """Adapt a normalized readmodel back to raw slice.json readmodel shape."""
+    deps = []
+    for d in nr.get("inbound", []):
+        deps.append({"id": d.get("id"), "type": "INBOUND",
+                      "title": d.get("title", ""), "elementType": d.get("elementType", "EVENT")})
+    for d in nr.get("outbound", []):
+        deps.append({"id": d.get("id"), "type": "OUTBOUND",
+                      "title": d.get("title", ""), "elementType": d.get("elementType", "")})
+    return {
+        "id": nr.get("id"),
+        "title": nr.get("title", ""),
+        "description": nr.get("description", ""),
+        "fields": _compat_fields(nr.get("fields", [])),
+        "dependencies": deps,
+        "todoList": nr.get("todoList", False),
+    }
+
+
+def _build_raw_compat(norm: dict) -> dict:
+    """Build a raw-compatible dict from normalized data.
+
+    This is stored as ds.raw so that generator functions like gen_projection(),
+    get_enrichment_info(), etc. can read it in the same shape as raw slice.json.
+    """
+    flags = norm.get("flags", {})
+    cmd = norm.get("command", {})
+
+    # Rebuild commands array
+    commands = []
+    if cmd.get("title"):
+        raw_cmd = {
+            "title": cmd["title"],
+            "aggregate": cmd.get("aggregate", ""),
+            "createsAggregate": cmd.get("createsAggregate", False),
+            "fields": _compat_fields(cmd.get("fields", [])),
+            "dependencies": [
+                {"type": "OUTBOUND", "elementType": "EVENT", "title": t}
+                for t in cmd.get("outboundEvents", [])
+            ],
+        }
+        if cmd.get("id"):
+            raw_cmd["id"] = cmd["id"]
+        commands.append(raw_cmd)
+
+    # Rebuild events
+    events = [_compat_event(e) for e in norm.get("events", [])]
+
+    # Rebuild specifications
+    specs = [_compat_spec(s) for s in norm.get("specifications", [])]
+
+    # Rebuild processors
+    processors = []
+    for p in norm.get("processors", []):
+        raw_proc = {
+            "id": p.get("id"),
+            "title": p.get("title", ""),
+            "type": p.get("type", "AUTOMATION"),
+            "fields": _compat_fields(p.get("fields", [])),
+            "dependencies": [],
+            "triggers": p.get("triggers", []),
+            "description": p.get("description", ""),
+        }
+        for d in p.get("inbound", []):
+            raw_proc["dependencies"].append({
+                "id": d.get("id"), "type": "INBOUND",
+                "title": d.get("title", ""), "elementType": d.get("elementType", ""),
+            })
+        for d in p.get("outbound", []):
+            raw_proc["dependencies"].append({
+                "id": d.get("id"), "type": "OUTBOUND",
+                "title": d.get("title", ""), "elementType": d.get("elementType", ""),
+            })
+        processors.append(raw_proc)
+
+    # Rebuild readmodels
+    readmodels = [_compat_readmodel(r) for r in norm.get("readmodels", [])]
+
+    # Rebuild codeGen
+    codegen = {}
+    bp = norm.get("backendPrompts", [])
+    if bp:
+        codegen["backendPrompts"] = bp
+
+    return {
+        "id": norm.get("slice", {}).get("id"),
+        "title": norm.get("slice", {}).get("title", ""),
+        "context": norm.get("slice", {}).get("context", ""),
+        "status": norm.get("slice", {}).get("status", ""),
+        "sliceType": norm.get("slice", {}).get("sliceType", ""),
+        "commands": commands,
+        "events": events,
+        "specifications": specs,
+        "processors": processors,
+        "readmodels": readmodels,
+        "codeGen": codegen,
+    }
+
+
+def build_event_id_map_from_normalized(root: Path, context: str, em_base: str) -> dict[str, str]:
+    """Build event ID → class name map from .normalized.json files."""
+    norm_dir = root / em_base / ".normalized" / context
+    id_map = {}
+    if not norm_dir.exists():
+        return id_map
+    for norm_file in norm_dir.glob("*.normalized.json"):
+        with open(norm_file) as f:
+            nd = json.load(f)
+        for event in nd.get("events", []):
+            eid = str(event.get("id", ""))
+            if eid:
+                id_map[eid] = event["className"]
+    return id_map
+
+
+def derive_slice_from_normalized(norm: dict, event_id_map: dict[str, str] | None = None) -> DerivedSlice:
+    """Build DerivedSlice from .normalized.json — no re-derivation of types/naming.
+
+    Uses _build_raw_compat() to create a raw-compatible dict so that all
+    existing generator functions (gen_projection, _gen_todo_context, etc.)
+    work unchanged via ds.raw.
+    """
+    naming = norm["naming"]
+    cmd = norm.get("command", {})
+    flags = norm.get("flags", {})
+    raw_compat = _build_raw_compat(norm)
+
+    # Build trigger info from processors (same logic as get_trigger_info but from normalized)
+    trigger = {}
+    is_auto = flags.get("isAutomation", False)
+    if is_auto and norm.get("processors"):
+        proc = norm["processors"][0]
+        trigger_event = ""
+        trigger_readmodel = ""
+        target_command = ""
+        for dep in proc.get("inbound", []):
+            if dep.get("elementType") == "EVENT":
+                trigger_event = dep.get("title", "")
+            elif dep.get("elementType") == "READMODEL":
+                trigger_readmodel = dep.get("title", "")
+        for dep in proc.get("outbound", []):
+            if dep.get("elementType") == "COMMAND":
+                target_command = dep.get("title", "")
+
+        trigger = {
+            "trigger_event": trigger_event,
+            "trigger_readmodel": trigger_readmodel,
+            "target_command": target_command,
+            "payload_fields": _compat_fields(proc.get("fields", [])),
+            "processor_title": proc.get("title", ""),
+            "source": proc.get("sourceType", "event"),
+            "kafka_topic": f"events.{pascal_case(trigger_event)}" if trigger_event else None,
+            "triggers": proc.get("triggers", []),
+            "description": proc.get("description", ""),
+        }
+
+    has_enrich = False
+    if trigger:
+        payload_fields = trigger.get("payload_fields", [])
+        has_enrich = any(f.get("generated") for f in payload_fields) and bool(trigger.get("description"))
+
+    # Compat: convert normalized fields back to raw shape for generators
+    cmd_fields_compat = _compat_fields(cmd.get("fields", []))
+    user_compat = _compat_fields(cmd.get("inputFields", []))
+    gen_compat = _compat_fields(cmd.get("generatedFields", []))
+    events_compat = [_compat_event(e) for e in norm.get("events", [])]
+    specs_compat = [_compat_spec(s) for s in norm.get("specifications", [])]
+
+    # Message type for automation slices
+    msg_type = ""
+    if trigger:
+        if trigger.get("trigger_event"):
+            msg_type = pascal_case(trigger["trigger_event"])
+        elif trigger.get("trigger_readmodel"):
+            rm_name = trigger["trigger_readmodel"].replace("TODO", "").replace("To-Do", "").strip()
+            msg_type = pascal_case(rm_name)
+
+    return DerivedSlice(
+        raw=raw_compat,
+        slice_name=naming.get("commandClassName") or naming.get("sliceName", ""),
+        slice_name_camel=naming.get("commandHandlerName") or camel_case(naming.get("sliceName", "")),
+        stream=stream_name(norm["slice"]["context"]),
+        context=norm["slice"]["context"],
+        command=raw_compat["commands"][0] if raw_compat.get("commands") else {},
+        command_fields=cmd_fields_compat,
+        user_fields=user_compat,
+        generated_fields=gen_compat,
+        command_field_names={field_name(f["name"]) for f in cmd_fields_compat},
+        has_commands=flags.get("hasCommands", False),
+        events=events_compat,
+        specs=specs_compat,
+        has_specs=flags.get("hasSpecs", False),
+        predicates=[s.get("predicateName", extract_predicate(_compat_spec(s))) for s in norm.get("specifications", [])],
+        is_automation=is_auto,
+        trigger_info=trigger,
+        message_type=msg_type,
+        has_enrichment=has_enrich,
+        is_projection=(
+            flags.get("isProjection", False)
+            # Exclude TODO lists (automation work queues — handled by pg-boss, not Kafka)
+            and not any(rm.get("todoList") for rm in raw_compat.get("readmodels", []))
+        ),
+        backend_prompts=norm.get("backendPrompts", []),
         event_id_map=event_id_map or {},
     )
 
@@ -377,7 +695,8 @@ class SlicePaths:
 # ──────────────────────────────────────────────────────────────────────
 
 def is_automation_slice(slice_data: dict) -> bool:
-    """Detect Pattern 5: automation processor (pg-boss triggered)."""
+    """Detect Pattern 5: automation processor (pg-boss triggered).
+    NOTE: Only used by derive_slice() fallback. Prefer ds.is_automation."""
     for proc in slice_data.get("processors", []):
         if proc.get("type") == "AUTOMATION":
             return True
@@ -387,7 +706,8 @@ def is_automation_slice(slice_data: dict) -> bool:
 def get_trigger_info(slice_data: dict) -> dict:
     """Extract trigger event info from automation processor dependencies.
 
-    Supports both .eventmodel (INBOUND READMODEL) and .eventmodel2 (INBOUND EVENT) patterns.
+    NOTE: Only used by derive_slice() fallback. The normalized path builds
+    trigger info directly in derive_slice_from_normalized().
 
     Returns: { message_type, payload_fields, target_command, source, kafka_topic,
                trigger_readmodel, trigger_event, processor_title, description }
@@ -438,21 +758,6 @@ def get_trigger_info(slice_data: dict) -> dict:
 
     return {}
 
-
-def has_backend_prompts(slice_data: dict) -> bool:
-    """Check if this slice has enrichment instructions.
-
-    Supports both formats:
-    - .eventmodel:  codeGen.backendPrompts[] on the slice
-    - .eventmodel2: description on individual AUTOMATION processors
-    """
-    if slice_data.get("codeGen", {}).get("backendPrompts"):
-        return True
-    # .eventmodel2: check processor descriptions
-    for proc in slice_data.get("processors", []):
-        if proc.get("type") == "AUTOMATION" and proc.get("description"):
-            return True
-    return False
 
 
 def get_enrichment_info(slice_data: dict) -> dict:
@@ -701,11 +1006,12 @@ def gen_command_handler(ds: DerivedSlice) -> str:
             lines.append(f"    }});")
         lines.append("  }")
     else:
-        # No specs — single event, simple flow
+        # No specs — single event, simple flow. Map all event fields from command.
         if ds.events:
             en = event_name_from_title(ds.events[0]["title"], "")
             lines.append(f"  stream.appendEvent{en}({{")
-            lines.append(f"    // TODO: map command fields to event payload")
+            for f in ds.events[0].get("fields", []):
+                lines.append(map_event_field_line(f, ds.command_field_names, "    "))
             lines.append(f"  }});")
 
     lines.append("};")
@@ -756,68 +1062,78 @@ export function create{ds.slice_name}Adapter(storageAdapter: IEvDbStorageAdapter
 '''
 
 
-def gen_rest_endpoint(ds: DerivedSlice) -> str:
-    """Generate REST endpoint index.ts."""
-    # Required fields (first UUID or the first field)
-    required = []
+def _zod_field(f: dict) -> str:
+    """Map a field to its Zod schema validator."""
+    ft = f.get("type", "String")
+    optional = f.get("optional", False)
+
+    if ft in ("Double", "Integer", "Int", "Decimal", "Long"):
+        base = "z.number()"
+    elif ft == "Boolean":
+        base = "z.boolean()"
+    elif ft in ("DateTime", "Date"):
+        base = "z.coerce.date()"
+    else:
+        # String / UUID
+        base = "z.string().min(1)" if not optional else "z.string()"
+
+    if optional:
+        base += ".optional()"
+    return base
+
+
+def gen_zod_schema(ds: DerivedSlice) -> str:
+    """Generate command.schema.ts with Zod validation schema for user-facing fields."""
+    lines = [
+        'import { z } from "zod";',
+        "",
+        f"export const {ds.slice_name}Schema = z.object({{",
+    ]
     for f in ds.user_fields:
         fn = field_name(f["name"])
-        if f.get("type") == "UUID" or fn == "account":
-            required.append(fn)
-    if not required and ds.user_fields:
-        required = [field_name(ds.user_fields[0]["name"])]
+        lines.append(f"  {fn}: {_zod_field(f)},")
+    lines.extend([
+        "});",
+        "",
+        f"export type {ds.slice_name}Input = z.infer<typeof {ds.slice_name}Schema>;",
+        "",
+    ])
+    return "\n".join(lines)
 
-    # Destructure
-    destructure_fields = [field_name(f["name"]) for f in ds.user_fields]
 
+def gen_rest_endpoint(ds: DerivedSlice) -> str:
+    """Generate REST endpoint index.ts with Zod validation."""
     lines = [
         'import type { Request, Response } from "express";',
         'import { randomUUID } from "node:crypto";',
         f'import {{ create{ds.slice_name}Adapter }} from "#BusinessCapabilities/{ds.context}/slices/{ds.slice_name}/adapter.js";',
         'import type { IEvDbStorageAdapter } from "@eventualize/core/adapters/IEvDbStorageAdapter";',
+        f'import {{ {ds.slice_name}Schema }} from "../../../slices/{ds.slice_name}/command.schema.js";',
         "",
         f"export const create{ds.slice_name}RestAdapter = (storageAdapter: IEvDbStorageAdapter) => {{",
         f"  const {ds.slice_name_camel} = create{ds.slice_name}Adapter(storageAdapter);",
         "",
         "  return async (req: Request, res: Response) => {",
         "    try {",
-        f"      const {{",
+        f"      const parsed = {ds.slice_name}Schema.safeParse(req.body);",
+        "      if (!parsed.success) {",
+        '        res.status(400).json({ error: parsed.error.issues });',
+        "        return;",
+        "      }",
+        "",
+        "      const command = {",
+        f'        commandType: "{ds.slice_name}" as const,',
+        "        ...parsed.data,",
     ]
-    for fn in destructure_fields:
-        lines.append(f"        {fn},")
-    lines.append("      } = req.body;")
-    lines.append("")
-
-    # Validation
-    if required:
-        conditions = " || ".join(f"!{fn}" for fn in required)
-        required_str = " and ".join(required)
-        lines.append(f'      if ({conditions}) {{')
-        lines.append(f'        res.status(400).json({{ error: "{required_str} is required" }});')
-        lines.append(f'        return;')
-        lines.append(f'      }}')
-        lines.append("")
-
-    lines.append("      const command = {")
-    lines.append(f'        commandType: "{ds.slice_name}" as const,')
-    for f in ds.user_fields:
-        fn = field_name(f["name"])
-        ft = f.get("type", "String")
-        if ft == "Double":
-            lines.append(f"        {fn}: Number({fn}),")
-        elif fn == "transactionId":
-            lines.append(f"        {fn}: {fn} ?? randomUUID(),")
-        else:
-            lines.append(f"        {fn},")
 
     for f in ds.generated_fields:
         fn = field_name(f["name"])
         ft = f.get("type", "String")
-        if ft == "DateTime":
+        if ft in ("DateTime", "Date"):
             lines.append(f"        {fn}: new Date(),")
         elif ft == "UUID":
             lines.append(f"        {fn}: randomUUID(),")
-        elif ft == "Double":
+        elif ft in ("Double", "Integer", "Int", "Decimal"):
             lines.append(f"        {fn}: 0, // TODO: compute generated field")
         else:
             lines.append(f'        {fn}: "", // TODO: compute generated field')
@@ -844,6 +1160,89 @@ def gen_rest_endpoint(ds: DerivedSlice) -> str:
         "};",
         "",
     ])
+    return "\n".join(lines)
+
+
+def gen_rest_behaviour_test(ds: DerivedSlice) -> str:
+    """Generate behaviour.test.ts — HTTP-level test for a REST endpoint using supertest."""
+    route_path = kebab_case(ds.slice_name)
+    context_pascal = pascal_case(ds.context)
+    base_path = f"/api/{kebab_case(context_pascal)}"
+    full_path = f"{base_path}/{route_path}"
+
+    # Required fields (same logic as gen_rest_endpoint)
+    required = []
+    for f in ds.user_fields:
+        fn = field_name(f["name"])
+        if f.get("type") == "UUID" or fn == "account":
+            required.append(fn)
+    if not required and ds.user_fields:
+        required = [field_name(ds.user_fields[0]["name"])]
+
+    lines = [
+        'import * as assert from "node:assert";',
+        'import { test, describe } from "node:test";',
+        'import express from "express";',
+        'import request from "supertest";',
+        f'import {{ routeConfig }} from "#BusinessCapabilities/{ds.context}/endpoints/routes.js";',
+        'import InMemoryStorageAdapter from "../../../../../tests/InMemoryStorageAdapter.js";',
+        "",
+        "function createTestApp() {",
+        "  const adapter = new InMemoryStorageAdapter();",
+        "  const app = express();",
+        "  app.use(express.json());",
+        "  app.use(routeConfig.basePath, routeConfig.createRouter(adapter));",
+        "  return app;",
+        "}",
+        "",
+        f'describe("{ds.slice_name} — Behaviour Tests", () => {{',
+    ]
+
+    # Test 1: Valid request returns 200
+    lines.append(f'  test("POST {full_path} with valid payload returns 200", async () => {{')
+    lines.append("    const app = createTestApp();")
+    lines.append("")
+    lines.append("    const res = await request(app)")
+    lines.append(f'      .post("{full_path}")')
+    lines.append("      .send({")
+    for f in ds.user_fields:
+        fn = field_name(f["name"])
+        lines.append(f"        {fn}: {_format_example(f)},")
+    lines.append("      });")
+    lines.append("")
+    lines.append("    assert.strictEqual(res.status, 200);")
+    lines.append('    assert.ok(res.body.streamId, "Response should include streamId");')
+    lines.append('    assert.ok(Array.isArray(res.body.emittedEventTypes), "Response should include emittedEventTypes");')
+    lines.append("  });")
+    lines.append("")
+
+    # Test 2: Missing required fields returns 400
+    if required:
+        lines.append(f'  test("POST {full_path} with missing required fields returns 400", async () => {{')
+        lines.append("    const app = createTestApp();")
+        lines.append("")
+        lines.append("    const res = await request(app)")
+        lines.append(f'      .post("{full_path}")')
+
+        # Send payload with required fields removed
+        non_required = [f for f in ds.user_fields if field_name(f["name"]) not in required]
+        if non_required:
+            lines.append("      .send({")
+            for f in non_required[:2]:
+                fn = field_name(f["name"])
+                lines.append(f"        {fn}: {_format_example(f)},")
+            lines.append("      });")
+        else:
+            lines.append("      .send({});")
+
+        lines.append("")
+        lines.append("    assert.strictEqual(res.status, 400);")
+        lines.append('    assert.ok(res.body.error, "Response should include error message");')
+        lines.append("  });")
+        lines.append("")
+
+    lines.append("});")
+    lines.append("")
     return "\n".join(lines)
 
 
@@ -1597,13 +1996,76 @@ def gen_test(ds: DerivedSlice) -> str:
 # Renderers — projections
 # ──────────────────────────────────────────────────────────────────────
 
-def is_projection_slice(slice_data: dict) -> bool:
-    """Detect STATE_VIEW slices (readmodels, no commands)."""
-    return (
-        slice_data.get("sliceType") == "STATE_VIEW"
-        and slice_data.get("readmodels")
-        and not slice_data.get("commands")
-    )
+
+def gen_event_message(event_name: str, event_iface: str, event_fields: list[dict]) -> str:
+    """Generate a message producer file for an event.
+
+    Creates a simple pass-through that writes the event payload to the outbox
+    as a CDC message (channel 'default'), making it available to Kafka consumers
+    like projections.
+    """
+    payload_fields = []
+    for f in event_fields:
+        fn = field_name(f["name"])
+        payload_fields.append(f"      {fn}: payload.{fn},")
+
+    return f'''import type {{ {event_iface} }} from "../events/{event_name}.js";
+import type IEvDbEventMetadata from "@eventualize/types/events/IEvDbEventMetadata";
+import EvDbMessage from "@eventualize/types/messages/EvDbMessage";
+
+export const {camel_case(event_name)}Messages = (
+  payload: Readonly<{event_iface}>,
+  _views: unknown,
+  metadata: IEvDbEventMetadata,
+) => {{
+  return [
+    EvDbMessage.createFromMetadata(metadata, "{event_name}", {{
+{chr(10).join(payload_fields)}
+    }}),
+  ];
+}};
+'''
+
+
+def gen_automation_trigger_message(event_name: str, event_iface: str, event_fields: list[dict],
+                                   context: str, automation_slice_name: str) -> str:
+    """Generate a message producer for an event that triggers an automation (pg-boss).
+
+    Creates BOTH:
+    - pg-boss queue message (routes to the automation worker)
+    - CDC message (for projections that also consume this event)
+    """
+    payload_fields = []
+    for f in event_fields:
+        fn = field_name(f["name"])
+        payload_fields.append(f"      {fn}: payload.{fn},")
+
+    return f'''import type {{ {event_iface} }} from "../events/{event_name}.js";
+import type IEvDbEventMetadata from "@eventualize/types/events/IEvDbEventMetadata";
+import EvDbMessage from "@eventualize/types/messages/EvDbMessage";
+import {{ endpointIdentity }} from "#BusinessCapabilities/{context}/endpoints/{automation_slice_name}/pg-boss/index.js";
+import {{ createPgBossQueueMessageFromMetadata }} from "#abstractions/endpoints/queueMessage.js";
+
+export const {camel_case(event_name)}Messages = (
+  payload: Readonly<{event_iface}>,
+  _views: unknown,
+  metadata: IEvDbEventMetadata,
+) => {{
+  return [
+    createPgBossQueueMessageFromMetadata(
+      [endpointIdentity.queueName],
+      metadata,
+      "{automation_slice_name}",
+      {{
+{chr(10).join(payload_fields)}
+      }},
+    ),
+    EvDbMessage.createFromMetadata(metadata, "{event_name}", {{
+{chr(10).join(payload_fields)}
+    }}),
+  ];
+}};
+'''
 
 
 def gen_projection(ds: DerivedSlice) -> str:
@@ -1621,12 +2083,27 @@ def gen_projection(ds: DerivedSlice) -> str:
         if dep.get("type") == "INBOUND" and dep.get("elementType") == "EVENT":
             inbound_events.append(pascal_case(dep["title"]))
 
-    # Determine projection key field (first UUID field or 'account')
-    key_field = "account"
-    for f in rm_fields:
-        if f.get("type") == "UUID":
-            key_field = field_name(f["name"])
-            break
+    # Determine projection key from idAttribute fields.
+    # Multiple idAttribute fields → composite key (e.g. portfolioId:loanId)
+    # Single idAttribute → simple key
+    # No idAttribute → first UUID > 'account'
+    id_fields = [field_name(f["name"]) for f in rm_fields if f.get("idAttribute")]
+
+    if len(id_fields) > 1:
+        # Composite key from multiple idAttribute fields
+        parts = ":".join(f"${{p.{fn}}}" for fn in id_fields)
+        key_expr = f"`{parts}`"
+    elif len(id_fields) == 1:
+        key_expr = f"p.{id_fields[0]}"
+    else:
+        # Fallback: first UUID > 'account'
+        key_name = "account"
+        for f in rm_fields:
+            if f.get("type") == "UUID":
+                key_name = field_name(f["name"])
+                break
+        key_expr = f"p.{key_name}"
+        key_expr = f"p.{key_name}"
 
     # Build payload type for each event
     payload_fields_ts = []
@@ -1655,7 +2132,7 @@ def gen_projection(ds: DerivedSlice) -> str:
         lines.extend([
             f"    {event_name}: (payload, {{ projectionName }}) => {{",
             f"      const p = payload as {ds.slice_name}Payload;",
-            f'      const key = p.{key_field};',
+            f'      const key = {key_expr};',
             "      return [",
             "        {",
             '          sql: `',
@@ -1717,10 +2194,9 @@ def gen_projection_test(ds: DerivedSlice) -> str:
             "    const payload = {",
             *payload_entries,
             "    };",
-            f'    const meta = {{ outboxId: "test-id", projectionName: "{ds.slice_name}" }};',
-            f"    const result = {ds.slice_name_camel}Slice.handlers.{event_name}!(payload, meta);",
+            f'    const meta = {{ outboxId: "test-id", storedAt: new Date(), projectionName: "{ds.slice_name}" }};',
+            f"    const result = {ds.slice_name_camel}Slice.handlers.{event_name}!(payload, meta)!;",
             "",
-            "    assert.ok(result, 'handler should return SQL statements');",
             "    assert.ok(result.length > 0, 'should have at least one SQL statement');",
             "    assert.ok(result[0].sql.length > 0, 'SQL should not be empty');",
             "    assert.ok(result[0].params.length > 0, 'params should not be empty');",
@@ -1897,6 +2373,57 @@ def update_stream_factory(paths: SlicePaths, slice_data: dict, events: list[dict
     return "\n".join(result)
 
 
+def wire_messages_on_stream(paths: SlicePaths, event_names: list[str]) -> str:
+    """Add .withMessages() calls and message imports to the stream factory.
+
+    For each event, adds:
+      - import { <camel>Messages } from "./messages/<eventName>Messages.js";
+      - .withMessages("<EventName>", <camel>Messages) before .build()
+    """
+    content = paths.stream_factory.read_text() if paths.stream_factory.exists() else ""
+    if not content:
+        return content
+
+    new_imports = []
+    new_messages = []
+
+    for en in event_names:
+        msg_var = f"{camel_case(en)}Messages"
+        import_line = f'import {{ {msg_var} }} from "./messages/{en}Messages.js";'
+        message_line = f'  .withMessages("{en}", {msg_var})'
+
+        if msg_var not in content:
+            new_imports.append(import_line)
+        if f'.withMessages("{en}"' not in content:
+            new_messages.append(message_line)
+
+    if not new_imports and not new_messages:
+        return content
+
+    # Insert imports before StreamFactoryBuilder line
+    lines = content.split("\n")
+    builder_idx = None
+    for i, line in enumerate(lines):
+        if "new StreamFactoryBuilder" in line:
+            builder_idx = i
+            break
+
+    if builder_idx is None:
+        return content
+
+    result = lines[:builder_idx]
+    for imp in new_imports:
+        if imp not in content:
+            result.append(imp)
+
+    remaining = "\n".join(lines[builder_idx:])
+    for msg_line in new_messages:
+        remaining = remaining.replace("  .build();", f"{msg_line}\n  .build();", 1)
+
+    result.append(remaining)
+    return "\n".join(result)
+
+
 def update_views_type(paths: SlicePaths, slice_data: dict, view_name: str) -> str:
     """Update or create <Stream>Views.ts."""
     stream = stream_name(slice_data["context"])
@@ -1942,9 +2469,9 @@ def _build_swagger_properties(fields: list[dict]) -> str:
     for f in fields:
         if f.get("generated"):
             continue
-        name = camel_case(f["name"])
+        name = field_name(f["name"])
         schema = openapi_type(f.get("type", "String"))
-        example = f.get("example", "")
+        example = f.get("example", "").strip('"').strip("'")
         parts = [f'type: "{schema["type"]}"']
         if "format" in schema:
             parts.append(f'format: "{schema["format"]}"')
@@ -2072,6 +2599,33 @@ export const routeConfig: RouteConfig = {{
 # Auto-normalize helper
 # ──────────────────────────────────────────────────────────────────────
 
+def _auto_normalize_before_scaffold(root: Path, slice_json_path: Path,
+                                    em_base: str, context: str, folder: str) -> None:
+    """Run the normalizer BEFORE scaffold reads from it.
+
+    Produces .normalized.json so scaffold can consume it as its primary input.
+    Silently skips if the normalizer script is not present.
+    Looks for the normalize script relative to THIS script (not root), so it works
+    in worktree scenarios where root points to an isolated copy.
+    """
+    import subprocess
+    # Find normalize script relative to this scaffold script (sibling skill)
+    this_script_dir = Path(__file__).resolve().parent
+    normalize_script = this_script_dir.parent.parent / "evdb-normalize" / "scripts" / "normalize_slice.py"
+    if not normalize_script.exists():
+        # Fallback: try from root
+        normalize_script = root / ".claude" / "skills" / "evdb-normalize" / "scripts" / "normalize_slice.py"
+    if not normalize_script.exists():
+        return
+    try:
+        subprocess.run(
+            [sys.executable, str(normalize_script), str(slice_json_path), "--root", str(root)],
+            check=False, capture_output=True, text=True,
+        )
+    except Exception:
+        pass  # Normalize failure never blocks scaffolding
+
+
 def _auto_normalize(root: Path, slice_json_path: Path) -> None:
     """Auto-run the normalizer + planner after scaffolding.
 
@@ -2144,9 +2698,24 @@ def scaffold_slice(root: Path, folder: str, dry_run: bool = False) -> dict:
     with open(slice_json_path) as f:
         slice_data = json.load(f)
 
-    # Build event ID map and derive the slice model
-    event_id_map = build_event_id_map(root, context)
-    ds = derive_slice(slice_data, event_id_map)
+    # Ensure context is available in slice_data (it comes from index.json, not slice.json)
+    if "context" not in slice_data:
+        slice_data["context"] = context
+
+    # Run normalize first to produce .normalized.json (if normalizer is available)
+    _auto_normalize_before_scaffold(root, slice_json_path, em_base, context, folder)
+
+    # Try to load from .normalized.json (single source of truth for derivations)
+    norm_path = root / em_base / ".normalized" / context / f"{folder}.normalized.json"
+    if norm_path.exists():
+        with open(norm_path) as f:
+            norm_data = json.load(f)
+        event_id_map = build_event_id_map_from_normalized(root, context, em_base)
+        ds = derive_slice_from_normalized(norm_data, event_id_map)
+    else:
+        # Fallback: derive from raw slice.json (legacy path)
+        event_id_map = build_event_id_map(root, context)
+        ds = derive_slice(slice_data, event_id_map)
 
     paths = SlicePaths(root, context, ds.slice_name, ds.stream)
     files_created = []
@@ -2160,9 +2729,9 @@ def scaffold_slice(root: Path, folder: str, dry_run: bool = False) -> dict:
         path.write_text(content)
         (files_updated if is_update else files_created).append(str(path.relative_to(root)))
 
-    # Detect enrichment-only slice (processor + backendPrompts, no commands)
-    is_enrichment = has_backend_prompts(slice_data) and not slice_data.get("commands")
-    is_projection = is_projection_slice(slice_data)
+    # Detect slice type from DerivedSlice flags
+    is_enrichment = bool(ds.backend_prompts) and not ds.has_commands
+    is_projection = ds.is_projection
 
     if is_projection:
         # ── Projection slice: generate ProjectionConfig + test ────────
@@ -2182,6 +2751,53 @@ def scaffold_slice(root: Path, folder: str, dry_run: bool = False) -> dict:
             existing = projections_path.read_text() if projections_path.exists() else ""
             if updated != existing:
                 write_file(projections_path, updated, is_update=bool(existing))
+
+        # ── Message producers: wire inbound events to the outbox ──────
+        # For each event this projection consumes, generate a message file
+        # and register .withMessages() on the stream factory so events flow
+        # through outbox → CDC → Kafka → this projection.
+        readmodel = ds.raw.get("readmodels", [{}])[0]
+        inbound_event_names = []
+        for dep in readmodel.get("dependencies", []):
+            if dep.get("type") == "INBOUND" and dep.get("elementType") == "EVENT":
+                inbound_event_names.append(pascal_case(dep["title"]))
+
+        if inbound_event_names:
+            messages_dir = paths.swimlane / "messages"
+            wired_events = []
+
+            for en in inbound_event_names:
+                msg_path = messages_dir / f"{en}Messages.ts"
+                if not msg_path.exists():
+                    # Find event fields from all slice.json files in this context
+                    event_fields = []
+                    slices_dir = root / em_base / ".slices" / context
+                    if slices_dir.exists():
+                        for sj in slices_dir.rglob("slice.json"):
+                            sd = json.load(open(sj))
+                            for ev in sd.get("events", []):
+                                if pascal_case(ev["title"]) == en:
+                                    event_fields = ev.get("fields", [])
+                                    break
+                            if event_fields:
+                                break
+
+                    iface = interface_name(en)
+                    # Ensure the event interface file exists
+                    event_file = paths.events_dir / f"{en}.ts"
+                    if not event_file.exists() and event_fields:
+                        write_file(event_file, gen_event_interface({"title": en, "fields": event_fields}))
+
+                    write_file(msg_path, gen_event_message(en, iface, event_fields))
+                    wired_events.append(en)
+
+            # Wire .withMessages() on the stream factory
+            if wired_events and paths.stream_factory.exists():
+                updated = wire_messages_on_stream(paths, wired_events)
+                if updated != paths.stream_factory.read_text():
+                    if not dry_run:
+                        paths.stream_factory.write_text(updated)
+                    files_updated.append(str(paths.stream_factory.relative_to(root)))
 
     elif is_enrichment:
         # ── Enrichment-only slice: generate enrichment.ts + test ────────
@@ -2227,6 +2843,12 @@ def scaffold_slice(root: Path, folder: str, dry_run: bool = False) -> dict:
             if not cmd_path.exists():
                 write_file(cmd_path, gen_command(ds))
 
+            # 3b. Zod schema (only for slices with REST endpoints, not automations)
+            if not ds.is_automation:
+                schema_path = paths.slice_dir / "command.schema.ts"
+                if not schema_path.exists():
+                    write_file(schema_path, gen_zod_schema(ds))
+
         # 4. GWTS (only if specs)
         if ds.has_specs:
             gwts_path = paths.slice_dir / "gwts.ts"
@@ -2261,7 +2883,57 @@ def scaffold_slice(root: Path, folder: str, dry_run: bool = False) -> dict:
                     if not enrichment_test_path.exists():
                         write_file(enrichment_test_path, gen_enrichment_test(ds))
 
-                # 7b. Automation endpoint test
+                # 7b. Message producer for the trigger event (so it reaches pg-boss via outbox)
+                # The trigger event comes from either:
+                # - trigger_info.trigger_event (cross-boundary Kafka pattern)
+                # - The TODO readmodel's INBOUND event (same-context outbox pattern)
+                trigger_event = ds.trigger_info.get("trigger_event", "")
+                if not trigger_event and ds.trigger_info.get("trigger_readmodel"):
+                    # Look up the TODO readmodel's inbound event from slice.json files
+                    todo_rm_title = ds.trigger_info["trigger_readmodel"]
+                    slices_dir_rm = root / em_base / ".slices" / context
+                    if slices_dir_rm.exists():
+                        for sj in slices_dir_rm.rglob("slice.json"):
+                            sd_rm = json.load(open(sj))
+                            for rm in sd_rm.get("readmodels", []):
+                                if rm.get("title", "").strip() == todo_rm_title.strip():
+                                    for dep in rm.get("dependencies", []):
+                                        if dep.get("type") == "INBOUND" and dep.get("elementType") == "EVENT":
+                                            trigger_event = dep["title"]
+                                            break
+                                if trigger_event:
+                                    break
+                            if trigger_event:
+                                break
+                if trigger_event:
+                    trigger_en = pascal_case(trigger_event)
+                    msg_path = paths.swimlane / "messages" / f"{trigger_en}Messages.ts"
+                    if not msg_path.exists():
+                        # Find trigger event fields from slice.json files in this context
+                        trigger_fields = []
+                        slices_dir = root / em_base / ".slices" / context
+                        if slices_dir.exists():
+                            for sj in slices_dir.rglob("slice.json"):
+                                sd_tmp = json.load(open(sj))
+                                for ev in sd_tmp.get("events", []):
+                                    if pascal_case(ev["title"]) == trigger_en:
+                                        trigger_fields = ev.get("fields", [])
+                                        break
+                                if trigger_fields:
+                                    break
+                        iface = interface_name(trigger_en)
+                        write_file(msg_path, gen_automation_trigger_message(
+                            trigger_en, iface, trigger_fields, context, ds.slice_name))
+                    # Wire .withMessages() on the stream factory
+                    if paths.stream_factory.exists():
+                        updated = wire_messages_on_stream(paths, [trigger_en])
+                        existing_sf = paths.stream_factory.read_text()
+                        if updated != existing_sf:
+                            if not dry_run:
+                                paths.stream_factory.write_text(updated)
+                            files_updated.append(str(paths.stream_factory.relative_to(root)))
+
+                # 7c. Automation endpoint test
                 auto_test_path = paths.bc / "endpoints" / ds.slice_name / "tests" / "automation.endpoint.test.ts"
                 if not auto_test_path.exists():
                     write_file(auto_test_path, gen_automation_endpoint_test(ds))
@@ -2269,6 +2941,11 @@ def scaffold_slice(root: Path, folder: str, dry_run: bool = False) -> dict:
                 endpoint_path = paths.rest_endpoint_dir / "index.ts"
                 if not endpoint_path.exists():
                     write_file(endpoint_path, gen_rest_endpoint(ds))
+
+                # 7c. REST behaviour test (HTTP-level test with supertest)
+                behaviour_test_path = paths.rest_endpoint_dir / "behaviour.test.ts"
+                if not behaviour_test_path.exists():
+                    write_file(behaviour_test_path, gen_rest_behaviour_test(ds))
 
         # 8. Tests (only if slice has commands)
         if has_commands:
@@ -2354,15 +3031,9 @@ def _gen_todo_context(paths: SlicePaths, ds: DerivedSlice,
     sn = ds.slice_name
     stream = ds.stream
     context = ds.context
-    is_enrichment = has_backend_prompts(ds.raw) and not ds.raw.get("commands")
-    is_proj = is_projection_slice(ds.raw)
-
-    # Get backend prompts from slice-level or processor descriptions
-    backend_prompts = ds.raw.get("codeGen", {}).get("backendPrompts", [])
-    if not backend_prompts:
-        for proc in ds.raw.get("processors", []):
-            if proc.get("type") == "AUTOMATION" and proc.get("description"):
-                backend_prompts.append(proc["description"])
+    is_enrichment = bool(ds.backend_prompts) and not ds.has_commands
+    is_proj = ds.is_projection
+    backend_prompts = ds.backend_prompts
 
     lines = [
         f"# TODO Context for {sn}",
@@ -2647,11 +3318,26 @@ def _gen_todo_context(paths: SlicePaths, ds: DerivedSlice,
         lines.append("// WRONG: flat { eventType, account, amount }")
         lines.append("```")
         lines.append("")
+        lines.append("### View test format (ViewSliceTester)")
+        lines.append("```typescript")
+        lines.append("ViewSliceTester.run(viewConfig, [")
+        lines.append("  {")
+        lines.append('    description: "event updates state correctly",')
+        lines.append("    given: [")
+        lines.append('      { eventType: "EventName", payload: { field: value } },')
+        lines.append("    ],")
+        lines.append("    then: { field: expectedValue }, // expected state after folding")
+        lines.append("  },")
+        lines.append("]);")
+        lines.append("// 'given' = events to fold, 'then' = expected view state after folding")
+        lines.append("// For accumulation: two given events, 'then' has accumulated value")
+        lines.append("// For overwrite: 'then' matches last event's value")
+        lines.append("```")
+        lines.append("")
         lines.append("### Other patterns")
         lines.append("- `commandHandler.ts`: pure function, only `stream.appendEvent*()` calls, no I/O")
         lines.append("- `gwts.ts`: `(state, command) => boolean` — compare state fields vs command fields")
         lines.append("- View handlers: `(state, event) => ({ ...state, field: event.field })`")
-        lines.append("- Tests use `SliceTester.testCommandHandler()` and `ViewSliceTester.run()`")
         lines.append("- All event payloads in tests must include ALL fields from the event interface")
         lines.append("")
 
@@ -2678,6 +3364,7 @@ def main():
     parser.add_argument("--root", default=".", help="Project root")
     parser.add_argument("--slice", default=None, help="Slice folder name to scaffold")
     parser.add_argument("--all-planned", action="store_true", help="Scaffold all Planned slices")
+    parser.add_argument("--context", default=None, help="Only scaffold slices in this context (use with --all-planned)")
     parser.add_argument("--dry-run", action="store_true", help="Show what would be created without writing")
     parser.add_argument("--json", action="store_true", help="Output as JSON")
     args = parser.parse_args()
@@ -2697,6 +3384,10 @@ def main():
                 idx = json.load(f)
             for s in sorted(idx["slices"], key=lambda x: x["index"]):
                 if s["status"] in scaffoldable_statuses:
+                    if args.context and s.get("context") != args.context:
+                        continue
+                    if args.context and s.get("context") != args.context:
+                        continue
                     planned.append(s["folder"])
 
         results = []

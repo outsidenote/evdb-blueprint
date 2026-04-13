@@ -678,6 +678,10 @@ def main():
                 "passed": r.passed,
                 "fail_count": r.fail_count,
                 "warn_count": r.warn_count,
+                "checks": [
+                    {"file": c.file, "check": c.check, "status": c.status, "detail": c.detail}
+                    for c in r.checks
+                ],
             } for r in reports], indent=2))
         else:
             # Summary table

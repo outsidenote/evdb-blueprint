@@ -16,10 +16,11 @@ const BASE_DOC = {
           { name: "projectionName", in: "path", required: true, schema: { type: "string" } },
           { name: "key", in: "query", schema: { type: "string" }, description: "Single key lookup" },
           { name: "keys", in: "query", schema: { type: "string" }, description: "Comma-separated keys" },
+          { name: "prefix", in: "query", schema: { type: "string" }, description: "Key prefix lookup (e.g. prefix=PORT-1: returns all keys starting with PORT-1:)" },
           { name: "from", in: "query", schema: { type: "string" }, description: "Range start" },
           { name: "to", in: "query", schema: { type: "string" }, description: "Range end" },
           { name: "afterKey", in: "query", schema: { type: "string" }, description: "Pagination cursor" },
-          { name: "limit", in: "query", schema: { type: "integer", default: 100 } },
+          { name: "limit", in: "query", schema: { type: "integer" }, description: "Max rows (default 100, max 1000)" },
         ],
         responses: {
           "200": { description: "Projection data returned" },

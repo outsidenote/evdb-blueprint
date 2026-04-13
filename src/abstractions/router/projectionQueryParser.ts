@@ -11,7 +11,8 @@
 export type ProjectionQuery =
   | { readonly mode: "byKey"; readonly projectionName: string; readonly key: string }
   | { readonly mode: "byKeys"; readonly projectionName: string; readonly keys: string[] }
-  | { readonly mode: "betweenKeys"; readonly projectionName: string; readonly from: string; readonly to: string; readonly limit: number; readonly afterKey?: string; readonly fromInclusive: boolean; readonly toInclusive: boolean };
+  | { readonly mode: "betweenKeys"; readonly projectionName: string; readonly from: string; readonly to: string; readonly limit: number; readonly afterKey?: string; readonly fromInclusive: boolean; readonly toInclusive: boolean }
+  | { readonly mode: "byPrefix"; readonly projectionName: string; readonly prefix: string; readonly limit: number; readonly afterKey?: string };
 
 
 /**
@@ -25,7 +26,7 @@ export class QueryValidationError extends Error {
 }
 
 
-const QUERY_MODE_PARAMS = ["key", "keys", "from", "to"] as const;
+const QUERY_MODE_PARAMS = ["key", "keys", "from", "to", "prefix"] as const;
 const PAGINATION_PARAMS = ["afterKey", "limit"] as const;
 const RANGE_OPTION_PARAMS = ["fromInclusive", "toInclusive"] as const;
 const ALL_KNOWN_PARAMS = [...QUERY_MODE_PARAMS, ...PAGINATION_PARAMS, ...RANGE_OPTION_PARAMS] as const;
@@ -61,6 +62,10 @@ export function parseProjectionQuery(
       const keys = parseKeys(rawParams);
       return { mode: "byKeys", projectionName, keys };
     }
+    case "byPrefix": {
+      const prefix = parseRequiredString(rawParams, "prefix");
+      return { mode: "byPrefix", projectionName, prefix, limit, afterKey };
+    }
     case "betweenKeys": {
       const from = parseRequiredString(rawParams, "from");
       const to = parseRequiredString(rawParams, "to");
@@ -79,11 +84,13 @@ function detectMode(params: Record<string, unknown>): QueryMode {
   const hasKeys = has(params, "keys");
   const hasFrom = has(params, "from");
   const hasTo = has(params, "to");
+  const hasPrefix = has(params, "prefix");
 
   const modeCount =
     (hasKey ? 1 : 0) +
     (hasKeys ? 1 : 0) +
-    (hasFrom || hasTo ? 1 : 0);
+    (hasFrom || hasTo ? 1 : 0) +
+    (hasPrefix ? 1 : 0);
 
   if (modeCount === 0) {
     throw new QueryValidationError(
@@ -99,6 +106,7 @@ function detectMode(params: Record<string, unknown>): QueryMode {
 
   if (hasKey) return "byKey";
   if (hasKeys) return "byKeys";
+  if (hasPrefix) return "byPrefix";
 
   if (hasFrom && !hasTo) throw new QueryValidationError("'from' requires 'to'");
   if (!hasFrom && hasTo) throw new QueryValidationError("'to' requires 'from'");
