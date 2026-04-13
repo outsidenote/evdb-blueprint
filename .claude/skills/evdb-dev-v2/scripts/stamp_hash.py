@@ -5,6 +5,9 @@ stamp_hash.py — Stamps the implementation hash for a slice after successful im
 Called at the end of the evdb-dev-v2 pipeline (after scaffold + AI fill + tests pass).
 Records the spec version (slice.json content hash) so the diff can detect future spec drift.
 
+Hashes are stored per-context at .implementation-hashes/<Context>.json to avoid
+merge conflicts when multiple developers work on different contexts in parallel.
+
 Usage:
   python3 stamp_hash.py --root . --slice <folder>
 """
@@ -42,7 +45,6 @@ def main():
 
     root = Path(args.root).resolve()
 
-    # Find slice in index
     for em_dir in [".eventmodel", ".eventmodel2"]:
         idx_path = root / em_dir / ".slices" / "index.json"
         if not idx_path.exists():
@@ -67,7 +69,11 @@ def main():
                     json.dumps(normalize(spec), sort_keys=True, separators=(",", ":")).encode()
                 ).hexdigest()
 
-                hashes_path = root / em_dir / "implementation-hashes.json"
+                # Per-context hash file
+                hashes_dir = root / ".implementation-hashes"
+                hashes_dir.mkdir(exist_ok=True)
+                hashes_path = hashes_dir / f"{context}.json"
+
                 stored = {}
                 if hashes_path.exists():
                     try:
@@ -77,7 +83,7 @@ def main():
 
                 stored[slice_id] = current_hash
                 hashes_path.write_text(json.dumps(stored, indent=2) + "\n")
-                print(f"[stamp-hash] {folder}: {current_hash}")
+                print(f"[stamp-hash] {context}/{folder}: {current_hash}")
                 return
 
     print(f"[stamp-hash] Slice '{args.slice}' not found in any index.json")

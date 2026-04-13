@@ -242,21 +242,6 @@ jobs:
           git fetch origin "${{ matrix.branch }}" 2>/dev/null || true
           git checkout -B "${{ matrix.branch }}"
 
-      - name: "💾 Commit split files"
-        run: |
-          # Stage the split files for this context
-          git add ${{ matrix.split_files }} || true
-          git add ${{ matrix.index_file }} || true
-
-          if git diff --cached --quiet; then
-            echo "No split files to commit"
-          else
-            git commit -m "chore(${{ matrix.context_pascal }}): split slice definitions from config.json
-
-          Split Miro-exported config.json into per-slice files for the ${{ matrix.context }} context.
-          Slices: ${{ matrix.slices }}"
-          fi
-
       - name: "💾 Commit scaffold code"
         run: |
           git add "src/BusinessCapabilities/${{ matrix.context_pascal }}/" || true
@@ -631,10 +616,15 @@ jobs:
       - name: "🧹 Clean up"
         run: |
           find "src/BusinessCapabilities/${{ matrix.context_pascal }}/" -name "TODO_CONTEXT.md" -delete 2>/dev/null || true
+          # Remove ephemeral event model files — config.json and split output are input, not output
+          rm -rf .eventmodel/ .eventmodel2/
 
       - name: "💾 Commit business logic"
         run: |
           git add "src/BusinessCapabilities/${{ matrix.context_pascal }}/" || true
+          git add ".implementation-hashes/" || true
+          # Stage removal of ephemeral event model files
+          git rm -rf --cached .eventmodel/ .eventmodel2/ 2>/dev/null || true
 
           if git diff --cached --quiet; then
             echo "No business logic changes to commit"

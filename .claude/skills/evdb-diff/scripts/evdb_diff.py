@@ -171,7 +171,7 @@ def run_diff(root: Path, verbose: bool = False) -> dict:
     slices_dir = eventmodel / ".slices"
     index_path = slices_dir / "index.json"
     config_path = eventmodel / "config.json"
-    hashes_path = eventmodel / "implementation-hashes.json"
+    hashes_dir = root / ".implementation-hashes"
     src = root / "src" / "BusinessCapabilities"
 
     # Load index
@@ -180,11 +180,21 @@ def run_diff(root: Path, verbose: bool = False) -> dict:
 
     slices = index_data.get("slices", [])
 
-    # Load existing hashes
+    # Load existing hashes from per-context files
     stored_hashes: dict[str, str] = {}
-    if hashes_path.exists():
-        with open(hashes_path) as f:
-            stored_hashes = json.load(f)
+    if hashes_dir.is_dir():
+        for hf in hashes_dir.glob("*.json"):
+            try:
+                stored_hashes.update(json.load(open(hf)))
+            except Exception:
+                pass
+    # Legacy: also check old single-file location
+    legacy_hashes = eventmodel / "implementation-hashes.json"
+    if legacy_hashes.exists():
+        try:
+            stored_hashes.update(json.load(open(legacy_hashes)))
+        except Exception:
+            pass
 
     # Pre-pass: record originally blocked slices
     originally_blocked = [s for s in slices if s.get("status") == "Blocked"]
@@ -737,11 +747,22 @@ def run_diff(root: Path, verbose: bool = False) -> dict:
         json.dump(index_data, f, indent=2)
         f.write("\n")
 
-    # Write hashes
+    # Write hashes per-context
     if new_hashes:
-        with open(hashes_path, "w") as f:
-            json.dump(dict(sorted(new_hashes.items())), f, indent=2)
-            f.write("\n")
+        # Group hashes by context (look up context from index)
+        id_to_context: dict[str, str] = {}
+        for s in slices:
+            id_to_context[str(s.get("id", ""))] = s.get("context", "default")
+
+        per_context: dict[str, dict[str, str]] = {}
+        for sid, h in new_hashes.items():
+            ctx = id_to_context.get(sid, "default")
+            per_context.setdefault(ctx, {})[sid] = h
+
+        hashes_dir.mkdir(exist_ok=True)
+        for ctx, ctx_hashes in per_context.items():
+            ctx_path = hashes_dir / f"{ctx}.json"
+            ctx_path.write_text(json.dumps(dict(sorted(ctx_hashes.items())), indent=2) + "\n")
 
     # Build result
     result = {
