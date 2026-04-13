@@ -21,6 +21,10 @@ on:
         description: 'AI provider: anthropic (direct API) or bedrock (AWS)'
         required: false
         default: 'anthropic'
+      model:
+        description: 'AI model: opus (default) or sonnet (cheaper, faster)'
+        required: false
+        default: 'opus'
 
 permissions:
   contents: write
@@ -269,33 +273,28 @@ jobs:
         id: provider
         run: |
           PROVIDER="${{ github.event.inputs.provider || 'anthropic' }}"
+          MODEL_TIER="${{ github.event.inputs.model || 'opus' }}"
+
           if [ "$PROVIDER" = "bedrock" ]; then
-            echo "model=us.anthropic.claude-opus-4-6-v1@bedrock" >> "$GITHUB_OUTPUT"
-            echo "Using Bedrock provider"
+            if [ "$MODEL_TIER" = "sonnet" ]; then
+              echo "model=us.anthropic.claude-sonnet-4-6-v1@bedrock" >> "$GITHUB_OUTPUT"
+            else
+              echo "model=us.anthropic.claude-opus-4-6-v1@bedrock" >> "$GITHUB_OUTPUT"
+            fi
+            echo "Using Bedrock provider ($MODEL_TIER)"
           else
-            echo "model=" >> "$GITHUB_OUTPUT"
-            echo "Using Anthropic API"
+            if [ "$MODEL_TIER" = "sonnet" ]; then
+              echo "model=claude-sonnet-4-6-20250514" >> "$GITHUB_OUTPUT"
+            else
+              echo "model=" >> "$GITHUB_OUTPUT"
+            fi
+            echo "Using Anthropic API ($MODEL_TIER)"
           fi
 
-      - name: "🔥 Warm up API"
-        env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_REGION: ${{ secrets.AWS_REGION || 'us-east-1' }}
-        run: |
-          MODEL_FLAG=""
-          if [ -n "${{ steps.provider.outputs.model }}" ]; then
-            MODEL_FLAG="--model ${{ steps.provider.outputs.model }}"
-          fi
-          claude --print --dangerously-skip-permissions \
-            $MODEL_FLAG \
-            --max-turns 1 \
-            "Reply with OK" > /dev/null 2>&1 || true
 
       - name: "🧠 AI: Fill business logic"
         id: claude
-        timeout-minutes: 30
+        timeout-minutes: 20
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -309,51 +308,141 @@ jobs:
             MODEL_FLAG="--model ${{ steps.provider.outputs.model }}"
           fi
 
-          PROMPT="Read and follow the skill instructions in .claude/skills/evdb-dev-v2/SKILL.md exactly.
+          CONTEXT="${{ matrix.context_pascal }}"
 
-            Implement the following slices one at a time using the evdb-dev-v2 pipeline:
+          # Read learned hints once (shared across slices)
+          HINTS=""
+          if [ -f ".claude/skills/evdb-dev-v2/learned_hints.md" ]; then
+            HINTS=$(cat .claude/skills/evdb-dev-v2/learned_hints.md)
+          fi
 
-            Context: ${{ matrix.context }}
-            Context folder: ${{ matrix.context_pascal }}
-            Slices: ${{ matrix.slices }}
+          # One conversation per slice — small context, better caching
+          IFS=',' read -ra SLICE_ARRAY <<< "${{ matrix.slices }}"
+          for SLICE in "${SLICE_ARRAY[@]}"; do
+            echo ""
+            echo "============================================"
+            echo "  Filling: $SLICE"
+            echo "============================================"
 
-            The scaffold (Step 1 + Step 2) has already been run. Start from Step 0 (scan session) for each slice, then Step 3 (fill business logic), then Step 4 (assert zero scans).
+            # Find TODO_CONTEXT.md (slices/ or endpoints/)
+            TODO_CONTENT=""
+            for dir in "src/BusinessCapabilities/$CONTEXT/slices/$SLICE" \
+                       "src/BusinessCapabilities/$CONTEXT/endpoints/$SLICE"; do
+              if [ -f "$dir/TODO_CONTEXT.md" ]; then
+                TODO_CONTENT=$(cat "$dir/TODO_CONTEXT.md")
+                break
+              fi
+            done
 
-            After all slices are done, run: npm run test:slices"
+            if [ -z "$TODO_CONTENT" ]; then
+              echo "  SKIP: No TODO_CONTEXT.md found"
+              echo "0,0,0,0" > "/tmp/slice-stats-$SLICE.txt"
+              continue
+            fi
 
-          # Run with JSON output to capture token usage
-          claude --print --dangerously-skip-permissions \
-            --output-format json \
-            $MODEL_FLAG \
-            --max-turns 50 \
-            "$PROMPT" > /tmp/claude-output.json
+            # Find the test file
+            TEST_CMD="echo 'no test found'"
+            for tf in "src/BusinessCapabilities/$CONTEXT/slices/$SLICE/tests/command.slice.test.ts" \
+                      "src/BusinessCapabilities/$CONTEXT/slices/$SLICE/tests/projection.test.ts" \
+                      "src/BusinessCapabilities/$CONTEXT/endpoints/$SLICE/tests/enrichment.test.ts"; do
+              if [ -f "$tf" ]; then
+                TEST_CMD="node --import tsx --test $tf"
+                break
+              fi
+            done
+
+            # Build a direct, self-contained prompt — no file reading needed
+            PROMPT=$(cat <<'PROMPT_HEADER'
+          You are filling TODO placeholders in an event-sourced TypeScript codebase (eventualize-js/evdb).
+
+          ## Key Conventions
+          - Pure handlers: commandHandler.ts NEVER imports storage, I/O, or time. Only stream.appendEvent*().
+          - appendEvent syntax: stream.appendEventMyEvent({ field1, field2 }) — plain payload, no generics.
+          - All relative imports use .js extension even for .ts source files.
+          - View state: read from stream.views.SliceStateMySlice.
+          - GWTS predicates: each spec branch returns a named predicate matching the spec description.
+          - Computed fields (timestamps, generated IDs) belong in endpoints only, never in pure handlers.
+
+          PROMPT_HEADER
+          )
+
+            # Append dynamic content
+            PROMPT="$PROMPT
+          ## Learned Hints
+          $HINTS
+
+          ## Spec & TODO Context
+          $TODO_CONTENT
+
+          ## Instructions
+          1. Read each file listed under 'Files with TODOs' in the spec above.
+          2. Replace ALL TODO/placeholder stubs with real business logic per the spec.
+             - gwts.ts: replace return false with real predicate conditions.
+             - commandHandler.ts: fill branching logic, reason strings, computed values.
+             - enrichment.ts: implement enrich() per Backend Prompts section.
+             - projection index.ts: replace generic UPSERT with proper field-specific SQL.
+             - tests: verify event fields match spec, fix test data, add edge cases.
+          3. Run the test: $TEST_CMD
+          4. If tests fail, read the error, fix the code, re-run until green.
+
+          Do NOT read SKILL.md or any reference files. Everything you need is above.
+          Do NOT run evdb-diff, evdb-scaffold, or scan sessions.
+          Do NOT read files outside 'Files with TODOs'."
+
+            claude --print --dangerously-skip-permissions \
+              --output-format json \
+              --exclude-dynamic-system-prompt-sections \
+              --max-budget-usd 1.50 \
+              $MODEL_FLAG \
+              --max-turns 12 \
+              "$PROMPT" > "/tmp/claude-$SLICE.json" 2>&1 || true
+
+            # Extract per-slice stats
+            python3 -c "
+          import json, sys
+          try:
+              lines = open('/tmp/claude-$SLICE.json').readlines()
+              data = json.loads(next(l for l in lines if l.strip().startswith('{')))
+              u = data.get('usage', {})
+              inp = u.get('input_tokens', 0) + u.get('cache_read_input_tokens', 0) + u.get('cache_creation_input_tokens', 0)
+              out = u.get('output_tokens', 0)
+              cost = data.get('total_cost_usd', 0)
+              turns = data.get('num_turns', 0)
+              print(f'  Turns: {turns}, Cost: \${cost:.2f}, Input: {inp:,}, Output: {out:,}')
+              open(f'/tmp/slice-stats-$SLICE.txt', 'w').write(f'{cost},{turns},{inp},{out}')
+          except Exception as e:
+              print(f'  Stats error: {e}')
+              open(f'/tmp/slice-stats-$SLICE.txt', 'w').write('0,0,0,0')
+          " || true
+
+          done
+
+          # Aggregate stats across all slices
+          python3 -c "
+          import json
+          tc, tt, ti, to = 0, 0, 0, 0
+          slices = '${{ matrix.slices }}'.split(',')
+          for s in slices:
+              try:
+                  parts = open(f'/tmp/slice-stats-{s}.txt').read().strip().split(',')
+                  tc += float(parts[0]); tt += int(parts[1]); ti += int(parts[2]); to += int(parts[3])
+              except: pass
+          print(f'Total: {tt} turns, \${tc:.2f}, Input: {ti:,}, Output: {to:,}')
+          with open('/tmp/claude-stats.txt', 'w') as f:
+              f.write(f'input_tokens={ti}\noutput_tokens={to}\ntotal_tokens={ti+to}\ncost={tc:.4f}\nnum_turns={tt}\napi_time_s=0\n')
+          summaries = []
+          for s in slices:
+              try:
+                  lines = open(f'/tmp/claude-{s}.json').readlines()
+                  data = json.loads(next(l for l in lines if l.strip().startswith('{')))
+                  summaries.append(f'{s}: {data.get(\"result\", \"no result\")[:200]}')
+              except: pass
+          open('/tmp/claude-summary.txt', 'w').write(chr(10).join(summaries)[:1000])
+          " || true
 
           END_TIME=$(date +%s)
           DURATION=$((END_TIME - START_TIME))
-          MINUTES=$((DURATION / 60))
-          SECONDS=$((DURATION % 60))
-
-          echo "duration=${MINUTES}m ${SECONDS}s" >> "$GITHUB_OUTPUT"
-
-          # Extract stats from JSON output
-          python3 -c "
-          import json
-          # The JSON output may have a warning line before it
-          lines = open('/tmp/claude-output.json').readlines()
-          json_line = next(l for l in lines if l.strip().startswith('{'))
-          data = json.loads(json_line)
-          result = data.get('result', '')
-          usage = data.get('usage', {})
-          input_t = usage.get('input_tokens', 0) + usage.get('cache_read_input_tokens', 0) + usage.get('cache_creation_input_tokens', 0)
-          output_t = usage.get('output_tokens', 0)
-          total_t = input_t + output_t
-          cost = data.get('total_cost_usd', 0)
-          num_turns = data.get('num_turns', 0)
-          api_ms = data.get('duration_api_ms', 0)
-          open('/tmp/claude-summary.txt', 'w').write(result[:1000])
-          open('/tmp/claude-stats.txt', 'w').write(
-              f'input_tokens={input_t}\noutput_tokens={output_t}\ntotal_tokens={total_t}\ncost={cost:.4f}\nnum_turns={num_turns}\napi_time_s={api_ms // 1000}\n')
-          " 2>/dev/null || true
+          echo "duration=$((DURATION / 60))m $((DURATION % 60))s" >> "$GITHUB_OUTPUT"
 
           # Set outputs from stats file
           if [ -f /tmp/claude-stats.txt ]; then
