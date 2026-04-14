@@ -13,7 +13,7 @@ import type { SliceStateAddLoanToPortfolioViewState } from "#BusinessCapabilitie
  * THEN: LoanRejectedFromPortfolio
  */
 export const amountLessThanZero = (state: SliceStateAddLoanToPortfolioViewState, command: AddLoanToPortfolio): boolean =>
-  false; // TODO: return boolean comparing state.field vs command.portfolioId
+  command.loanAmount <= 0;
 
 /**
  * spec: portfolioRatingBreached
@@ -21,8 +21,10 @@ export const amountLessThanZero = (state: SliceStateAddLoanToPortfolioViewState,
  * WHEN command fields: portfolioId, acquisitionDate, borrowerName, creditRating, interestRate, loanAmount, loanId, maturityDate
  * THEN: LoanRejectedFromPortfolio
  */
+const subInvestmentGradeRatings = ["BB+", "BB", "BB-", "B+", "B", "B-", "CCC+", "CCC", "CCC-", "CC", "C", "D"];
+
 export const portfolioRatingBreached = (state: SliceStateAddLoanToPortfolioViewState, command: AddLoanToPortfolio): boolean =>
-  false; // TODO: return boolean comparing state.portfolioId vs command.portfolioId
+  subInvestmentGradeRatings.includes(command.creditRating);
 
 /**
  * spec: portfolioRatingMaintained
@@ -30,5 +32,5 @@ export const portfolioRatingBreached = (state: SliceStateAddLoanToPortfolioViewS
  * WHEN command fields: portfolioId, acquisitionDate, borrowerName, creditRating, interestRate, loanAmount, loanId, maturityDate
  * THEN: LoanAddedToPortfolio
  */
-export const portfolioRatingMaintained = (state: SliceStateAddLoanToPortfolioViewState, command: AddLoanToPortfolio): boolean =>
-  false; // TODO: return boolean comparing state.portfolioId vs command.portfolioId
+export const portfolioRatingMaintained = (_state: SliceStateAddLoanToPortfolioViewState, _command: AddLoanToPortfolio): boolean =>
+  true;
