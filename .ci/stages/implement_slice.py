@@ -136,6 +136,43 @@ def is_trivial_slice(todo_map: dict[str, list[str]]) -> bool:
     return True
 
 
+def has_spec_logic(root: Path, context: str, slice_name: str) -> bool:
+    """Check if slice.json contains specifications or non-empty descriptions.
+
+    A slice with GWT specifications needs AI to implement branching logic.
+    A slice with readmodel/processor/command descriptions has business rules
+    that the scaffold cannot express — AI must read the description and
+    generate the correct implementation.
+
+    Without this check, projections like PortfolioSummary get SKIPped
+    because the scaffold generates a syntactically valid EXCLUDED.payload
+    UPSERT with only generic TODOs — but the description says it needs
+    counter increments, weighted averages, and derived ratings.
+    """
+    # Try both .eventmodel and .eventmodel2
+    for em_dir in (".eventmodel", ".eventmodel2"):
+        spec_path = root / em_dir / ".slices" / context / slice_name / "slice.json"
+        if spec_path.exists():
+            spec = load_json(spec_path)
+            if not spec:
+                continue
+
+            # GWT specifications = branching logic
+            if spec.get("specifications"):
+                return True
+
+            # Non-empty descriptions in readmodels, processors, or commands
+            for section in ("readmodels", "processors", "commands"):
+                for item in spec.get(section, []):
+                    desc = item.get("description", "").strip()
+                    if desc:
+                        return True
+
+            return False
+
+    return False
+
+
 def strip_generic_todos(directory: Path) -> int:
     """Remove generic TODO comments from .ts files. Returns files cleaned."""
     cleaned = 0
@@ -313,12 +350,15 @@ def process_slice(
 
     # ── Deterministic fast-path ──────────────────────────────
     todo_map = scan_todos(cwd)
-    if is_trivial_slice(todo_map):
+    spec_has_logic = has_spec_logic(root, context, slice_name)
+    if is_trivial_slice(todo_map) and not spec_has_logic:
         cleaned = strip_generic_todos(cwd)
         print(f"  [{slice_name}] DETERMINISTIC: stripped {cleaned} generic TODO(s)", file=sys.stderr)
         emit("ai_skipped", "implement_slice.py", slice=slice_name, context=context,
              data={"reason": "trivial_slice", "todos_found": len(todo_map), "cleaned": cleaned})
         return SliceResult(name=slice_name, path="SKIP", summary=f"{slice_name}: deterministic (trivial)")
+    if is_trivial_slice(todo_map) and spec_has_logic:
+        print(f"  [{slice_name}] OVERRIDE: generic TODOs but spec has logic — sending to AI", file=sys.stderr)
 
     # ── Haiku classification ─────────────────────────────────
     model_name = decision.get("model", "auto")
