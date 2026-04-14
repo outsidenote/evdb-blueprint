@@ -6,19 +6,32 @@ ProjectionSliceTester.run(portfolioSummarySlice, [
   {
     description: "LoanRiskAssessed: first event creates initial state",
     run: () => {
-      // TODO: create test data and fill expected state
-      // The payload should contain the fields from the LoanRiskAssessed event,
-      // NOT the readmodel fields. Check the event schema in TODO_CONTEXT.md.
-      // Key should match how the projection handler builds it.
-      const key = randomUUID();
+      const portfolioId = `PORT-INIT-${randomUUID()}`;
       return {
         given: [
           { messageType: "LoanRiskAssessed", payload: {
-            // TODO: fill with LoanRiskAssessed event fields
+            portfolioId,
+            loanAmount: 10000,
+            capitalRequirement: 1000,
+            expectedLoss: 120,
+            riskWeight: 0.30,
+            probabilityOfDefault: 0.05,
           } },
         ],
-        then: [{ key, expectedState: {
-          // TODO: expected stored state after first event
+        then: [{ key: portfolioId, expectedState: {
+          portfolioId,
+          totalLoans: 1,
+          totalExposure: 10000,
+          totalCapitalRequirement: 1000,
+          totalExpectedLoss: 120,
+          sumWeightedRiskWeight: 3000,
+          sumWeightedPD: 500,
+          averageRiskWeight: 0.30,
+          averageProbabilityOfDefault: 0.05,
+          averageRating: "A",
+          riskBand: "Investment Grade",
+          worstRating: "A",
+          worstRiskWeight: 0.30,
         } }],
       };
     },
@@ -26,21 +39,45 @@ ProjectionSliceTester.run(portfolioSummarySlice, [
   {
     description: "two LoanRiskAssessed events: fields accumulate correctly",
     run: () => {
-      // Spec: Aggregates per portfolio. Each LoanRiskAssessed increments totalLoans by 1, adds loanAmount to totalExposure, adds capit...
-      // TODO: send two events with DIFFERENT numeric values,
-      // then assert the accumulated/averaged result.
-      const key = randomUUID();
+      // Event 1: loanAmount=10000, riskWeight=0.30 (→ A), PD=0.05
+      // Event 2: loanAmount=5000,  riskWeight=0.60 (→ BB), PD=0.08
+      // averageRiskWeight = (0.30*10000 + 0.60*5000) / 15000 = 6000/15000 = 0.40 (→ BBB)
+      // averagePD        = (0.05*10000 + 0.08*5000) / 15000 = 900/15000 = 0.06
+      // worstRating      = BB (riskWeight 0.60 > 0.30)
+      const portfolioId = `PORT-ACCUM-${randomUUID()}`;
       return {
         given: [
           { messageType: "LoanRiskAssessed", payload: {
-            // TODO: first event payload
+            portfolioId,
+            loanAmount: 10000,
+            capitalRequirement: 800,
+            expectedLoss: 100,
+            riskWeight: 0.30,
+            probabilityOfDefault: 0.05,
           } },
           { messageType: "LoanRiskAssessed", payload: {
-            // TODO: second event payload (different numbers)
+            portfolioId,
+            loanAmount: 5000,
+            capitalRequirement: 500,
+            expectedLoss: 80,
+            riskWeight: 0.60,
+            probabilityOfDefault: 0.08,
           } },
         ],
-        then: [{ key, expectedState: {
-          // TODO: expected accumulated state after two events
+        then: [{ key: portfolioId, expectedState: {
+          portfolioId,
+          totalLoans: 2,
+          totalExposure: 15000,
+          totalCapitalRequirement: 1300,
+          totalExpectedLoss: 180,
+          sumWeightedRiskWeight: 6000,
+          sumWeightedPD: 900,
+          averageRiskWeight: 0.4,
+          averageProbabilityOfDefault: 0.06,
+          averageRating: "BBB",
+          riskBand: "Investment Grade",
+          worstRating: "BB",
+          worstRiskWeight: 0.60,
         } }],
       };
     },
