@@ -95,34 +95,14 @@ jobs:
           fi
 
           if [ "${{ github.event_name }}" = "push" ]; then
-            NEW_HASH=$(python3 -c "
-          import json, hashlib
-          with open('$CONFIG') as f:
-              data = json.load(f)
-          slices = data.get('slices', [])
-          for s in slices:
-              s.pop('status', None)
-              s.pop('index', None)
-          print(hashlib.md5(json.dumps(slices, sort_keys=True).encode()).hexdigest())
-          ")
+            NEW_HASH=$(python3 .ci/config_hash.py "$CONFIG")
 
             # Use github.event.before for reliable comparison (works with merge commits, multi-commit pushes)
             BEFORE="${{ github.event.before }}"
             if [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
               BEFORE=""
             fi
-            OLD_HASH=$(git show ${BEFORE:-HEAD~1}:"$CONFIG" 2>/dev/null | python3 -c "
-          import json, hashlib, sys
-          try:
-              data = json.load(sys.stdin)
-              slices = data.get('slices', [])
-              for s in slices:
-                  s.pop('status', None)
-                  s.pop('index', None)
-              print(hashlib.md5(json.dumps(slices, sort_keys=True).encode()).hexdigest())
-          except:
-              print('none')
-          " 2>/dev/null || echo "none")
+            OLD_HASH=$(git show ${BEFORE:-HEAD~1}:"$CONFIG" 2>/dev/null | python3 .ci/config_hash.py -)
 
             if [ "$OLD_HASH" = "$NEW_HASH" ]; then
               echo "changed=false" >> "$GITHUB_OUTPUT"
@@ -165,41 +145,12 @@ jobs:
             exit 0
           fi
 
-          # Build matrix: one job per context
-          MATRIX=$(echo "$RESULT" | python3 -c "
-          import sys, json
-          data = json.load(sys.stdin)
-          base = data['base_branch']
-          contexts = []
-          for ctx, info in data['contexts'].items():
-              if info['planned_slices']:
-                  contexts.append({
-                      'context': ctx,
-                      'context_pascal': info['context_pascal'],
-                      'branch': info['branch'],
-                      'base_branch': base,
-                      'slices': ','.join(info['planned_slices']),
-                      'split_files': ' '.join(info['split_files']),
-                      'index_file': info['index_file'],
-                  })
-          print(json.dumps({'include': contexts}))
-          ")
-
-          echo "has_contexts=true" >> "$GITHUB_OUTPUT"
-          echo "matrix=$MATRIX" >> "$GITHUB_OUTPUT"
+          echo "$RESULT" | python3 .ci/plan_matrix.py
 
       - name: "✅ Validate matrix"
         if: steps.gate.outputs.changed == 'true' && steps.plan.outputs.has_contexts == 'true'
         run: |
-          echo '${{ steps.plan.outputs.matrix }}' | python3 -c "
-          import sys, json
-          m = json.load(sys.stdin)
-          assert 'include' in m, 'Missing include key'
-          for ctx in m['include']:
-              for key in ('context', 'branch', 'slices', 'index_file'):
-                  assert key in ctx, f'Missing {key} in context entry'
-          print(f'Matrix valid: {len(m[\"include\"])} contexts')
-          "
+          echo '${{ steps.plan.outputs.matrix }}' | python3 .ci/validate_matrix.py
 
       - name: "📦 Upload scaffold artifacts"
         if: steps.gate.outputs.changed == 'true' && steps.plan.outputs.has_contexts == 'true'
@@ -496,48 +447,11 @@ jobs:
               --max-turns "$MAX_TURNS" \
               "$PROMPT" > "/tmp/claude-$SLICE.json" 2>&1 || true
 
-            # Extract per-slice stats
-            python3 -c "
-          import json, sys
-          try:
-              lines = open('/tmp/claude-$SLICE.json').readlines()
-              data = json.loads(next(l for l in lines if l.strip().startswith('{')))
-              u = data.get('usage', {})
-              inp = u.get('input_tokens', 0) + u.get('cache_read_input_tokens', 0) + u.get('cache_creation_input_tokens', 0)
-              out = u.get('output_tokens', 0)
-              cost = data.get('total_cost_usd', 0)
-              turns = data.get('num_turns', 0)
-              print(f'  Turns: {turns}, Cost: \${cost:.2f}, Input: {inp:,}, Output: {out:,}')
-              open(f'/tmp/slice-stats-$SLICE.txt', 'w').write(f'{cost},{turns},{inp},{out}')
-          except Exception as e:
-              print(f'  Stats error: {e}')
-              open(f'/tmp/slice-stats-$SLICE.txt', 'w').write('0,0,0,0')
-          " || true
+            python3 .ci/extract_claude_stats.py "/tmp/claude-$SLICE.json" --slice-name "$SLICE" || true
 
           done
 
-          # Aggregate stats across all slices
-          python3 -c "
-          import json
-          tc, tt, ti, to = 0, 0, 0, 0
-          slices = '${{ matrix.slices }}'.split(',')
-          for s in slices:
-              try:
-                  parts = open(f'/tmp/slice-stats-{s}.txt').read().strip().split(',')
-                  tc += float(parts[0]); tt += int(parts[1]); ti += int(parts[2]); to += int(parts[3])
-              except: pass
-          print(f'Total: {tt} turns, \${tc:.2f}, Input: {ti:,}, Output: {to:,}')
-          with open('/tmp/claude-stats.txt', 'w') as f:
-              f.write(f'input_tokens={ti}\noutput_tokens={to}\ntotal_tokens={ti+to}\ncost={tc:.4f}\nnum_turns={tt}\napi_time_s=0\n')
-          summaries = []
-          for s in slices:
-              try:
-                  lines = open(f'/tmp/claude-{s}.json').readlines()
-                  data = json.loads(next(l for l in lines if l.strip().startswith('{')))
-                  summaries.append(f'{s}: {data.get(\"result\", \"no result\")[:200]}')
-              except: pass
-          open('/tmp/claude-summary.txt', 'w').write(chr(10).join(summaries)[:1000])
-          " || true
+          python3 .ci/aggregate_stats.py --slices "${{ matrix.slices }}" || true
 
           END_TIME=$(date +%s)
           DURATION=$((END_TIME - START_TIME))
@@ -687,18 +601,7 @@ jobs:
           cat /tmp/confidence.json
           echo "::endgroup::"
 
-          # Extract context-level summary for PR
-          python3 -c "
-          import json
-          data = json.load(open('/tmp/confidence.json'))
-          ctx = data['context_summary']
-          print(f\"avg_score={ctx['average_score']}\")
-          print(f\"worst_band={ctx['worst_band']}\")
-          print(f\"high={ctx['high_confidence']}\")
-          print(f\"medium={ctx['medium_confidence']}\")
-          print(f\"low={ctx['low_confidence']}\")
-          print(f\"blocked={ctx['blocked']}\")
-          " >> "$GITHUB_OUTPUT" 2>/dev/null || true
+          python3 .ci/extract_confidence.py 2>/dev/null || true
 
       # ── Metrics Collection ───────────────────────────────────────
       - name: "📈 Collect metrics"
@@ -753,69 +656,13 @@ jobs:
       - name: "📝 Write summary"
         if: always()
         run: |
-          python3 - "$GITHUB_STEP_SUMMARY" "${{ matrix.context_pascal }}" "${{ steps.claude.outputs.duration }}" "${{ steps.claude.outputs.cost }}" "${{ steps.claude.outputs.num_turns }}" "${{ steps.repair.outputs.total_repaired || '0' }}" <<'PYEOF'
-          import json, sys
-
-          summary_path, context, duration, cost, turns, repaired = sys.argv[1:7]
-
-          try: conf = json.load(open("/tmp/confidence.json"))
-          except Exception: conf = {}
-          slices = conf.get("slices", [])
-          ctx = conf.get("context_summary", {})
-          band_emoji = {"HIGH": "🟢", "MEDIUM": "🟡", "LOW": "🟠", "BLOCKED": "🔴"}
-          band = ctx.get("worst_band", "UNKNOWN")
-
-          lines = []
-
-          # Pipeline diagram
-          lines.append(f"## {context} — Code Generation Report")
-          lines.append("")
-          lines.append("```mermaid")
-          lines.append("graph LR")
-          lines.append("  A[Miro Export] --> B[Split + Normalize]")
-          lines.append("  B --> C[evdb-diff]")
-          lines.append("  C --> D[evdb-scaffold]")
-          lines.append("  D --> E[Claude AI Fill]")
-          lines.append("  E --> F[Verify + Test]")
-          if int(repaired) > 0:
-              lines.append("  F -->|failures| G[Self-Heal]")
-              lines.append("  G --> F")
-          lines.append(f"  F --> H[PR]")
-          lines.append(f"  style H fill:#{'2ea44f' if band in ('HIGH','MEDIUM') else 'da3633'},color:#fff")
-          lines.append("```")
-          lines.append("")
-
-          # Overall status
-          lines.append(f"**{band_emoji.get(band, '⚪')} {band}** — {duration} — ${cost} — {turns} turns")
-          if int(repaired) > 0:
-              lines.append(f" — {repaired} self-healed")
-          lines.append("")
-
-          # Slice table
-          lines.append("| Slice | Score | Status | Action |")
-          lines.append("|:------|:-----:|:------:|:-------|")
-          for s in slices:
-              e = band_emoji.get(s.get("band", ""), "⚪")
-              lines.append(f"| `{s['slice_name']}` | **{s['score']}** | {e} | {s['recommended_action']} |")
-
-          # Flags (only if issues)
-          flagged = [s for s in slices if s.get("reasons") and s["reasons"] != ["All checks passed"]]
-          if flagged:
-              lines.append("")
-              lines.append("<details><summary>Flags</summary>")
-              lines.append("")
-              for s in flagged:
-                  lines.append(f"**{s['slice_name']}**")
-                  for r in s["reasons"]:
-                      lines.append(f"- {r}")
-              lines.append("")
-              lines.append("</details>")
-
-          lines.append("")
-
-          with open(summary_path, "a") as f:
-              f.write("\n".join(lines) + "\n")
-          PYEOF
+          python3 .ci/write_summary.py \
+            --summary-path "$GITHUB_STEP_SUMMARY" \
+            --context "${{ matrix.context_pascal }}" \
+            --duration "${{ steps.claude.outputs.duration }}" \
+            --cost "${{ steps.claude.outputs.cost }}" \
+            --turns "${{ steps.claude.outputs.num_turns }}" \
+            --repaired "${{ steps.repair.outputs.total_repaired || '0' }}"
 
       # ── Clean up + Commit + PR ───────────────────────────────────
       - name: "🧹 Clean up"
@@ -867,85 +714,21 @@ jobs:
             exit 0
           fi
 
-          # Read confidence data for PR body
-          CONFIDENCE_BODY=""
-          if [ -f /tmp/confidence.json ]; then
-            CONFIDENCE_BODY=$(python3 -c "
-          import json
-          data = json.load(open('/tmp/confidence.json'))
-          ctx = data.get('context_summary', {})
-          slices = data.get('slices', [])
-          band_emoji = {'HIGH': '🟢', 'MEDIUM': '🟡', 'LOW': '🟠', 'BLOCKED': '🔴'}
-          band = ctx.get('worst_band', 'UNKNOWN')
-          lines = []
-          lines.append(f'## Confidence: {band_emoji.get(band, \"\")} {band} (avg {ctx.get(\"average_score\", \"?\")})')
-          lines.append('')
-          lines.append('| Slice | Score | Band | Recommendation |')
-          lines.append('|-------|-------|------|----------------|')
-          for s in slices:
-              e = band_emoji.get(s.get('band', ''), '')
-              lines.append(f'| {s[\"slice_name\"]} | {s[\"score\"]} | {e} {s[\"band\"]} | {s[\"recommended_action\"]} |')
-          for s in slices:
-              if s.get('reasons') and s['reasons'] != ['All checks passed']:
-                  lines.append(f'')
-                  lines.append(f'**{s[\"slice_name\"]}** flags:')
-                  for r in s['reasons']:
-                      lines.append(f'- {r}')
-          print('\n'.join(lines))
-          " 2>/dev/null || echo "")
-          fi
-
-          # Read healing summary
-          HEALING_BODY=""
-          if [ -f /tmp/repair-results.json ]; then
-            HEALING_BODY=$(python3 -c "
-          import json
-          data = json.load(open('/tmp/repair-results.json'))
-          if data.get('total_attempted', 0) > 0:
-              lines = ['## Self-Healing', '']
-              lines.append(f'**{data[\"total_repaired\"]}/{data[\"total_attempted\"]}** repairs succeeded ({data[\"total_ai_used\"]} used AI)')
-              lines.append('')
-              for r in data.get('repairs', []):
-                  icon = '✅' if r['repaired'] else '❌'
-                  lines.append(f'- {icon} **{r[\"slice_name\"]}**: {r[\"strategy_used\"]} — {r[\"details\"]}')
-              print('\n'.join(lines))
-          " 2>/dev/null || echo "")
-          fi
-
           # Create as draft if LOW confidence
           DRAFT_FLAG=""
           if [ "${{ steps.confidence.outputs.worst_band }}" = "LOW" ]; then
             DRAFT_FLAG="--draft"
           fi
 
+          PR_BODY=$(python3 .ci/build_pr_body.py \
+            --context "${{ matrix.context }}" \
+            --slices "${{ matrix.slices }}" \
+            --base-branch "${{ matrix.base_branch }}")
+
           PR_URL=$(gh pr create \
             $DRAFT_FLAG \
             --title "feat(${{ matrix.context_pascal }}): implement planned slices — $(date +%Y%m%d-%H%M)" \
-            --body "$(cat <<EOF
-          ## Summary
-          Auto-generated slice implementations for the **${{ matrix.context }}** context.
-
-          **Slices:** ${{ matrix.slices }}
-          **Target:** \`${{ matrix.base_branch }}\`
-
-          ## Commits
-          1. **Split** — slice definitions extracted from config.json (deterministic)
-          2. **Scaffold** — TypeScript boilerplate generated by evdb-scaffold (deterministic, no AI)
-          3. **Business logic** — predicates, handler branching, enrichment filled by Claude Code (AI)
-
-          ${CONFIDENCE_BODY}
-
-          ${HEALING_BODY}
-
-          ## Review checklist
-          - [ ] Predicate logic in \`gwts.ts\` matches domain rules
-          - [ ] Command handler branching covers all spec scenarios
-          - [ ] Generated field computations are correct
-          - [ ] Tests pass and cover edge cases
-
-          Generated with evdb CI pipeline (v2 — self-healing)
-          EOF
-          )" \
+            --body "$PR_BODY" \
             --base "${{ matrix.base_branch }}")
 
           echo "pr_url=$PR_URL" >> "$GITHUB_OUTPUT"
@@ -955,49 +738,15 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          CLAUDE_SUMMARY=$(cat /tmp/claude-summary.txt 2>/dev/null || echo "No output captured")
+          COMMENT=$(python3 .ci/build_pr_comment.py \
+            --context "${{ matrix.context }}" \
+            --slices "${{ matrix.slices }}" \
+            --duration "${{ steps.claude.outputs.duration }}" \
+            --run-id "${{ github.run_id }}" \
+            --run-number "${{ github.run_number }}" \
+            --repo "${{ github.repository }}" \
+            --worst-band "${{ steps.confidence.outputs.worst_band }}" \
+            --avg-score "${{ steps.confidence.outputs.avg_score }}" \
+            --repaired "${{ steps.repair.outputs.total_repaired || '0' }}")
 
-          # Build classification summary
-          CLASS_SUMMARY=""
-          if [ -f /tmp/classification.json ]; then
-            CLASS_SUMMARY=$(python3 -c "
-          import json
-          data = json.load(open('/tmp/classification.json'))
-          if data['total_failures'] > 0:
-              lines = ['### Failure Classification', '']
-              lines.append('| Slice | Class | Deterministic |')
-              lines.append('|-------|-------|---------------|')
-              for c in data['classifications']:
-                  lines.append(f'| {c[\"slice_name\"]} | \`{c[\"failure_class\"]}\` | {\"✓\" if c[\"deterministic\"] else \"✗\"} |')
-              print('\n'.join(lines))
-          " 2>/dev/null || echo "")
-          fi
-
-          gh pr comment "${{ matrix.branch }}" --body "$(cat <<EOF
-          ## Generation Stats
-
-          | Metric | Value |
-          |--------|-------|
-          | Context | **${{ matrix.context }}** |
-          | Slices | \`${{ matrix.slices }}\` |
-          | Duration | **${{ steps.claude.outputs.duration }}** |
-          | API time | ${{ steps.claude.outputs.api_time_s }}s |
-          | Turns | ${{ steps.claude.outputs.num_turns }} |
-          | Input tokens | ${{ steps.claude.outputs.input_tokens }} |
-          | Output tokens | ${{ steps.claude.outputs.output_tokens }} |
-          | Total tokens | ${{ steps.claude.outputs.total_tokens }} |
-          | Cost | **\$${{ steps.claude.outputs.cost }}** |
-          | Confidence | **${{ steps.confidence.outputs.worst_band }}** (avg ${{ steps.confidence.outputs.avg_score }}) |
-          | Repairs | ${{ steps.repair.outputs.total_repaired || '0' }} applied |
-          | Workflow run | [#${{ github.run_number }}](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}) |
-
-          ### Claude Code Summary
-
-          ${CLAUDE_SUMMARY}
-
-          ${CLASS_SUMMARY}
-
-          ---
-          *Generated by evdb CI pipeline v2 (self-healing)*
-          EOF
-          )"
+          gh pr comment "${{ matrix.branch }}" --body "$COMMENT"
