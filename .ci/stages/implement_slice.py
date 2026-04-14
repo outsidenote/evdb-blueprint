@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """Stage: AI code generation — fill business logic for all slices in a context.
 
-Reads policy decisions for model/budget/turns per slice.
-Runs Claude Code via subprocess, one conversation per slice.
-Extracts stats and aggregates.
+Two modes:
+  FAST (sonnet): cwd locked to slice dir, slim prompt, no tests, 6 turns, $0.30
+  DEEP (opus):   cwd at project root, full prompt with test loop, 20 turns, $2.00
+
+Haiku classifies complexity when policy says model=auto.
 
 Usage:
     python3 .ci/stages/implement_slice.py \
@@ -26,11 +28,26 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from lib.contracts import (
-    DECISIONS, CLAUDE_STATS, CLAUDE_SUMMARY,
+    DECISIONS, CLAUDE_STATS, CLAUDE_SUMMARY, POLICY_CONFIG,
     slice_stats_path, slice_claude_output,
-    load_json, write_json, set_output,
+    load_json, load_config, write_json, set_output,
 )
 from lib.audit import emit
+
+
+# ── Mode configs ─────────────────────────────────────────────────
+
+FAST_MODE = {
+    "max_turns": 6,
+    "max_budget": 0.30,
+    "timeout_min": 5,
+}
+
+DEEP_MODE = {
+    "max_turns": 20,
+    "max_budget": 2.00,
+    "timeout_min": 20,
+}
 
 
 # ── Helpers ──────────────────────────────────────────────────────
@@ -56,8 +73,8 @@ def find_todo_context(root: Path, context: str, slice_dir: str | None, endpoint_
     return "", ""
 
 
-def find_test_file(root: Path, context: str, slice_dir: str | None, endpoint_dir: str | None) -> str:
-    """Find the test command for this slice."""
+def find_test_cmd(root: Path, context: str, slice_dir: str | None, endpoint_dir: str | None) -> str:
+    """Find the test command for this slice (deep mode only)."""
     candidates = []
     if slice_dir:
         candidates.append(f"src/BusinessCapabilities/{context}/slices/{slice_dir}/tests/command.slice.test.ts")
@@ -71,8 +88,48 @@ def find_test_file(root: Path, context: str, slice_dir: str | None, endpoint_dir
     return "echo 'no test found'"
 
 
-def build_prompt(todo_content: str, test_cmd: str, hints: str) -> str:
-    """Build the AI prompt — self-contained, no file reading needed."""
+def resolve_slice_cwd(root: Path, context: str, slice_dir: str | None, endpoint_dir: str | None) -> Path:
+    """Resolve the working directory for a slice.
+
+    For fast mode: cwd = the slice/endpoint directory (hard constrained).
+    Falls back to context dir if neither exists.
+    """
+    if slice_dir:
+        p = root / "src" / "BusinessCapabilities" / context / "slices" / slice_dir
+        if p.exists():
+            return p
+    if endpoint_dir:
+        p = root / "src" / "BusinessCapabilities" / context / "endpoints" / endpoint_dir
+        if p.exists():
+            return p
+    return root / "src" / "BusinessCapabilities" / context
+
+
+# ── Prompts ──────────────────────────────────────────────────────
+
+def build_fast_prompt(todo_content: str) -> str:
+    """Slim prompt for fast mode. No conventions dump, no test loop."""
+    return f"""Implement TODOs in this TypeScript slice.
+
+{todo_content}
+
+Tasks:
+- Replace all TODO stubs in gwts.ts with real predicate logic
+- Replace all TODO stubs in commandHandler.ts with real branching logic
+- Replace all TODO stubs in enrichment.ts if present
+- Replace generic UPSERT in projection index.ts with field-specific SQL if present
+
+Rules:
+- Only edit files listed in the spec above
+- Do NOT run tests
+- Do NOT read files outside this directory
+- Do NOT scan or explore the repo
+
+Return when all TODOs are replaced."""
+
+
+def build_deep_prompt(todo_content: str, test_cmd: str, hints: str) -> str:
+    """Full prompt for deep mode. Includes conventions, hints, test loop."""
     return f"""You are filling TODO placeholders in an event-sourced TypeScript codebase (eventualize-js/evdb).
 
 ## Key Conventions
@@ -105,10 +162,12 @@ Do NOT run evdb-diff, evdb-scaffold, or scan sessions.
 Do NOT read files outside 'Files with TODOs'."""
 
 
-def classify_complexity(claude_path: str, todo_content: str, provider: str) -> str:
-    """Use Haiku (~$0.01) to classify slice complexity as 'sonnet' or 'opus'.
+# ── Haiku classification ─────────────────────────────────────────
 
-    Reads the TODO spec and decides which model should implement it.
+def classify_complexity(claude_path: str, todo_content: str, provider: str) -> str:
+    """Use Haiku (~$0.02) to classify slice complexity as 'sonnet' or 'opus'.
+
+    Reads the full TODO spec and decides which model should implement it.
     Falls back to 'opus' on any error.
     """
     if provider == "bedrock":
@@ -155,6 +214,8 @@ def resolve_model_for_auto(
     return tier, model_id, "haiku_classified"
 
 
+# ── Stats extraction ─────────────────────────────────────────────
+
 def extract_stats(json_path: Path) -> dict:
     """Parse Claude Code JSON output, extract usage stats."""
     empty = {"cost": 0, "turns": 0, "input_tokens": 0, "output_tokens": 0, "result": ""}
@@ -196,11 +257,18 @@ def main():
     for d in decisions_data.get("decisions", []):
         decisions_lookup[d["slice"]] = d
 
-    # Load learned hints
+    # Load learned hints (deep mode only)
     hints = ""
     hints_path = root / ".claude" / "skills" / "evdb-dev-v2" / "learned_hints.md"
     if hints_path.exists():
         hints = hints_path.read_text()
+
+    # Load model resolution
+    try:
+        policy_cfg = load_config(POLICY_CONFIG)
+        model_resolution = policy_cfg.get("model_resolution", {})
+    except FileNotFoundError:
+        model_resolution = {"anthropic": {"opus": "", "sonnet": "claude-sonnet-4-6"}}
 
     # Check claude CLI
     claude_path = shutil.which("claude")
@@ -227,8 +295,6 @@ def main():
 
         model_name = decision.get("model", "auto")
         model_id = decision.get("model_id", "")
-        max_turns = decision.get("max_turns", 20)
-        max_budget = decision.get("max_budget_usd", 2.00)
 
         # Resolve directories
         slice_dir = find_slice_dir(root, context, slice_name, "slices")
@@ -245,33 +311,34 @@ def main():
 
         # When policy says "auto", use Haiku to classify complexity
         if model_name == "auto":
-            from lib.contracts import POLICY_CONFIG, load_config
-            try:
-                policy_cfg = load_config(POLICY_CONFIG)
-                mr = policy_cfg.get("model_resolution", {})
-            except FileNotFoundError:
-                mr = {"anthropic": {"opus": "", "sonnet": "claude-sonnet-4-6-20250514"}}
-
             model_name, model_id, method = resolve_model_for_auto(
-                claude_path, todo_content, args.provider, mr)
-
-            if model_name == "sonnet":
-                max_turns = 16
-                max_budget = 0.75
-            else:
-                max_turns = 20
-                max_budget = 2.00
-
+                claude_path, todo_content, args.provider, model_resolution)
             print(f"  Complexity: {method} → {model_name}", file=sys.stderr)
 
+        # ── Choose mode: FAST (sonnet) or DEEP (opus) ────────
+        is_fast = (model_name == "sonnet")
+        mode = FAST_MODE if is_fast else DEEP_MODE
+        mode_label = "FAST" if is_fast else "DEEP"
+
+        max_turns = mode["max_turns"]
+        max_budget = mode["max_budget"]
+        timeout = mode["timeout_min"] * 60
+
+        if is_fast:
+            prompt = build_fast_prompt(todo_content)
+            cwd = resolve_slice_cwd(root, context, slice_dir, endpoint_dir)
+        else:
+            test_cmd = find_test_cmd(root, context, slice_dir, endpoint_dir)
+            prompt = build_deep_prompt(todo_content, test_cmd, hints)
+            cwd = root
+
+        print(f"  Mode: {mode_label}", file=sys.stderr)
         print(f"  Model: {model_name} ({model_id or 'default'})", file=sys.stderr)
         print(f"  Budget: ${max_budget}, Turns: {max_turns}", file=sys.stderr)
+        print(f"  CWD: {cwd}", file=sys.stderr)
         print(f"  TODO: {todo_file}", file=sys.stderr)
 
-        # Build prompt and run
-        test_cmd = find_test_file(root, context, slice_dir, endpoint_dir)
-        prompt = build_prompt(todo_content, test_cmd, hints)
-
+        # ── Run Claude Code ──────────────────────────────────
         model_flag = ["--model", model_id] if model_id else []
         output_path = slice_claude_output(slice_name)
 
@@ -285,13 +352,13 @@ def main():
                  "--max-turns", str(max_turns),
                  prompt],
                 capture_output=False,
-                cwd=str(root),
-                timeout=20 * 60,
+                cwd=str(cwd),
+                timeout=timeout,
                 stdout=open(output_path, "w"),
                 stderr=sys.stderr,
             )
         except subprocess.TimeoutExpired:
-            print(f"  TIMEOUT after 20min", file=sys.stderr)
+            print(f"  TIMEOUT after {mode['timeout_min']}min", file=sys.stderr)
         except Exception as e:
             print(f"  ERROR: {e}", file=sys.stderr)
 
@@ -303,6 +370,7 @@ def main():
         emit("ai_invocation", "implement_slice.py",
              slice=slice_name, context=context,
              data={
+                 "mode": mode_label,
                  "model": model_name,
                  "model_id": model_id or "default",
                  "tokens_in": stats["input_tokens"],
@@ -310,6 +378,8 @@ def main():
                  "cost_usd": stats["cost"],
                  "turns": stats["turns"],
                  "max_budget_usd": max_budget,
+                 "max_turns": max_turns,
+                 "cwd": str(cwd),
                  "policy_rule": decision.get("rule_matched", ""),
              })
 
