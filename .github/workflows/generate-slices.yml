@@ -314,7 +314,9 @@ jobs:
         run: |
           git add "src/BusinessCapabilities/${{ matrix.context_pascal }}/" || true
           git add ".implementation-hashes/" || true
-          git add ".claude/skills/evdb-dev-v2/learned_hints.md" || true
+          # learned_hints.md is NOT committed here — stored as artifact only
+          # to avoid merge conflicts between branches. Patterns are promoted
+          # to the hints file via manual review or a separate merge workflow.
           git rm -rf --cached .eventmodel/ .eventmodel2/ 2>/dev/null || true
           if ! git diff --cached --quiet; then
             git commit -m "feat(${{ matrix.context_pascal }}): implement slice business logic
@@ -413,6 +415,7 @@ jobs:
             /tmp/risk-scores.json
             /tmp/decisions.json
             /tmp/audit.jsonl
+            /tmp/learned-discoveries.json
           retention-days: 90
 
   # ═══════════════════════════════════════════════════════════════

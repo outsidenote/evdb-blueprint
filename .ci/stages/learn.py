@@ -251,26 +251,19 @@ def main():
         print(f"Found {len(all_patterns)} patterns, all already known", file=sys.stderr)
         return
 
-    # Append to learned_hints.md
-    content = existing_hints
-
-    # Replace the placeholder if present
-    if "No domain-specific discoveries yet" in content:
-        content = content.replace(
-            "_No domain-specific discoveries yet. First successful run will add entries here._",
-            "",
-        )
-
-    # Append new hints under the domain section
-    for category, hint_text in new_hints:
-        # Find the marker line and append after it
-        if MARKER in content:
-            marker_pos = content.index(MARKER) + len(MARKER)
-            content = content[:marker_pos] + f"\n{hint_text}" + content[marker_pos:]
-        else:
-            content = content.rstrip() + f"\n{hint_text}\n"
-
-    HINTS_FILE.write_text(content)
+    # Write discoveries to artifact file (NOT to learned_hints.md directly).
+    # This avoids merge conflicts when multiple branches learn concurrently.
+    # Patterns are promoted to the hints file via manual review or a merge workflow.
+    discoveries_path = Path("/tmp/learned-discoveries.json")
+    import json
+    discoveries = {
+        "context": context,
+        "timestamp": TODAY,
+        "patterns": [
+            {"category": cat, "hint": hint} for cat, hint in new_hints
+        ],
+    }
+    discoveries_path.write_text(json.dumps(discoveries, indent=2) + "\n")
 
     # Audit
     emit("patterns_learned", "learn.py", context=context,
