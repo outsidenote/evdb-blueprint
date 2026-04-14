@@ -105,6 +105,56 @@ Do NOT run evdb-diff, evdb-scaffold, or scan sessions.
 Do NOT read files outside 'Files with TODOs'."""
 
 
+def classify_complexity(claude_path: str, todo_content: str, provider: str) -> str:
+    """Use Haiku (~$0.01) to classify slice complexity as 'sonnet' or 'opus'.
+
+    Reads the TODO spec and decides which model should implement it.
+    Falls back to 'opus' on any error.
+    """
+    if provider == "bedrock":
+        classify_model = "us.anthropic.claude-haiku-4-5-v1@bedrock"
+    else:
+        classify_model = "claude-haiku-4-5-20251001"
+
+    prompt = """You are a complexity classifier for code generation tasks.
+Read the TODO spec below and reply with ONLY one word.
+Reply 'sonnet' if the task is straightforward (simple field mapping, basic CRUD, simple predicates, basic SQL upserts).
+Reply 'opus' if the task requires complex logic (algorithms, simulations, mathematical formulas, multi-step aggregation, weighted calculations, accumulation patterns, complex business rules with many branches).
+Reply with ONLY 'sonnet' or 'opus'.
+
+---
+""" + todo_content[:3000]  # cap to avoid huge prompts
+
+    try:
+        result = subprocess.run(
+            [claude_path, "--print", "--dangerously-skip-permissions",
+             "--model", classify_model,
+             "--max-turns", "1",
+             "--output-format", "text",
+             prompt],
+            capture_output=True, text=True, timeout=30,
+        )
+        output = result.stdout.strip().lower()
+        if "sonnet" in output:
+            return "sonnet"
+        return "opus"
+    except Exception:
+        return "opus"
+
+
+def resolve_model_for_auto(
+    claude_path: str, todo_content: str, provider: str, model_resolution: dict,
+) -> tuple[str, str, str]:
+    """When policy says model=auto, use Haiku to pick sonnet or opus.
+
+    Returns (model_name, model_id, method).
+    """
+    tier = classify_complexity(claude_path, todo_content, provider)
+    provider_map = model_resolution.get(provider, model_resolution.get("anthropic", {}))
+    model_id = provider_map.get(tier, "")
+    return tier, model_id, "haiku_classified"
+
+
 def extract_stats(json_path: Path) -> dict:
     """Parse Claude Code JSON output, extract usage stats."""
     empty = {"cost": 0, "turns": 0, "input_tokens": 0, "output_tokens": 0, "result": ""}
@@ -175,6 +225,7 @@ def main():
                  data={"reason": "blocked_by_policy", "rule": decision.get("rule_matched", "")})
             continue
 
+        model_name = decision.get("model", "auto")
         model_id = decision.get("model_id", "")
         max_turns = decision.get("max_turns", 20)
         max_budget = decision.get("max_budget_usd", 2.00)
@@ -192,7 +243,28 @@ def main():
             print(f"  SKIP: no TODO_CONTEXT.md", file=sys.stderr)
             continue
 
-        print(f"  Model: {decision.get('model', 'default')} ({model_id or 'default'})", file=sys.stderr)
+        # When policy says "auto", use Haiku to classify complexity
+        if model_name == "auto":
+            from lib.contracts import POLICY_CONFIG, load_config
+            try:
+                policy_cfg = load_config(POLICY_CONFIG)
+                mr = policy_cfg.get("model_resolution", {})
+            except FileNotFoundError:
+                mr = {"anthropic": {"opus": "", "sonnet": "claude-sonnet-4-6-20250514"}}
+
+            model_name, model_id, method = resolve_model_for_auto(
+                claude_path, todo_content, args.provider, mr)
+
+            if model_name == "sonnet":
+                max_turns = 16
+                max_budget = 0.75
+            else:
+                max_turns = 20
+                max_budget = 2.00
+
+            print(f"  Complexity: {method} → {model_name}", file=sys.stderr)
+
+        print(f"  Model: {model_name} ({model_id or 'default'})", file=sys.stderr)
         print(f"  Budget: ${max_budget}, Turns: {max_turns}", file=sys.stderr)
         print(f"  TODO: {todo_file}", file=sys.stderr)
 
@@ -231,7 +303,7 @@ def main():
         emit("ai_invocation", "implement_slice.py",
              slice=slice_name, context=context,
              data={
-                 "model": decision.get("model", "unknown"),
+                 "model": model_name,
                  "model_id": model_id or "default",
                  "tokens_in": stats["input_tokens"],
                  "tokens_out": stats["output_tokens"],
