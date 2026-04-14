@@ -2226,62 +2226,30 @@ def gen_projection_test(ds: DerivedSlice) -> str:
     return "\n".join(lines)
 
 
-def _format_expected_value(f: dict) -> str:
-    """Format a field's example value for PostgreSQL jsonb comparison.
-
-    PostgreSQL stores jsonb numbers as numbers and strings as strings.
-    deepStrictEqual needs exact type match, so we format accordingly.
-    """
-    ft = f.get("type", "String")
-    example = f.get("example", "")
-    if ft in ("Double", "Decimal"):
-        try:
-            return str(float(example)) if example else "0"
-        except (ValueError, TypeError):
-            return "0"
-    if ft in ("Integer", "Int"):
-        try:
-            return str(int(float(example))) if example else "0"
-        except (ValueError, TypeError):
-            return "0"
-    # Strings, UUIDs, dates — use the same format as _format_example
-    # but dates come back from PG as strings, not Date objects
-    if ft in ("DateTime", "Date"):
-        if not example:
-            return '"2025-01-01T11:00:00Z"'
-        return f'"{example}"'
-    if example:
-        return f'"{example}"'
-    fn = field_name(f.get("name", ""))
-    if ft == "UUID":
-        return f'"test-{fn}-001"'
-    return f'"test-{fn}"'
-
-
 def gen_projection_integration_test(ds: DerivedSlice) -> str:
-    """Generate projection integration test that executes SQL against real PostgreSQL.
+    """Generate projection integration test skeleton for AI to fill.
 
-    Uses ProjectionSliceTester which:
-    - Spins up a test PostgreSQL instance
-    - Feeds events via applyProjectionEvent (executes the actual SQL)
-    - Queries the projections table and asserts on stored state
+    Produces a minimal ProjectionSliceTester.run() structure with TODO
+    test cases. The AI fills in event payloads and expected state based
+    on the event schema (from TODO_CONTEXT.md) and the readmodel description.
 
-    This catches:
+    The scaffold does NOT attempt to generate payloads because:
+    - The event fields come from a different slice (upstream event producer)
+    - The readmodel fields are the OUTPUT, not the INPUT
+    - The scaffold only has access to the current slice's definition
+
+    What the AI fills:
+    - Event payload fields (from the inbound event schema)
+    - Expected state after one event (initial values)
+    - Expected state after two events (accumulation, if spec has description)
+
+    What this catches when the AI fills it correctly:
     - Uncast parameters in jsonb_build_object ($3 without ::text)
     - Wrong accumulation logic (EXCLUDED.payload instead of field-specific SQL)
     - Missing fields in the stored payload
     - SQL syntax errors
-
-    Test case 1 (deterministic, no AI needed):
-      Feed one event, assert the stored state matches the input.
-      This alone catches SQL execution errors like missing type casts.
-
-    Test case 2 (AI fills expected values):
-      Feed two events, assert accumulation is correct.
-      Only generated when readmodel has a description with aggregation rules.
     """
     readmodel = ds.raw["readmodels"][0]
-    rm_fields = readmodel.get("fields", [])
     description = readmodel.get("description", "").strip()
 
     # Find INBOUND events
@@ -2292,16 +2260,6 @@ def gen_projection_integration_test(ds: DerivedSlice) -> str:
 
     if not inbound_events:
         return ""
-
-    # Determine the projection key
-    id_fields = [field_name(f["name"]) for f in rm_fields if f.get("idAttribute")]
-    if len(id_fields) > 1:
-        key_parts = ":".join(f"${{{fn}}}" for fn in id_fields)
-        key_template = f"`{key_parts}`"
-    elif len(id_fields) == 1:
-        key_template = id_fields[0]
-    else:
-        key_template = '"test-key"'
 
     event_name = inbound_events[0]
 
@@ -2314,100 +2272,59 @@ def gen_projection_integration_test(ds: DerivedSlice) -> str:
         "  {",
         f'    description: "{event_name}: first event creates initial state",',
         "    run: () => {",
+        f"      // TODO: create test data and fill expected state",
+        f"      // The payload should contain the fields from the {event_name} event,",
+        f"      // NOT the readmodel fields. Check the event schema in TODO_CONTEXT.md.",
+        f"      // Key should match how the projection handler builds it.",
+        "      const key = randomUUID();",
+        "      return {",
+        "        given: [",
+        f'          {{ messageType: "{event_name}", payload: {{',
+        f"            // TODO: fill with {event_name} event fields",
+        "          } },",
+        "        ],",
+        "        then: [{ key, expectedState: {",
+        "          // TODO: expected stored state after first event",
+        "        } }],",
+        "      };",
+        "    },",
+        "  },",
     ]
 
-    # Generate key variables
-    for fn in id_fields:
-        lines.append(f'      const {fn} = randomUUID();')
-
-    # Build payload and expected state with concrete values
-    lines.append("      return {")
-    lines.append("        given: [")
-    lines.append(f'          {{ messageType: "{event_name}", payload: {{')
-    for f in rm_fields:
-        fn = field_name(f["name"])
-        if fn in id_fields:
-            lines.append(f"            {fn},")
-        else:
-            lines.append(f"            {fn}: {_format_example(f)},")
-    lines.append("          } },")
-    lines.append("        ],")
-
-    # Expected state: concrete values, same as input (first insert = stored as-is)
-    lines.append(f"        then: [{{ key: {key_template}, expectedState: {{")
-    for f in rm_fields:
-        fn = field_name(f["name"])
-        if fn in id_fields:
-            lines.append(f"          {fn},")
-        else:
-            lines.append(f"          {fn}: {_format_expected_value(f)},")
-    lines.append("        } }],")
-    lines.append("      };")
-    lines.append("    },")
-    lines.append("  },")
-
-    # Test case 2: accumulation — only if spec has aggregation description
-    # AI must fill the expectedState because accumulation rules vary per spec
+    # Second test case only if there's aggregation logic to test
     if description:
-        lines.append("  {")
-        lines.append(f'    description: "two {event_name} events: fields accumulate correctly",')
-        lines.append("    run: () => {")
-        for fn in id_fields:
-            lines.append(f'      const {fn} = randomUUID();')
-
-        # First event payload
-        lines.append("      return {")
-        lines.append("        given: [")
-        lines.append(f'          {{ messageType: "{event_name}", payload: {{')
-        for f in rm_fields:
-            fn = field_name(f["name"])
-            if fn in id_fields:
-                lines.append(f"            {fn},")
-            else:
-                lines.append(f"            {fn}: {_format_example(f)},")
-        lines.append("          } },")
-
-        # Second event payload — different numbers for numeric fields
-        lines.append(f'          {{ messageType: "{event_name}", payload: {{')
-        for f in rm_fields:
-            fn = field_name(f["name"])
-            ft = f.get("type", "String")
-            if fn in id_fields:
-                lines.append(f"            {fn},")
-            elif ft in ("Double", "Integer", "Int", "Decimal"):
-                try:
-                    val = float(f.get("example", "0") or "0")
-                    lines.append(f"            {fn}: {int(val * 2) if val else 50},")
-                except (ValueError, TypeError):
-                    lines.append(f"            {fn}: 50,")
-            else:
-                lines.append(f"            {fn}: {_format_example(f)},")
-        lines.append("          } },")
-        lines.append("        ],")
-
-        # Expected accumulated state — AI must fill this based on spec
         desc_short = description[:120].replace('"', "'")
         if len(description) > 120:
             desc_short += "..."
-        lines.append(f"        // Spec: {desc_short}")
-        lines.append(f"        then: [{{ key: {key_template}, expectedState: {{")
-        for f in rm_fields:
-            fn = field_name(f["name"])
-            if fn in id_fields:
-                lines.append(f"          {fn},")
-            else:
-                ft = f.get("type", "String")
-                if ft in ("Double", "Integer", "Int", "Decimal"):
-                    lines.append(f"          {fn}: 0, // TODO: expected accumulated value after 2 events")
-                else:
-                    lines.append(f'          {fn}: "", // TODO: expected derived value after 2 events')
-        lines.append("        } }],")
-        lines.append("      };")
-        lines.append("    },")
-        lines.append("  },")
+        lines.extend([
+            "  {",
+            f'    description: "two {event_name} events: fields accumulate correctly",',
+            "    run: () => {",
+            f"      // Spec: {desc_short}",
+            f"      // TODO: send two events with DIFFERENT numeric values,",
+            f"      // then assert the accumulated/averaged result.",
+            "      const key = randomUUID();",
+            "      return {",
+            "        given: [",
+            f'          {{ messageType: "{event_name}", payload: {{',
+            f"            // TODO: first event payload",
+            "          } },",
+            f'          {{ messageType: "{event_name}", payload: {{',
+            f"            // TODO: second event payload (different numbers)",
+            "          } },",
+            "        ],",
+            "        then: [{ key, expectedState: {",
+            "          // TODO: expected accumulated state after two events",
+            "        } }],",
+            "      };",
+            "    },",
+            "  },",
+        ])
 
-    lines.append("]);")
-    lines.append("")
+    lines.extend([
+        "]);",
+        "",
+    ])
     return "\n".join(lines)
 
 
@@ -3270,6 +3187,7 @@ def _gen_todo_context(paths: SlicePaths, ds: DerivedSlice,
     if is_proj:
         todo_files.append(f"- `slices/{sn}/index.ts` — replace generic UPSERT with proper SQL: select specific fields, handle accumulation vs overwrite")
         todo_files.append(f"- `slices/{sn}/tests/projection.test.ts` — verify SQL params contain correct field values")
+        todo_files.append(f"- `slices/{sn}/projection.slice.test.ts` — fill event payloads and expected state (runs against real PostgreSQL via testcontainers)")
     elif is_enrichment:
         todo_files.append(f"- `endpoints/{sn}/enrichment.ts` — implement enrichment logic per backendPrompts below")
         todo_files.append(f"- `endpoints/{sn}/tests/enrichment.test.ts` — verify enrichment output")

@@ -82,16 +82,24 @@ def run_tests(root: Path, context: str) -> tuple[bool, str]:
 
     test_files = []
     for pattern in test_patterns:
-        test_files.extend(sorted(test_dir.glob(pattern)))
+        matches = sorted(test_dir.glob(pattern))
+        print(f"  Pattern '{pattern}': {len(matches)} file(s)", file=sys.stderr)
+        for m in matches:
+            print(f"    {m.relative_to(root)}", file=sys.stderr)
+        test_files.extend(matches)
 
     if not test_files:
+        print("  No test files found — skipping tests", file=sys.stderr)
         return True, "No test files found"
+
+    print(f"  Total: {len(test_files)} test file(s) to run", file=sys.stderr)
 
     output_lines = []
     all_passed = True
 
     for tf in test_files:
         rel = tf.relative_to(root)
+        print(f"  Running: {rel} ...", file=sys.stderr, end=" ", flush=True)
         output_lines.append(f"--- Running: {rel} ---")
         try:
             result = subprocess.run(
@@ -104,12 +112,25 @@ def run_tests(root: Path, context: str) -> tuple[bool, str]:
                 output_lines.append(result.stderr)
             if result.returncode != 0:
                 all_passed = False
+                print(f"FAIL (exit {result.returncode})", file=sys.stderr)
+                # Log first 5 lines of stderr for quick diagnosis in CI
+                stderr_lines = result.stderr.strip().splitlines()
+                for line in stderr_lines[:5]:
+                    print(f"    {line}", file=sys.stderr)
+                if len(stderr_lines) > 5:
+                    print(f"    ... ({len(stderr_lines) - 5} more lines in test-output.txt)", file=sys.stderr)
+            else:
+                print("PASS", file=sys.stderr)
         except subprocess.TimeoutExpired:
-            output_lines.append(f"TIMEOUT: {rel}")
+            output_lines.append(f"TIMEOUT: {rel} (120s)")
             all_passed = False
+            print(f"TIMEOUT (120s)", file=sys.stderr)
         except Exception as e:
             output_lines.append(f"ERROR: {e}")
             all_passed = False
+            print(f"ERROR: {e}", file=sys.stderr)
+
+    print(f"  Test result: {'PASS' if all_passed else 'FAIL'} ({len(test_files)} files)", file=sys.stderr)
 
     full_output = "\n".join(output_lines)
     TEST_OUTPUT.write_text(full_output)
