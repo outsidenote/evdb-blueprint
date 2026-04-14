@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Stage: AI code generation — fill business logic for all slices in a context.
 
-Two modes:
-  FAST (sonnet): cwd locked to slice dir, slim prompt, no tests, 6 turns, $0.30
-  DEEP (opus):   cwd at project root, full prompt with test loop, 20 turns, $2.00
+Three paths per slice:
+  SKIP:  no meaningful TODOs → deterministic strip, zero cost, instant
+  FAST:  sonnet, cwd locked, slim prompt, relevant hints only, 6 turns, $0.30
+  DEEP:  opus, cwd locked, full prompt, relevant hints only, 20 turns, $2.00
 
 Haiku classifies complexity when policy says model=auto.
 
@@ -20,6 +21,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -73,27 +75,8 @@ def find_todo_context(root: Path, context: str, slice_dir: str | None, endpoint_
     return "", ""
 
 
-def find_test_cmd(root: Path, context: str, slice_dir: str | None, endpoint_dir: str | None) -> str:
-    """Find the test command for this slice (deep mode only)."""
-    candidates = []
-    if slice_dir:
-        candidates.append(f"src/BusinessCapabilities/{context}/slices/{slice_dir}/tests/command.slice.test.ts")
-        candidates.append(f"src/BusinessCapabilities/{context}/slices/{slice_dir}/tests/projection.test.ts")
-    if endpoint_dir:
-        candidates.append(f"src/BusinessCapabilities/{context}/endpoints/{endpoint_dir}/tests/enrichment.test.ts")
-
-    for tf in candidates:
-        if (root / tf).exists():
-            return f"node --import tsx --test {tf}"
-    return "echo 'no test found'"
-
-
 def resolve_slice_cwd(root: Path, context: str, slice_dir: str | None, endpoint_dir: str | None) -> Path:
-    """Resolve the working directory for a slice.
-
-    For fast mode: cwd = the slice/endpoint directory (hard constrained).
-    Falls back to context dir if neither exists.
-    """
+    """Resolve the working directory — locked to slice/endpoint directory."""
     if slice_dir:
         p = root / "src" / "BusinessCapabilities" / context / "slices" / slice_dir
         if p.exists():
@@ -105,12 +88,161 @@ def resolve_slice_cwd(root: Path, context: str, slice_dir: str | None, endpoint_
     return root / "src" / "BusinessCapabilities" / context
 
 
+# ── Deterministic fast-path ──────────────────────────────────────
+
+def scan_todos(directory: Path) -> dict:
+    """Scan .ts files in a directory for TODO markers. Returns per-file counts.
+
+    Ignores TODO_CONTEXT.md (that's the spec, not generated code).
+    Ignores test files (tests are filled by AI as part of the slice, not separately).
+    """
+    todos: dict[str, list[str]] = {}
+    if not directory.exists():
+        return todos
+
+    for ts_file in directory.rglob("*.ts"):
+        if "TODO_CONTEXT" in ts_file.name:
+            continue
+
+        try:
+            content = ts_file.read_text()
+        except Exception:
+            continue
+
+        file_todos = []
+        for i, line in enumerate(content.splitlines(), 1):
+            if "TODO" in line and "//" in line:
+                file_todos.append(f"L{i}: {line.strip()}")
+
+        if file_todos:
+            rel = str(ts_file.relative_to(directory))
+            todos[rel] = file_todos
+
+    return todos
+
+
+def is_trivial_slice(todo_map: dict[str, list[str]]) -> bool:
+    """Determine if a slice can be handled without AI.
+
+    Trivial means:
+      - Zero TODOs in any file, OR
+      - Only generic/cosmetic TODOs that don't affect functionality
+    """
+    if not todo_map:
+        return True  # no TODOs at all → scaffold produced complete code
+
+    # Generic TODOs that the scaffold leaves but don't need AI
+    GENERIC_PATTERNS = [
+        r"TODO:\s*select specific fields to store",
+        r"TODO:\s*adjust .* if needed",
+        r"TODO:\s*derive from command fields",
+    ]
+
+    for _, todos in todo_map.items():
+        for todo_line in todos:
+            is_generic = any(re.search(p, todo_line, re.I) for p in GENERIC_PATTERNS)
+            if not is_generic:
+                return False  # found a real TODO that needs AI
+
+    return True  # all TODOs are generic
+
+
+def strip_generic_todos(directory: Path) -> int:
+    """Remove generic TODO comments from .ts files. Returns count of lines cleaned."""
+    cleaned = 0
+    if not directory.exists():
+        return cleaned
+
+    for ts_file in directory.rglob("*.ts"):
+        if "TODO_CONTEXT" in ts_file.name or ".test." in ts_file.name:
+            continue
+
+        try:
+            content = ts_file.read_text()
+            original = content
+            # Remove inline TODO comments but keep the code
+            content = re.sub(r"\s*//\s*TODO:.*$", "", content, flags=re.MULTILINE)
+            if content != original:
+                ts_file.write_text(content)
+                cleaned += 1
+        except Exception:
+            pass
+
+    return cleaned
+
+
+# ── Hint retrieval ───────────────────────────────────────────────
+
+# Map file patterns to hint section headers
+HINT_SECTIONS = {
+    "gwts.ts": "## How to derive predicates (gwts.ts)",
+    "commandHandler.ts": "## How to derive computed field values (commandHandler.ts)",
+    "view": "## How to derive view accumulation (SliceState views)",
+    "test.ts": "## How to construct test data (command.slice.test.ts)",
+    "domain": "## Domain-specific discoveries",
+}
+
+
+def select_hints(full_hints: str, todo_files: list[str]) -> str:
+    """Select only the hint sections relevant to the files that have TODOs.
+
+    Instead of dumping the entire learned_hints.md (~120 lines) into every prompt,
+    pick the 1-3 sections that match the files Claude will actually edit.
+    """
+    if not full_hints or not todo_files:
+        return ""
+
+    # Determine which sections are needed based on file names
+    needed_keys = set()
+    files_lower = " ".join(f.lower() for f in todo_files)
+
+    if "gwts" in files_lower:
+        needed_keys.add("gwts.ts")
+    if "commandhandler" in files_lower:
+        needed_keys.add("commandHandler.ts")
+    if "view" in files_lower or "state" in files_lower:
+        needed_keys.add("view")
+    if "test" in files_lower:
+        needed_keys.add("test.ts")
+
+    # Always include domain discoveries if they exist (they're short)
+    needed_keys.add("domain")
+
+    if not needed_keys:
+        return ""
+
+    # Extract matching sections from the hints file
+    sections = []
+    for key in needed_keys:
+        header = HINT_SECTIONS.get(key, "")
+        if not header or header not in full_hints:
+            continue
+
+        # Find section boundaries: from header to next ## or end
+        start = full_hints.index(header)
+        next_section = full_hints.find("\n## ", start + len(header))
+        if next_section == -1:
+            section_text = full_hints[start:].strip()
+        else:
+            section_text = full_hints[start:next_section].strip()
+
+        # Skip domain section if it only has the placeholder
+        if key == "domain" and "No domain-specific discoveries yet" in section_text:
+            continue
+
+        sections.append(section_text)
+
+    return "\n\n---\n\n".join(sections)
+
+
 # ── Prompts ──────────────────────────────────────────────────────
 
-def build_fast_prompt(todo_content: str) -> str:
-    """Slim prompt for fast mode. No conventions dump, no test loop."""
-    return f"""Implement TODOs in this TypeScript slice.
+def build_fast_prompt(todo_content: str, hints: str) -> str:
+    """Slim prompt for fast mode. Relevant hints only."""
+    hint_block = f"\n## Hints\n{hints}\n" if hints else ""
 
+    return f"""Implement TODOs in this TypeScript slice.
+{hint_block}
 {todo_content}
 
 Tasks:
@@ -129,7 +261,9 @@ Return when all TODOs are replaced."""
 
 
 def build_deep_prompt(todo_content: str, hints: str) -> str:
-    """Full prompt for deep mode. Includes conventions and hints. No test loop."""
+    """Full prompt for deep mode. Relevant hints only, no test loop."""
+    hint_block = f"\n## Relevant Hints\n{hints}\n" if hints else ""
+
     return f"""You are filling TODO placeholders in an event-sourced TypeScript codebase (eventualize-js/evdb).
 
 ## Key Conventions
@@ -139,10 +273,7 @@ def build_deep_prompt(todo_content: str, hints: str) -> str:
 - View state: read from stream.views.SliceStateMySlice.
 - GWTS predicates: each spec branch returns a named predicate matching the spec description.
 - Computed fields (timestamps, generated IDs) belong in endpoints only, never in pure handlers.
-
-## Learned Hints
-{hints}
-
+{hint_block}
 ## Spec & TODO Context
 {todo_content}
 
@@ -164,11 +295,7 @@ Do NOT read files outside 'Files with TODOs'."""
 # ── Haiku classification ─────────────────────────────────────────
 
 def classify_complexity(claude_path: str, todo_content: str, provider: str) -> str:
-    """Use Haiku (~$0.02) to classify slice complexity as 'sonnet' or 'opus'.
-
-    Reads the full TODO spec and decides which model should implement it.
-    Falls back to 'opus' on any error.
-    """
+    """Use Haiku (~$0.02) to classify slice complexity as 'sonnet' or 'opus'."""
     if provider == "bedrock":
         classify_model = "us.anthropic.claude-haiku-4-5-v1@bedrock"
     else:
@@ -203,10 +330,7 @@ Reply with ONLY 'sonnet' or 'opus'.
 def resolve_model_for_auto(
     claude_path: str, todo_content: str, provider: str, model_resolution: dict,
 ) -> tuple[str, str, str]:
-    """When policy says model=auto, use Haiku to pick sonnet or opus.
-
-    Returns (model_name, model_id, method).
-    """
+    """When policy says model=auto, use Haiku to pick sonnet or opus."""
     tier = classify_complexity(claude_path, todo_content, provider)
     provider_map = model_resolution.get(provider, model_resolution.get("anthropic", {}))
     model_id = provider_map.get(tier, "")
@@ -256,11 +380,11 @@ def main():
     for d in decisions_data.get("decisions", []):
         decisions_lookup[d["slice"]] = d
 
-    # Load learned hints (deep mode only)
-    hints = ""
+    # Load full hints file once (sections are selected per-slice)
+    full_hints = ""
     hints_path = root / ".claude" / "skills" / "evdb-dev-v2" / "learned_hints.md"
     if hints_path.exists():
-        hints = hints_path.read_text()
+        full_hints = hints_path.read_text()
 
     # Load model resolution
     try:
@@ -308,7 +432,21 @@ def main():
             print(f"  SKIP: no TODO_CONTEXT.md", file=sys.stderr)
             continue
 
-        # When policy says "auto", use Haiku to classify complexity
+        cwd = resolve_slice_cwd(root, context, slice_dir, endpoint_dir)
+
+        # ── Deterministic fast-path: skip AI if trivial ──────
+        todo_map = scan_todos(cwd)
+        if is_trivial_slice(todo_map):
+            cleaned = strip_generic_todos(cwd)
+            print(f"  DETERMINISTIC: trivial slice, stripped {cleaned} generic TODO(s)", file=sys.stderr)
+            print(f"  Cost: $0.00, Turns: 0", file=sys.stderr)
+            emit("ai_skipped", "implement_slice.py", slice=slice_name, context=context,
+                 data={"reason": "trivial_slice", "todos_found": len(todo_map),
+                        "cleaned": cleaned})
+            summaries.append(f"{slice_name}: deterministic (trivial)")
+            continue
+
+        # ── Haiku classification if model=auto ───────────────
         if model_name == "auto":
             model_name, model_id, method = resolve_model_for_auto(
                 claude_path, todo_content, args.provider, model_resolution)
@@ -323,18 +461,22 @@ def main():
         max_budget = mode["max_budget"]
         timeout = mode["timeout_min"] * 60
 
+        # ── Select relevant hints ────────────────────────────
+        todo_files = list(todo_map.keys())
+        hints = select_hints(full_hints, todo_files)
+        hint_count = hints.count("##") if hints else 0
+
         if is_fast:
-            prompt = build_fast_prompt(todo_content)
-            cwd = resolve_slice_cwd(root, context, slice_dir, endpoint_dir)
+            prompt = build_fast_prompt(todo_content, hints)
         else:
             prompt = build_deep_prompt(todo_content, hints)
-            cwd = resolve_slice_cwd(root, context, slice_dir, endpoint_dir)
 
         print(f"  Mode: {mode_label}", file=sys.stderr)
         print(f"  Model: {model_name} ({model_id or 'default'})", file=sys.stderr)
         print(f"  Budget: ${max_budget}, Turns: {max_turns}", file=sys.stderr)
         print(f"  CWD: {cwd}", file=sys.stderr)
-        print(f"  TODO: {todo_file}", file=sys.stderr)
+        print(f"  TODOs: {sum(len(v) for v in todo_map.values())} in {len(todo_map)} file(s)", file=sys.stderr)
+        print(f"  Hints: {hint_count} section(s) selected", file=sys.stderr)
 
         # ── Run Claude Code ──────────────────────────────────
         model_flag = ["--model", model_id] if model_id else []
@@ -378,6 +520,8 @@ def main():
                  "max_budget_usd": max_budget,
                  "max_turns": max_turns,
                  "cwd": str(cwd),
+                 "todo_files": todo_files,
+                 "hint_sections": hint_count,
                  "policy_rule": decision.get("rule_matched", ""),
              })
 
