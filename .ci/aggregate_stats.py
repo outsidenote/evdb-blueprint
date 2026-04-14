@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Aggregate per-slice stats into totals and write GITHUB_OUTPUT vars.
+"""Aggregate per-slice stats into totals.
 
 Usage:
   python3 .ci/aggregate_stats.py --slices "slice1,slice2,slice3"
 
-Reads /tmp/slice-stats-{name}.txt for each slice.
-Writes /tmp/claude-stats.txt and /tmp/claude-summary.txt.
-Sets GITHUB_OUTPUT vars: input_tokens, output_tokens, total_tokens, cost, num_turns, api_time_s
+Reads /tmp/slice-stats-{name}.json for each slice.
+Writes /tmp/claude-stats.json (full) and /tmp/claude-summary.txt (text).
+Sets GITHUB_OUTPUT vars.
 """
 import json, os, argparse
 
@@ -16,40 +16,45 @@ def main():
     args = parser.parse_args()
 
     slices = args.slices.split(",")
-    tc, tt, ti, to = 0, 0, 0, 0
-
-    for s in slices:
-        try:
-            parts = open(f"/tmp/slice-stats-{s}.txt").read().strip().split(",")
-            tc += float(parts[0])
-            tt += int(parts[1])
-            ti += int(parts[2])
-            to += int(parts[3])
-        except Exception:
-            pass
-
-    print(f"Total: {tt} turns, ${tc:.2f}, Input: {ti:,}, Output: {to:,}")
-
-    with open("/tmp/claude-stats.txt", "w") as f:
-        f.write(f"input_tokens={ti}\noutput_tokens={to}\ntotal_tokens={ti+to}\ncost={tc:.4f}\nnum_turns={tt}\napi_time_s=0\n")
-
-    # Write combined summary
+    totals = {"cost": 0, "turns": 0, "input_tokens": 0, "output_tokens": 0}
     summaries = []
+
     for s in slices:
         try:
-            lines = open(f"/tmp/claude-{s}.json").readlines()
-            data = json.loads(next(l for l in lines if l.strip().startswith("{")))
-            summaries.append(f'{s}: {data.get("result", "no result")[:200]}')
+            stats = json.load(open(f"/tmp/slice-stats-{s}.json"))
+            totals["cost"] += stats.get("cost", 0)
+            totals["turns"] += stats.get("turns", 0)
+            totals["input_tokens"] += stats.get("input_tokens", 0)
+            totals["output_tokens"] += stats.get("output_tokens", 0)
+            if stats.get("result"):
+                summaries.append(f"{s}: {stats['result']}")
         except Exception:
             pass
+
+    totals["total_tokens"] = totals["input_tokens"] + totals["output_tokens"]
+    print(f"Total: {totals['turns']} turns, ${totals['cost']:.2f}, Input: {totals['input_tokens']:,}, Output: {totals['output_tokens']:,}")
+
+    # Write JSON stats
+    with open("/tmp/claude-stats.json", "w") as f:
+        json.dump(totals, f, indent=2)
+
+    # Write summary text
     with open("/tmp/claude-summary.txt", "w") as f:
         f.write("\n".join(summaries)[:1000])
 
-    # Write to GITHUB_OUTPUT if available
+    # Also write flat key=value for GITHUB_OUTPUT compatibility
     github_output = os.environ.get("GITHUB_OUTPUT", "")
+    kv_lines = [
+        f"input_tokens={totals['input_tokens']}",
+        f"output_tokens={totals['output_tokens']}",
+        f"total_tokens={totals['total_tokens']}",
+        f"cost={totals['cost']:.4f}",
+        f"num_turns={totals['turns']}",
+        f"api_time_s=0",
+    ]
     if github_output:
         with open(github_output, "a") as f:
-            f.write(f"input_tokens={ti}\noutput_tokens={to}\ntotal_tokens={ti+to}\ncost={tc:.4f}\nnum_turns={tt}\napi_time_s=0\n")
+            f.write("\n".join(kv_lines) + "\n")
 
 if __name__ == "__main__":
     main()
