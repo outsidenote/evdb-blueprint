@@ -43,7 +43,7 @@ from lib.audit import emit
 # ── Mode configs ─────────────────────────────────────────────────
 
 FAST_MODE = {"max_turns": 6, "max_budget": 0.30, "timeout_min": 5}
-DEEP_MODE = {"max_turns": 20, "max_budget": 2.00, "timeout_min": 20}
+DEEP_MODE = {"max_turns": 12, "max_budget": 1.50, "timeout_min": 15}
 MAX_PARALLEL = 3  # max concurrent Claude processes
 
 

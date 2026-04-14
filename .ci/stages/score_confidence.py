@@ -270,13 +270,20 @@ def main():
         verify_data = [verify_data] if verify_data else []
     class_data = load_json(Path(args.classification)) if args.classification else {}
     repair_data = load_json(Path(args.repair)) if args.repair else {}
-    claude_stats = load_json(Path(args.claude_stats)) if args.claude_stats else {}
+
+    # Load per-slice stats (not aggregate) for accurate token/cost attribution
+    from lib.contracts import slice_stats_path
+    aggregate_stats = load_json(Path(args.claude_stats)) if args.claude_stats else {}
 
     scores: list[ConfidenceScore] = []
     for name in slices:
         v_sig = extract_verify_signals(verify_data, name)
         c_sig = extract_classification_signals(class_data, name)
         r_sig = extract_repair_signals(repair_data, name)
+
+        # Use per-slice stats if available, fall back to aggregate
+        per_slice = load_json(slice_stats_path(name))
+        claude_stats = per_slice if per_slice else aggregate_stats
 
         cs = score_slice(name, v_sig, test_passed, c_sig, r_sig, claude_stats, config)
         scores.append(cs)

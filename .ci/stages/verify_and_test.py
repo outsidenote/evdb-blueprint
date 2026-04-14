@@ -62,9 +62,26 @@ def run_verify(root: Path) -> tuple[bool, str]:
 
 
 def run_tests(root: Path, context: str) -> tuple[bool, str]:
-    """Run all tests for a context. Returns (passed, output)."""
+    """Run slice tests for a context. Returns (passed, output).
+
+    Only runs known test patterns — not every *.test.ts in the tree:
+      - slices/*/tests/command.slice.test.ts  (command slices)
+      - slices/*/tests/projection.test.ts     (projection slices)
+      - endpoints/*/tests/enrichment.test.ts  (enrichment endpoints)
+
+    This avoids running behaviour tests, integration tests, or other
+    test files that require external services (DB, Kafka, etc).
+    """
     test_dir = root / "src" / "BusinessCapabilities" / context
-    test_files = sorted(test_dir.rglob("*.test.ts"))
+    test_patterns = [
+        "slices/*/tests/command.slice.test.ts",
+        "slices/*/tests/projection.test.ts",
+        "endpoints/*/tests/enrichment.test.ts",
+    ]
+
+    test_files = []
+    for pattern in test_patterns:
+        test_files.extend(sorted(test_dir.glob(pattern)))
 
     if not test_files:
         return True, "No test files found"
