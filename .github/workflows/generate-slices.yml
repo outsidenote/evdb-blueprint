@@ -293,6 +293,16 @@ jobs:
             --repaired "${{ steps.repair.outputs.total_repaired || '0' }}" \
             --max-repair-level "${{ steps.repair.outputs.max_repair_level || '0' }}"
 
+      - name: "🧠 Learn from success"
+        if: steps.verify.outputs.passed == 'true' || steps.repair.outputs.total_repaired != '0'
+        run: |
+          python3 .ci/stages/learn.py \
+            --root . \
+            --context "${{ matrix.context_pascal }}" \
+            --slices "${{ matrix.slices }}" \
+            --verify-passed "${{ steps.verify.outputs.verify_passed || 'false' }}" \
+            --test-passed "${{ steps.verify.outputs.test_passed || 'false' }}"
+
       # ── Clean + commit + PR ─────────────────────────────────
       - name: Clean up
         run: |
@@ -304,6 +314,7 @@ jobs:
         run: |
           git add "src/BusinessCapabilities/${{ matrix.context_pascal }}/" || true
           git add ".implementation-hashes/" || true
+          git add ".claude/skills/evdb-dev-v2/learned_hints.md" || true
           git rm -rf --cached .eventmodel/ .eventmodel2/ 2>/dev/null || true
           if ! git diff --cached --quiet; then
             git commit -m "feat(${{ matrix.context_pascal }}): implement slice business logic
