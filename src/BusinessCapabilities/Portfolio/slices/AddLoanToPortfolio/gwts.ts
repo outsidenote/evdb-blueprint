@@ -6,6 +6,17 @@ import type { SliceStateAddLoanToPortfolioViewState } from "#BusinessCapabilitie
  * Each function maps 1:1 to a named spec in the event model diagram.
  */
 
+const RATING_ORDER = [
+  "D", "C", "CC", "CCC", "B-", "B", "B+",
+  "BB-", "BB", "BB+", "BBB-", "BBB", "BBB+",
+  "A-", "A", "A+", "AA-", "AA", "AA+", "AAA",
+];
+const ratingIndex = (rating: string): number => {
+  const idx = RATING_ORDER.indexOf(rating);
+  return idx >= 0 ? idx : RATING_ORDER.length;
+};
+const MIN_PORTFOLIO_RATING_INDEX = RATING_ORDER.indexOf("BBB");
+
 /**
  * spec: amountLessThanZero
  * GIVEN state fields: none
@@ -13,7 +24,7 @@ import type { SliceStateAddLoanToPortfolioViewState } from "#BusinessCapabilitie
  * THEN: LoanRejectedFromPortfolio
  */
 export const amountLessThanZero = (state: SliceStateAddLoanToPortfolioViewState, command: AddLoanToPortfolio): boolean =>
-  false; // TODO: return boolean comparing state.field vs command.portfolioId
+  command.loanAmount <= 0;
 
 /**
  * spec: portfolioRatingBreached
@@ -22,7 +33,7 @@ export const amountLessThanZero = (state: SliceStateAddLoanToPortfolioViewState,
  * THEN: LoanRejectedFromPortfolio
  */
 export const portfolioRatingBreached = (state: SliceStateAddLoanToPortfolioViewState, command: AddLoanToPortfolio): boolean =>
-  false; // TODO: return boolean comparing state.portfolioId vs command.portfolioId
+  ratingIndex(command.creditRating) < MIN_PORTFOLIO_RATING_INDEX;
 
 /**
  * spec: portfolioRatingMaintained
@@ -31,4 +42,4 @@ export const portfolioRatingBreached = (state: SliceStateAddLoanToPortfolioViewS
  * THEN: LoanAddedToPortfolio
  */
 export const portfolioRatingMaintained = (state: SliceStateAddLoanToPortfolioViewState, command: AddLoanToPortfolio): boolean =>
-  false; // TODO: return boolean comparing state.portfolioId vs command.portfolioId
+  ratingIndex(command.creditRating) >= MIN_PORTFOLIO_RATING_INDEX;

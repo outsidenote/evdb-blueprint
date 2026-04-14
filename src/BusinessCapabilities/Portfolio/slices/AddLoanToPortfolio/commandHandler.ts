@@ -1,7 +1,7 @@
 import type { CommandHandler } from "#abstractions/commands/commandHandler.js";
 import type { AddLoanToPortfolio } from "./command.js";
 import type { PortfolioStreamType } from "#BusinessCapabilities/Portfolio/swimlanes/Portfolio/index.js";
-import { unknownPredicate, unknownPredicate, unknownPredicate } from "./gwts.js";
+import { amountLessThanZero, portfolioRatingBreached, portfolioRatingMaintained } from "./gwts.js";
 
 /**
  * Pure command handler for the AddLoanToPortfolio command.
@@ -11,8 +11,6 @@ export const handleAddLoanToPortfolio: CommandHandler<
   PortfolioStreamType,
   AddLoanToPortfolio
 > = (stream, command) => {
-  const { portfolioId, acquisitionDate, borrowerName, creditRating, interestRate, loanAmount, loanId, maturityDate } = stream.views.SliceStateAddLoanToPortfolio;
-
   if (amountLessThanZero(stream.views.SliceStateAddLoanToPortfolio, command)) {
     stream.appendEventLoanRejectedFromPortfolio({
       portfolioId: command.portfolioId,
@@ -23,7 +21,7 @@ export const handleAddLoanToPortfolio: CommandHandler<
       loanAmount: command.loanAmount,
       loanId: command.loanId,
       maturityDate: command.maturityDate,
-      errorMessage: "", // TODO: derive from command fields
+      errorMessage: "Amount should be greater than zero",
     });
   } else if (portfolioRatingBreached(stream.views.SliceStateAddLoanToPortfolio, command)) {
     stream.appendEventLoanRejectedFromPortfolio({
@@ -35,7 +33,7 @@ export const handleAddLoanToPortfolio: CommandHandler<
       loanAmount: command.loanAmount,
       loanId: command.loanId,
       maturityDate: command.maturityDate,
-      errorMessage: "", // TODO: derive from command fields
+      errorMessage: "Portfolio rating would be breached by this loan",
     });
   } else if (portfolioRatingMaintained(stream.views.SliceStateAddLoanToPortfolio, command)) {
     stream.appendEventLoanAddedToPortfolio({
@@ -58,7 +56,7 @@ export const handleAddLoanToPortfolio: CommandHandler<
       loanAmount: command.loanAmount,
       loanId: command.loanId,
       maturityDate: command.maturityDate,
-      errorMessage: "", // TODO: derive from command fields
+      errorMessage: "Unable to add loan to portfolio",
     });
   }
 };
