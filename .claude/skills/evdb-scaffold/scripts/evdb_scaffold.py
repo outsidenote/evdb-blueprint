@@ -2266,7 +2266,7 @@ def gen_projection_integration_test(ds: DerivedSlice) -> str:
     lines = [
         'import { randomUUID } from "node:crypto";',
         'import { ProjectionSliceTester } from "#abstractions/slices/ProjectionSliceTester.js";',
-        f'import {{ {ds.slice_name_camel}Slice }} from "../index.js";',
+        f'import {{ {ds.slice_name_camel}Slice }} from "./index.js";',
         "",
         f"ProjectionSliceTester.run({ds.slice_name_camel}Slice, [",
         "  {",
