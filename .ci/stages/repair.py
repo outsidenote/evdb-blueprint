@@ -160,35 +160,55 @@ def run_ai_repair(
     level: int, level_name: str,
     model: str, max_turns: int, max_files: int, max_budget: float,
     allowed_files: list[str],
+    verify_output: str = "",
+    test_output: str = "",
 ) -> RepairAttempt:
-    """Bounded AI repair. Restricted to allowed_files. Never touches tests."""
+    """Bounded AI repair with structured failure context.
+
+    CWD locked to the slice directory. Claude gets exact failure details
+    and a narrow edit scope — no repo scanning possible.
+    """
     start = time.time()
     slice_name = classification.get("slice_name", "")
     fc = classification.get("failure_class", "")
-    details_text = "\n".join(classification.get("details", [])[:5])
+    details_text = "\n".join(classification.get("details", [])[:10])
 
-    prompt = f"""Fix a specific CI failure in an evdb slice.
+    # Build targeted repair prompt with full failure context
+    sections = [f"Fix a specific CI failure in this TypeScript slice."]
+    sections.append(f"\nFailure class: {fc}")
+    sections.append(f"\nVerification details:\n{details_text}")
 
-Slice: {slice_name}
-Context: {context}
-Failure: {fc}
-Details:
-{details_text}
+    if test_output:
+        # Truncate test output to relevant portion
+        test_excerpt = test_output[:2000]
+        sections.append(f"\nTest output:\n{test_excerpt}")
 
-CONSTRAINTS:
-- ONLY modify: {', '.join(allowed_files)}
-- Files are in src/BusinessCapabilities/{context}/slices/{slice_name}/
+    sections.append(f"\nAllowed files: {', '.join(allowed_files)}")
+    sections.append(f"""
+Rules:
+- Only edit: {', '.join(allowed_files)}
 - Do NOT modify test files (*.test.ts)
-- Do NOT modify other slices
-- MINIMAL change only"""
+- Do NOT read files outside this directory
+- Do NOT scan or explore the repo
+- Make the MINIMAL change to fix the failure
+- Do NOT refactor unrelated logic""")
+
+    prompt = "\n".join(sections)
 
     claude_path = shutil.which("claude")
     if not claude_path:
         return RepairAttempt(level=level, level_name=level_name, strategy="ai_repair",
                              resolved=False, detail="Claude CLI not available")
 
-    # Snapshot before
+    # CWD locked to slice directory
     slice_dir = root / "src" / "BusinessCapabilities" / context / "slices" / slice_name
+    if not slice_dir.exists():
+        # Try endpoints
+        slice_dir = root / "src" / "BusinessCapabilities" / context / "endpoints" / slice_name
+    if not slice_dir.exists():
+        return RepairAttempt(level=level, level_name=level_name, strategy="ai_repair",
+                             resolved=False, detail=f"Slice dir not found: {slice_name}")
+
     before = _snapshot(slice_dir, allowed_files)
 
     model_flag = ["--model", model] if model else []
@@ -198,7 +218,7 @@ CONSTRAINTS:
              "--output-format", "text", "--max-turns", str(max_turns),
              "--max-budget-usd", str(max_budget),
              *model_flag, prompt],
-            capture_output=True, text=True, cwd=str(root), timeout=300,
+            capture_output=True, text=True, cwd=str(slice_dir), timeout=300,
         )
     except subprocess.TimeoutExpired:
         return RepairAttempt(level=level, level_name=level_name, strategy="ai_repair",
@@ -269,6 +289,21 @@ def quick_verify(root: Path, context: str) -> bool:
 
 # ── Repair ladder orchestrator ───────────────────────────────────
 
+def _load_failure_context() -> tuple[str, str]:
+    """Load verify and test output for passing to AI repair."""
+    verify_out = ""
+    test_out = ""
+    try:
+        from lib.contracts import VERIFY_RESULTS, TEST_OUTPUT
+        if VERIFY_RESULTS.exists():
+            verify_out = VERIFY_RESULTS.read_text()[:3000]
+        if TEST_OUTPUT.exists():
+            test_out = TEST_OUTPUT.read_text()[:3000]
+    except Exception:
+        pass
+    return verify_out, test_out
+
+
 def repair_slice(
     classification: dict,
     root: Path,
@@ -286,6 +321,9 @@ def repair_slice(
     strategies = pipeline_config.get("repair", {}).get("strategies", {})
     strategy_config = strategies.get(fc, {})
     allowed_files = strategy_config.get("allowed_files", ["*.ts"])
+
+    # Load failure context once for AI repair levels
+    verify_output, test_output = _load_failure_context()
 
     # ── L1: Deterministic ──────────────────────────────────────
     if max_depth >= 1:
@@ -322,6 +360,8 @@ def repair_slice(
             max_files=l2.get("max_files", 1),
             max_budget=l2.get("max_budget_usd", 0.25),
             allowed_files=allowed_files[:1],  # restrict to first file only
+            verify_output=verify_output,
+            test_output=test_output,
         )
         attempts.append(attempt)
 
@@ -355,6 +395,8 @@ def repair_slice(
             max_files=l3.get("max_files", 3),
             max_budget=l3.get("max_budget_usd", 1.00),
             allowed_files=allowed_files,
+            verify_output=verify_output,
+            test_output=test_output,
         )
         attempts.append(attempt)
 

@@ -128,8 +128,8 @@ Rules:
 Return when all TODOs are replaced."""
 
 
-def build_deep_prompt(todo_content: str, test_cmd: str, hints: str) -> str:
-    """Full prompt for deep mode. Includes conventions, hints, test loop."""
+def build_deep_prompt(todo_content: str, hints: str) -> str:
+    """Full prompt for deep mode. Includes conventions and hints. No test loop."""
     return f"""You are filling TODO placeholders in an event-sourced TypeScript codebase (eventualize-js/evdb).
 
 ## Key Conventions
@@ -154,9 +154,8 @@ def build_deep_prompt(todo_content: str, test_cmd: str, hints: str) -> str:
    - enrichment.ts: implement enrich() per Backend Prompts section.
    - projection index.ts: replace generic UPSERT with proper field-specific SQL.
    - tests: verify event fields match spec, fix test data, add edge cases.
-3. Run the test: {test_cmd}
-4. If tests fail, read the error, fix the code, re-run until green.
 
+Do NOT run tests — the CI pipeline handles that separately.
 Do NOT read SKILL.md or any reference files. Everything you need is above.
 Do NOT run evdb-diff, evdb-scaffold, or scan sessions.
 Do NOT read files outside 'Files with TODOs'."""
@@ -328,9 +327,8 @@ def main():
             prompt = build_fast_prompt(todo_content)
             cwd = resolve_slice_cwd(root, context, slice_dir, endpoint_dir)
         else:
-            test_cmd = find_test_cmd(root, context, slice_dir, endpoint_dir)
-            prompt = build_deep_prompt(todo_content, test_cmd, hints)
-            cwd = root
+            prompt = build_deep_prompt(todo_content, hints)
+            cwd = resolve_slice_cwd(root, context, slice_dir, endpoint_dir)
 
         print(f"  Mode: {mode_label}", file=sys.stderr)
         print(f"  Model: {model_name} ({model_id or 'default'})", file=sys.stderr)
