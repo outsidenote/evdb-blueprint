@@ -20,7 +20,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from lib.contracts import CLASSIFICATION, load_json, write_json, set_output
+from lib.contracts import CLASSIFICATION, TEST_RESULTS, load_json, write_json, set_output
 from lib.audit import emit
 
 
@@ -108,34 +108,52 @@ FLAKY_PATTERNS = [
     re.compile(r"SIGKILL|SIGTERM", re.I),
 ]
 
-TEST_SLICE_RE = re.compile(r"(?:FAIL|not ok|✗)\s+.*?BusinessCapabilities/(\w+)/slices/(\w+)")
+def classify_test_results(test_results: list[dict], already: set[str]) -> list[SliceClassification]:
+    """Classify failures from structured test results (JSON from verify_and_test.py).
+
+    No regex. Each result has: file, slice, passed, exit_code, error.
+    Deterministic: if passed=false and slice not already classified, it's a test_failure.
+    """
+    results = []
+    for entry in test_results:
+        if entry.get("passed", True):
+            continue
+
+        slice_name = entry.get("slice", "")
+        if not slice_name or slice_name in already:
+            continue
+
+        error = entry.get("error", "")
+
+        # Check for environment/flaky issues in the error text
+        is_flaky = any(p.search(error) for p in FLAKY_PATTERNS)
+        if is_flaky:
+            results.append(SliceClassification(slice_name, FLAKY_OR_ENV,
+                                               [f"Environment: {error[:200]}"]))
+        else:
+            results.append(SliceClassification(
+                slice_name, TEST_FAILURE,
+                [f"Test failure in {entry.get('file', '?')}", error[:200]],
+                affected_files=[entry.get("file", "")],
+            ))
+
+    return results
 
 
-def classify_test_output(test_output: str, already: set[str]) -> list[SliceClassification]:
-    """Classify failures from test runner output."""
+def classify_test_output_fallback(test_output: str, already: set[str]) -> list[SliceClassification]:
+    """Fallback: classify from raw test output text if structured results unavailable."""
+    if not test_output or not test_output.strip():
+        return []
+
     for p in FLAKY_PATTERNS:
         if p.search(test_output):
             return [SliceClassification("__all__", FLAKY_OR_ENV,
                                         [f"Environment: {p.pattern}"])]
 
-    failing = set()
-    for m in TEST_SLICE_RE.finditer(test_output):
-        failing.add(m.group(2))
-
-    if not failing:
-        file_re = re.compile(r"not ok \d+.*?(\w+)\.slice\.test")
-        for m in file_re.finditer(test_output):
-            failing.add(m.group(1))
-
-    results = []
-    for s in failing:
-        if s not in already:
-            results.append(SliceClassification(s, TEST_FAILURE, [f"Test failure for {s}"]))
-
-    if not results and not failing and "# fail" in test_output:
-        results.append(SliceClassification("__all__", TEST_FAILURE,
-                                           ["Test failures — could not identify slices"]))
-    return results
+    if "# fail" in test_output or "not ok" in test_output:
+        return [SliceClassification("__all__", TEST_FAILURE,
+                                    ["Test failures — see test-output.txt for details"])]
+    return []
 
 
 # ── Main ─────────────────────────────────────────────────────────
@@ -152,10 +170,6 @@ def main():
     if isinstance(verify_data, dict):
         verify_data = [verify_data] if verify_data else []
 
-    test_output = ""
-    if args.test_output and Path(args.test_output).exists():
-        test_output = Path(args.test_output).read_text()
-
     # Classify
     results: dict[str, SliceClassification] = {}
 
@@ -164,9 +178,19 @@ def main():
 
     already = set(results.keys())
 
-    if test_output:
-        for c in classify_test_output(test_output, already):
+    # Prefer structured test results (JSON) over raw text output
+    test_results_data = load_json(TEST_RESULTS)
+    if test_results_data and "results" in test_results_data:
+        for c in classify_test_results(test_results_data["results"], already):
             results[c.slice_name] = c
+    else:
+        # Fallback to raw text parsing if structured results unavailable
+        test_output = ""
+        if args.test_output and Path(args.test_output).exists():
+            test_output = Path(args.test_output).read_text()
+        if test_output:
+            for c in classify_test_output_fallback(test_output, already):
+                results[c.slice_name] = c
 
     classifications = list(results.values())
 

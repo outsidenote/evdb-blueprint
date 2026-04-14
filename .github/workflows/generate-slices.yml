@@ -315,7 +315,7 @@ jobs:
             --max-repair-level "${{ steps.repair.outputs.max_repair_level || '0' }}"
 
       - name: "🧠 Learn from success"
-        if: steps.verify.outputs.passed == 'true' || steps.repair.outputs.total_repaired != '0'
+        if: steps.verify.outputs.verify_passed == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -342,7 +342,7 @@ jobs:
             $PRIOR_FLAG
 
       - name: "📌 Stamp implementation hashes"
-        if: steps.verify.outputs.passed == 'true' || steps.repair.outputs.total_repaired != '0'
+        if: steps.verify.outputs.verify_passed == 'true'
         run: |
           STAMP_SCRIPT=".claude/skills/evdb-dev-v2/scripts/stamp_hash.py"
           if [ -f "$STAMP_SCRIPT" ]; then

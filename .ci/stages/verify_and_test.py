@@ -16,7 +16,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from lib.contracts import (
-    VERIFY_RESULTS, TEST_OUTPUT, NORMALIZE_SCRIPT, VERIFY_SCRIPT,
+    VERIFY_RESULTS, TEST_OUTPUT, TEST_RESULTS, NORMALIZE_SCRIPT, VERIFY_SCRIPT,
     write_json, set_output,
 )
 from lib.audit import emit
@@ -95,12 +95,34 @@ def run_tests(root: Path, context: str) -> tuple[bool, str]:
     print(f"  Total: {len(test_files)} test file(s) to run", file=sys.stderr)
 
     output_lines = []
+    test_results: list[dict] = []
     all_passed = True
 
     for tf in test_files:
         rel = tf.relative_to(root)
+        rel_str = str(rel)
+
+        # Extract slice name from path: slices/SliceName/... or endpoints/SliceName/...
+        slice_name = ""
+        for part_type in ("slices", "endpoints"):
+            if f"/{part_type}/" in rel_str or rel_str.startswith(f"{part_type}/"):
+                parts = rel_str.split(f"{part_type}/")
+                if len(parts) > 1:
+                    slice_name = parts[1].split("/")[0]
+                    break
+
         print(f"  Running: {rel} ...", file=sys.stderr, end=" ", flush=True)
         output_lines.append(f"--- Running: {rel} ---")
+
+        entry: dict = {
+            "file": rel_str,
+            "slice": slice_name,
+            "passed": False,
+            "exit_code": -1,
+            "error": "",
+            "stdout_head": "",
+        }
+
         try:
             result = subprocess.run(
                 ["node", "--import", "tsx", "--test", str(tf)],
@@ -110,10 +132,17 @@ def run_tests(root: Path, context: str) -> tuple[bool, str]:
             output_lines.append(result.stdout)
             if result.stderr:
                 output_lines.append(result.stderr)
+
+            entry["exit_code"] = result.returncode
+            entry["passed"] = result.returncode == 0
+
             if result.returncode != 0:
                 all_passed = False
+                # Capture first meaningful error lines for classifier
+                combined = (result.stdout + "\n" + result.stderr).strip()
+                entry["error"] = combined[:500]
+                entry["stdout_head"] = result.stdout[:300]
                 print(f"FAIL (exit {result.returncode})", file=sys.stderr)
-                # Log first lines of stdout + stderr for quick diagnosis in CI
                 for label, text in [("stdout", result.stdout), ("stderr", result.stderr)]:
                     lines = text.strip().splitlines()
                     if lines:
@@ -126,13 +155,25 @@ def run_tests(root: Path, context: str) -> tuple[bool, str]:
         except subprocess.TimeoutExpired:
             output_lines.append(f"TIMEOUT: {rel} (120s)")
             all_passed = False
-            print(f"TIMEOUT (120s)", file=sys.stderr)
+            entry["error"] = "TIMEOUT after 120s"
+            print("TIMEOUT (120s)", file=sys.stderr)
         except Exception as e:
             output_lines.append(f"ERROR: {e}")
             all_passed = False
+            entry["error"] = str(e)
             print(f"ERROR: {e}", file=sys.stderr)
 
+        test_results.append(entry)
+
     print(f"  Test result: {'PASS' if all_passed else 'FAIL'} ({len(test_files)} files)", file=sys.stderr)
+
+    # Write structured results — classifier reads this instead of parsing text
+    write_json(TEST_RESULTS, {
+        "total": len(test_results),
+        "passed": sum(1 for r in test_results if r["passed"]),
+        "failed": sum(1 for r in test_results if not r["passed"]),
+        "results": test_results,
+    })
 
     full_output = "\n".join(output_lines)
     TEST_OUTPUT.write_text(full_output)
