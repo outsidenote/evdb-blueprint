@@ -3,7 +3,6 @@ name: Generate Slice Code
 on:
   push:
     paths:
-      # Only trigger on config.json (the Miro import file)
       - '.eventmodel/config.json'
       - '.eventmodel2/config.json'
 
@@ -25,27 +24,32 @@ on:
         description: 'AI model: auto (routes per slice), opus (all slices), or sonnet (all slices)'
         required: false
         default: 'auto'
+      mode:
+        description: 'Mode: live or simulate (dry-run, no AI, no PRs)'
+        required: false
+        default: 'live'
 
 permissions:
   contents: write
   pull-requests: write
+  issues: write
 
 concurrency:
   group: codegen-${{ github.ref }}
   cancel-in-progress: true
 
+# ═══════════════════════════════════════════════════════════════════
+# Phase 0: Plan — fully deterministic
+#   detect → scaffold → risk score → policy decisions → matrix
+# ═══════════════════════════════════════════════════════════════════
 jobs:
-  # ──────────────────────────────────────────────────────────────────
-  # Phase 1: Deterministic — split config, diff, scaffold
-  # Outputs a matrix of contexts for Phase 2
-  # ──────────────────────────────────────────────────────────────────
-  scaffold:
+  plan:
     runs-on: ubuntu-latest
     outputs:
-      matrix: ${{ steps.plan.outputs.matrix }}
-      has_contexts: ${{ steps.plan.outputs.has_contexts }}
-      changed: ${{ steps.gate.outputs.changed }}
-      em_dir: ${{ steps.detect.outputs.em_dir }}
+      matrix:       ${{ steps.policy.outputs.matrix }}
+      has_contexts: ${{ steps.policy.outputs.has_contexts }}
+      mode:         ${{ steps.detect.outputs.mode }}
+      em_dir:       ${{ steps.detect.outputs.em_dir }}
 
     steps:
       - uses: actions/checkout@v5
@@ -54,116 +58,87 @@ jobs:
 
       - uses: ./.github/actions/setup-env
 
-      - name: Detect event model directory
+      - name: Detect + gate
         id: detect
         run: |
-          EM_DIR="${{ github.event.inputs.em_dir }}"
-          if [ -z "$EM_DIR" ]; then
-            BEFORE="${{ github.event.before }}"
-            [ "$BEFORE" = "0000000000000000000000000000000000000000" ] && BEFORE=""
-            if git diff --name-only "${BEFORE:-HEAD~1}" HEAD 2>/dev/null | grep -q '.eventmodel2/'; then
-              EM_DIR=".eventmodel2"
-            else
-              EM_DIR=".eventmodel"
-            fi
-          fi
-          echo "em_dir=$EM_DIR" >> "$GITHUB_OUTPUT"
+          python3 .ci/stages/detect.py \
+            --em-dir "${{ inputs.em_dir || '' }}" \
+            --event-name "${{ github.event_name }}" \
+            --before "${{ github.event.before }}" \
+            --mode "${{ inputs.mode || 'live' }}"
 
-      - name: Check config.json actually changed
-        id: gate
+      - name: "Split → Diff → Scaffold → Plan"
+        if: steps.detect.outputs.changed == 'true'
+        id: scaffold
         run: |
-          EM_DIR="${{ steps.detect.outputs.em_dir }}"
-          CONFIG="$EM_DIR/config.json"
-
-          # Skip if config.json was deleted
-          if [ ! -f "$CONFIG" ]; then
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-            echo "config.json not found — skipping (likely deleted)"
-            exit 0
-          fi
-
-          if [ "${{ github.event_name }}" = "push" ]; then
-            NEW_HASH=$(python3 .ci/config_hash.py "$CONFIG")
-
-            # Use github.event.before for reliable comparison (works with merge commits, multi-commit pushes)
-            BEFORE="${{ github.event.before }}"
-            if [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
-              BEFORE=""
-            fi
-            OLD_HASH=$(git show ${BEFORE:-HEAD~1}:"$CONFIG" 2>/dev/null | python3 .ci/config_hash.py -)
-
-            if [ "$OLD_HASH" = "$NEW_HASH" ]; then
-              echo "changed=false" >> "$GITHUB_OUTPUT"
-              exit 0
-            fi
-          fi
-          echo "changed=true" >> "$GITHUB_OUTPUT"
-
-      - name: "🔧 Split → Diff → Scaffold"
-        if: steps.gate.outputs.changed == 'true'
-        id: generate
-        run: |
-          CONTEXT_ARG=""
-          if [ -n "${{ github.event.inputs.context }}" ]; then
-            CONTEXT_ARG="--context ${{ github.event.inputs.context }}"
-          fi
-
-          # Use current branch as base for codegen branch names
-          BASE_BRANCH="${GITHUB_REF_NAME}"
-
-          python3 .claude/scripts/generate_slices.py \
+          python3 .ci/stages/scaffold.py \
             --root . \
-            --em-dir ${{ steps.detect.outputs.em_dir }} \
-            --base-branch "$BASE_BRANCH" \
-            $CONTEXT_ARG > /tmp/generate-output.json
+            --em-dir "${{ steps.detect.outputs.em_dir }}" \
+            --base-branch "${{ github.ref_name }}" \
+            --context "${{ inputs.context || '' }}"
 
-          cat /tmp/generate-output.json
-
-      - name: "📋 Plan context matrix"
-        if: steps.gate.outputs.changed == 'true'
-        id: plan
+      - name: Risk score
+        if: steps.detect.outputs.changed == 'true' && steps.scaffold.outputs.has_contexts == 'true'
         run: |
-          RESULT=$(cat /tmp/generate-output.json)
-          TOTAL=$(echo "$RESULT" | python3 -c "import sys,json; print(json.load(sys.stdin)['total_planned'])")
+          python3 .ci/stages/risk_score.py \
+            --root . \
+            --em-dir "${{ steps.detect.outputs.em_dir }}" \
+            --generate-output /tmp/generate-output.json
 
-          if [ "$TOTAL" = "0" ]; then
-            echo "has_contexts=false" >> "$GITHUB_OUTPUT"
-            echo "matrix={}" >> "$GITHUB_OUTPUT"
-            echo "No planned slices found."
-            exit 0
-          fi
-
-          echo "$RESULT" | python3 .ci/plan_matrix.py
-
-      - name: "✅ Validate matrix"
-        if: steps.gate.outputs.changed == 'true' && steps.plan.outputs.has_contexts == 'true'
+      - name: Policy decisions
+        if: steps.detect.outputs.changed == 'true' && steps.scaffold.outputs.has_contexts == 'true'
+        id: policy
         run: |
-          echo '${{ steps.plan.outputs.matrix }}' | python3 .ci/validate_matrix.py
+          python3 .ci/stages/policy_decide.py \
+            --risk-scores /tmp/risk-scores.json \
+            --generate-output /tmp/generate-output.json \
+            --trigger "${{ github.event_name }}" \
+            --model-override "${{ inputs.model || 'auto' }}" \
+            --provider "${{ inputs.provider || 'anthropic' }}"
 
-      - name: "📦 Upload scaffold artifacts"
-        if: steps.gate.outputs.changed == 'true' && steps.plan.outputs.has_contexts == 'true'
+      - name: Validate matrix
+        if: steps.detect.outputs.changed == 'true' && steps.policy.outputs.has_contexts == 'true'
+        run: |
+          echo '${{ steps.policy.outputs.matrix }}' | python3 .ci/validate_matrix.py
+
+      - name: Upload plan artifacts
+        if: steps.detect.outputs.changed == 'true' && steps.policy.outputs.has_contexts == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: scaffolded-workspace
+          name: plan-output
           path: |
             src/BusinessCapabilities/
             .eventmodel/
             .eventmodel2/
+            /tmp/decisions.json
+            /tmp/risk-scores.json
+            /tmp/audit.jsonl
           retention-days: 1
 
-  # ──────────────────────────────────────────────────────────────────
-  # Phase 2: One job per context
-  #   - Downloads scaffolded code
-  #   - Claude Code fills business logic
-  #   - Commits split files + generated code to codegen branch
-  #   - Opens PR targeting the feature branch
-  # ──────────────────────────────────────────────────────────────────
+      - name: Simulation report
+        if: steps.detect.outputs.mode == 'simulate' && steps.policy.outputs.has_contexts == 'true'
+        run: |
+          echo "## Simulation Report" >> "$GITHUB_STEP_SUMMARY"
+          echo '```json' >> "$GITHUB_STEP_SUMMARY"
+          cat /tmp/decisions.json >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "### Risk Scores" >> "$GITHUB_STEP_SUMMARY"
+          echo '```json' >> "$GITHUB_STEP_SUMMARY"
+          cat /tmp/risk-scores.json >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+  # ═══════════════════════════════════════════════════════════════
+  # Phase 1–3: Implement → Verify → Deliver (one job per context)
+  # ═══════════════════════════════════════════════════════════════
   codegen:
-    needs: scaffold
-    if: needs.scaffold.outputs.changed != 'false' && needs.scaffold.outputs.has_contexts == 'true'
+    needs: plan
+    if: >-
+      needs.plan.outputs.has_contexts == 'true' &&
+      needs.plan.outputs.mode == 'live'
     runs-on: ubuntu-latest
     strategy:
-      matrix: ${{ fromJson(needs.scaffold.outputs.matrix) }}
+      matrix: ${{ fromJson(needs.plan.outputs.matrix) }}
       max-parallel: 2
       fail-fast: false
 
@@ -175,488 +150,148 @@ jobs:
 
       - uses: ./.github/actions/setup-env
 
-      - name: "📦 Download scaffold artifacts"
+      - name: Download plan artifacts
         uses: actions/download-artifact@v4
         with:
-          name: scaffolded-workspace
+          name: plan-output
 
-      - name: "🌿 Create codegen branch"
+      # ── Branch + scaffold commit ────────────────────────────
+      - name: Create codegen branch
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git fetch origin "${{ matrix.branch }}" 2>/dev/null || true
           git checkout -B "${{ matrix.branch }}"
 
-      - name: "💾 Commit scaffold code"
+      - name: Commit scaffold
         run: |
           git add "src/BusinessCapabilities/${{ matrix.context_pascal }}/" || true
-
-          if git diff --cached --quiet; then
-            echo "No scaffolded code to commit"
-          else
+          if ! git diff --cached --quiet; then
             git commit -m "chore(${{ matrix.context_pascal }}): scaffold boilerplate
 
           Deterministic scaffold output for slices: ${{ matrix.slices }}
           Generated by evdb-scaffold (no AI)."
           fi
 
-      - name: "🤖 Install Claude Code"
+      - name: Install Claude Code
         run: npm install -g @anthropic-ai/claude-code@2.1.105
 
-      - name: "⚙️ Configure AI provider"
-        id: provider
-        run: |
-          PROVIDER="${{ github.event.inputs.provider || 'anthropic' }}"
-          MODEL_TIER="${{ github.event.inputs.model || 'auto' }}"
-
-          echo "model_tier=$MODEL_TIER" >> "$GITHUB_OUTPUT"
-          echo "provider=$PROVIDER" >> "$GITHUB_OUTPUT"
-
-          # For fixed model selection, resolve the model ID now
-          if [ "$PROVIDER" = "bedrock" ]; then
-            echo "opus_model=us.anthropic.claude-opus-4-6-v1@bedrock" >> "$GITHUB_OUTPUT"
-            echo "sonnet_model=us.anthropic.claude-sonnet-4-6-v1@bedrock" >> "$GITHUB_OUTPUT"
-          else
-            echo "opus_model=" >> "$GITHUB_OUTPUT"
-            echo "sonnet_model=claude-sonnet-4-6-20250514" >> "$GITHUB_OUTPUT"
-          fi
-
-          echo "Using $PROVIDER provider, model: $MODEL_TIER"
-
-
-      - name: "🧠 AI: Fill business logic"
-        id: claude
-        timeout-minutes: 20
+      # ── Phase 1: AI implementation ──────────────────────────
+      - name: "🧠 Implement slices"
+        id: implement
+        timeout-minutes: 25
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          ANTHROPIC_API_KEY:     ${{ secrets.ANTHROPIC_API_KEY }}
+          AWS_ACCESS_KEY_ID:     ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_REGION: ${{ secrets.AWS_REGION || 'us-east-1' }}
+          AWS_REGION:            ${{ secrets.AWS_REGION || 'us-east-1' }}
+          GITHUB_RUN_ID:         ${{ github.run_id }}
         run: |
-          START_TIME=$(date +%s)
-
-          MODEL_TIER="${{ steps.provider.outputs.model_tier }}"
-          OPUS_MODEL="${{ steps.provider.outputs.opus_model }}"
-          SONNET_MODEL="${{ steps.provider.outputs.sonnet_model }}"
-
-          CONTEXT="${{ matrix.context_pascal }}"
-
-          # Read learned hints once (shared across slices)
-          HINTS=""
-          if [ -f ".claude/skills/evdb-dev-v2/learned_hints.md" ]; then
-            HINTS=$(cat .claude/skills/evdb-dev-v2/learned_hints.md)
-          fi
-
-          # Classify TODO_CONTEXT complexity using Haiku (~$0.01 per call)
-          # Haiku reads the spec and decides which model should implement it
-          classify_complexity() {
-            local todo_content="$1"
-            local classify_model="claude-haiku-4-5-20251001"
-            if [ "${{ steps.provider.outputs.provider }}" = "bedrock" ]; then
-              classify_model="us.anthropic.claude-haiku-4-5-v1@bedrock"
-            fi
-
-            # Write prompt to temp file to avoid YAML escaping issues
-            cat > /tmp/classify-prompt.txt <<'CLASSIFY_EOF'
-          You are a complexity classifier for code generation tasks.
-          Read the TODO spec below and reply with ONLY one word.
-          Reply 'sonnet' if the task is straightforward (simple field mapping, basic CRUD, simple predicates, basic SQL upserts).
-          Reply 'opus' if the task requires complex logic (algorithms, simulations, mathematical formulas, multi-step aggregation, weighted calculations, accumulation patterns, complex business rules with many branches).
-          Reply with ONLY 'sonnet' or 'opus'.
-          CLASSIFY_EOF
-            printf "\n---\n%s" "$todo_content" >> /tmp/classify-prompt.txt
-
-            RESULT=$(claude --print --dangerously-skip-permissions \
-              --model "$classify_model" \
-              --max-turns 1 \
-              --output-format text \
-              "$(cat /tmp/classify-prompt.txt)" 2>/dev/null || echo "opus")
-
-            if echo "$RESULT" | grep -qi "sonnet"; then
-              echo "sonnet|haiku_classified"
-            else
-              echo "opus|haiku_classified"
-            fi
-          }
-
-          # One conversation per slice — small context, better caching
-          IFS=',' read -ra SLICE_ARRAY <<< "${{ matrix.slices }}"
-          for SLICE in "${SLICE_ARRAY[@]}"; do
-            echo ""
-            echo "============================================"
-            echo "  Filling: $SLICE"
-            echo "============================================"
-
-            # Resolve lowercase folder name to actual PascalCase directory
-            # Scaffold creates PascalCase dirs (AddLoanToPortfolio) but index uses lowercase (addloantoportfolio)
-            SLICE_DIR=""
-            for candidate in "src/BusinessCapabilities/$CONTEXT/slices/"*/; do
-              base=$(basename "$candidate")
-              if [ "$(echo "$base" | tr '[:upper:]' '[:lower:]')" = "$SLICE" ]; then
-                SLICE_DIR="$base"
-                break
-              fi
-            done
-
-            # Also check endpoints/ for enrichment slices
-            ENDPOINT_DIR=""
-            for candidate in "src/BusinessCapabilities/$CONTEXT/endpoints/"*/; do
-              base=$(basename "$candidate")
-              if [ "$(echo "$base" | tr '[:upper:]' '[:lower:]')" = "$SLICE" ]; then
-                ENDPOINT_DIR="$base"
-                break
-              fi
-            done
-
-            if [ -z "$SLICE_DIR" ] && [ -z "$ENDPOINT_DIR" ]; then
-              echo "  SKIP: No directory found for $SLICE"
-              echo "0,0,0,0" > "/tmp/slice-stats-$SLICE.txt"
-              continue
-            fi
-
-            echo "  Resolved: slices/$SLICE_DIR endpoints/$ENDPOINT_DIR"
-
-            # Find TODO_CONTEXT.md (slices/ or endpoints/)
-            TODO_CONTENT=""
-            TODO_FILE=""
-            for dir in "src/BusinessCapabilities/$CONTEXT/slices/$SLICE_DIR" \
-                       "src/BusinessCapabilities/$CONTEXT/endpoints/$ENDPOINT_DIR"; do
-              if [ -n "$(basename "$dir")" ] && [ -f "$dir/TODO_CONTEXT.md" ]; then
-                TODO_CONTENT=$(cat "$dir/TODO_CONTEXT.md")
-                TODO_FILE="$dir/TODO_CONTEXT.md"
-                break
-              fi
-            done
-
-            if [ -z "$TODO_CONTENT" ]; then
-              echo "  SKIP: No TODO_CONTEXT.md found"
-              echo "0,0,0,0" > "/tmp/slice-stats-$SLICE.txt"
-              continue
-            fi
-
-            echo "  Found: $TODO_FILE"
-
-            # Classify complexity and pick model
-            if [ "$MODEL_TIER" = "auto" ]; then
-              CLASSIFICATION=$(classify_complexity "$TODO_CONTENT")
-              SLICE_MODEL=$(echo "$CLASSIFICATION" | cut -d'|' -f1)
-              SLICE_METHOD=$(echo "$CLASSIFICATION" | cut -d'|' -f2)
-              echo "  Complexity: $SLICE_METHOD → $SLICE_MODEL"
-
-              if [ "$SLICE_MODEL" = "opus" ]; then
-                MODEL_FLAG=""
-                [ -n "$OPUS_MODEL" ] && MODEL_FLAG="--model $OPUS_MODEL"
-                MAX_TURNS=20
-                MAX_BUDGET="2.00"
-              else
-                MODEL_FLAG="--model $SONNET_MODEL"
-                MAX_TURNS=16
-                MAX_BUDGET="0.75"
-              fi
-            elif [ "$MODEL_TIER" = "sonnet" ]; then
-              MODEL_FLAG="--model $SONNET_MODEL"
-              MAX_TURNS=12
-              MAX_BUDGET="0.75"
-              echo "  Model: sonnet (forced)"
-            else
-              MODEL_FLAG=""
-              [ -n "$OPUS_MODEL" ] && MODEL_FLAG="--model $OPUS_MODEL"
-              MAX_TURNS=12
-              MAX_BUDGET="2.00"
-              echo "  Model: opus (forced)"
-            fi
-
-            # Find the test file
-            TEST_CMD="echo 'no test found'"
-            for tf in "src/BusinessCapabilities/$CONTEXT/slices/$SLICE_DIR/tests/command.slice.test.ts" \
-                      "src/BusinessCapabilities/$CONTEXT/slices/$SLICE_DIR/tests/projection.test.ts" \
-                      "src/BusinessCapabilities/$CONTEXT/endpoints/$ENDPOINT_DIR/tests/enrichment.test.ts"; do
-              if [ -f "$tf" ]; then
-                TEST_CMD="node --import tsx --test $tf"
-                break
-              fi
-            done
-
-            # Build a direct, self-contained prompt — no file reading needed
-            PROMPT=$(cat <<'PROMPT_HEADER'
-          You are filling TODO placeholders in an event-sourced TypeScript codebase (eventualize-js/evdb).
-
-          ## Key Conventions
-          - Pure handlers: commandHandler.ts NEVER imports storage, I/O, or time. Only stream.appendEvent*().
-          - appendEvent syntax: stream.appendEventMyEvent({ field1, field2 }) — plain payload, no generics.
-          - All relative imports use .js extension even for .ts source files.
-          - View state: read from stream.views.SliceStateMySlice.
-          - GWTS predicates: each spec branch returns a named predicate matching the spec description.
-          - Computed fields (timestamps, generated IDs) belong in endpoints only, never in pure handlers.
-
-          PROMPT_HEADER
-          )
-
-            # Append dynamic content
-            PROMPT="$PROMPT
-          ## Learned Hints
-          $HINTS
-
-          ## Spec & TODO Context
-          $TODO_CONTENT
-
-          ## Instructions
-          1. Read each file listed under 'Files with TODOs' in the spec above.
-          2. Replace ALL TODO/placeholder stubs with real business logic per the spec.
-             - gwts.ts: replace return false with real predicate conditions.
-             - commandHandler.ts: fill branching logic, reason strings, computed values.
-             - enrichment.ts: implement enrich() per Backend Prompts section.
-             - projection index.ts: replace generic UPSERT with proper field-specific SQL.
-             - tests: verify event fields match spec, fix test data, add edge cases.
-          3. Run the test: $TEST_CMD
-          4. If tests fail, read the error, fix the code, re-run until green.
-
-          Do NOT read SKILL.md or any reference files. Everything you need is above.
-          Do NOT run evdb-diff, evdb-scaffold, or scan sessions.
-          Do NOT read files outside 'Files with TODOs'."
-
-            claude --print --dangerously-skip-permissions \
-              --output-format json \
-              --exclude-dynamic-system-prompt-sections \
-              --max-budget-usd "$MAX_BUDGET" \
-              $MODEL_FLAG \
-              --max-turns "$MAX_TURNS" \
-              "$PROMPT" > "/tmp/claude-$SLICE.json" 2>&1 || true
-
-            python3 .ci/extract_claude_stats.py "/tmp/claude-$SLICE.json" --slice-name "$SLICE" || true
-
-          done
-
-          python3 .ci/aggregate_stats.py --slices "${{ matrix.slices }}" || true
-
-          END_TIME=$(date +%s)
-          DURATION=$((END_TIME - START_TIME))
-          echo "duration=$((DURATION / 60))m $((DURATION % 60))s" >> "$GITHUB_OUTPUT"
-
-          # Set outputs from stats file
-          if [ -f /tmp/claude-stats.txt ]; then
-            while IFS='=' read -r key val; do
-              echo "$key=$val" >> "$GITHUB_OUTPUT"
-            done < /tmp/claude-stats.txt
-          fi
-
-      - name: "💰 Check cost guardrail"
-        if: always() && steps.claude.outputs.cost != ''
-        run: |
-          COST="${{ steps.claude.outputs.cost }}"
-          if [ -n "$COST" ] && (( $(echo "$COST > 5.00" | bc -l 2>/dev/null || echo 0) )); then
-            echo "::warning::Cost exceeded \$5 threshold: \$$COST for context ${{ matrix.context }}"
-          fi
-
-      # ── Verify + Test (initial pass) ──────────────────────────────
-      - name: "🔄 Normalize"
-        run: |
-          python3 .claude/skills/evdb-normalize/scripts/normalize_slice.py \
-            --root . --all 2>/dev/null || true
-
-      - name: "🔍 Verify contracts"
-        id: verify
-        run: |
-          # JSON output for downstream steps (always write the file)
-          python3 .claude/skills/evdb-verify/scripts/verify_slice.py \
-            --all --root . --json > /tmp/verify-results.json 2>/dev/null || echo '{"violations":[]}' > /tmp/verify-results.json
-
-          # Human-readable summary — this determines step outcome (no || true)
-          python3 .claude/skills/evdb-verify/scripts/verify_slice.py \
-            --all --root .
-        continue-on-error: true
-
-      - name: "🧪 Run tests"
-        id: tests
-        run: |
-          # Run only tests for this context, not all slices
-          find "src/BusinessCapabilities/${{ matrix.context_pascal }}" \
-            -name "*.test.ts" -type f | sort | while read -r tf; do
-            echo "--- Running: $tf ---"
-            node --import tsx --test "$tf" || exit 1
-          done 2>&1 | tee /tmp/test-output.txt
-        continue-on-error: true
-
-      # ── Self-Healing Pipeline ────────────────────────────────────
-      - name: "🏷️ Classify failures"
-        id: classify
-        if: steps.verify.outcome == 'failure' || steps.tests.outcome == 'failure'
-        run: |
-          python3 .claude/scripts/classify_failure.py \
-            --verify /tmp/verify-results.json \
-            --test-output /tmp/test-output.txt \
-            --context "${{ matrix.context_pascal }}" \
-            > /tmp/classification.json
-
-          echo "::group::Classification Results"
-          cat /tmp/classification.json
-          echo "::endgroup::"
-
-          # Set output for downstream steps
-          TOTAL=$(python3 -c "import json; print(json.load(open('/tmp/classification.json'))['total_failures'])")
-          echo "total_failures=$TOTAL" >> "$GITHUB_OUTPUT"
-
-      - name: "🔧 Self-heal repairs"
-        id: repair
-        if: steps.classify.outputs.total_failures != '0' && steps.classify.outputs.total_failures != ''
-        env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_REGION: ${{ secrets.AWS_REGION || 'us-east-1' }}
-        run: |
-          python3 .claude/scripts/repair_orchestrator.py \
-            --classification /tmp/classification.json \
+          python3 .ci/stages/implement_slice.py \
             --root . \
             --context "${{ matrix.context_pascal }}" \
-            > /tmp/repair-results.json
-
-          echo "::group::Repair Results"
-          cat /tmp/repair-results.json
-          echo "::endgroup::"
-
-          REPAIRED=$(python3 -c "import json; print(json.load(open('/tmp/repair-results.json'))['total_repaired'])")
-          echo "total_repaired=$REPAIRED" >> "$GITHUB_OUTPUT"
-
-      - name: "🔍 Re-verify"
-        id: reverify
-        if: steps.repair.outputs.total_repaired != '0' && steps.repair.outputs.total_repaired != ''
-        run: |
-          python3 .claude/skills/evdb-normalize/scripts/normalize_slice.py \
-            --root . --all 2>/dev/null || true
-          python3 .claude/skills/evdb-verify/scripts/verify_slice.py \
-            --all --root . --json > /tmp/verify-results.json 2>/dev/null || true
-        continue-on-error: true
-
-      - name: "🧪 Re-run tests"
-        id: retests
-        if: steps.repair.outputs.total_repaired != '0' && steps.repair.outputs.total_repaired != ''
-        run: |
-          find "src/BusinessCapabilities/${{ matrix.context_pascal }}" \
-            -name "*.test.ts" -type f | sort | while read -r tf; do
-            echo "--- Running: $tf ---"
-            node --import tsx --test "$tf" || exit 1
-          done 2>&1 | tee /tmp/test-output.txt
-        continue-on-error: true
-
-      # ── Confidence Scoring ───────────────────────────────────────
-      - name: "📊 Score confidence"
-        id: confidence
-        if: always()
-        run: |
-          # Determine final test status (use re-test if repair ran, else initial)
-          if [ "${{ steps.retests.outcome }}" = "success" ]; then
-            TEST_PASSED=true
-          elif [ "${{ steps.retests.outcome }}" = "failure" ]; then
-            TEST_PASSED=false
-          elif [ "${{ steps.tests.outcome }}" = "success" ]; then
-            TEST_PASSED=true
-          else
-            TEST_PASSED=false
-          fi
-
-          EXTRA_ARGS=""
-          if [ -f /tmp/classification.json ]; then
-            EXTRA_ARGS="$EXTRA_ARGS --classification /tmp/classification.json"
-          fi
-          if [ -f /tmp/repair-results.json ]; then
-            EXTRA_ARGS="$EXTRA_ARGS --repair /tmp/repair-results.json"
-          fi
-          if [ -f /tmp/claude-stats.txt ]; then
-            EXTRA_ARGS="$EXTRA_ARGS --claude-stats /tmp/claude-stats.txt"
-          fi
-
-          python3 .claude/scripts/confidence_scorer.py \
-            --verify /tmp/verify-results.json \
-            --test-passed "$TEST_PASSED" \
             --slices "${{ matrix.slices }}" \
-            $EXTRA_ARGS \
-            > /tmp/confidence.json
+            --decisions /tmp/decisions.json \
+            --provider "${{ inputs.provider || 'anthropic' }}"
 
-          echo "::group::Confidence Scores"
-          cat /tmp/confidence.json
-          echo "::endgroup::"
+      - name: Cost guardrail
+        if: always() && steps.implement.outputs.cost != ''
+        run: |
+          COST="${{ steps.implement.outputs.cost }}"
+          if [ -n "$COST" ] && (( $(echo "$COST > 5.00" | bc -l 2>/dev/null || echo 0) )); then
+            echo "::warning::Cost \$$COST exceeds \$5 threshold"
+          fi
 
-          python3 .ci/extract_confidence.py 2>/dev/null || true
+      # ── Phase 2: Verify + repair ────────────────────────────
+      - name: "🔍 Verify + test"
+        id: verify
+        env:
+          GITHUB_RUN_ID: ${{ github.run_id }}
+        run: |
+          python3 .ci/stages/verify_and_test.py \
+            --root . --context "${{ matrix.context_pascal }}"
 
-      # ── Metrics Collection ───────────────────────────────────────
+      - name: "🔧 Classify + repair"
+        id: repair
+        if: steps.verify.outputs.passed != 'true'
+        env:
+          ANTHROPIC_API_KEY:     ${{ secrets.ANTHROPIC_API_KEY }}
+          AWS_ACCESS_KEY_ID:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION:            ${{ secrets.AWS_REGION || 'us-east-1' }}
+          GITHUB_RUN_ID:         ${{ github.run_id }}
+        run: |
+          python3 .ci/stages/classify.py \
+            --verify /tmp/verify-results.json \
+            --test-output /tmp/test-output.txt \
+            --context "${{ matrix.context_pascal }}"
+
+          python3 .ci/stages/repair.py \
+            --classification /tmp/classification.json \
+            --decisions /tmp/decisions.json \
+            --root . \
+            --context "${{ matrix.context_pascal }}" \
+            --provider "${{ inputs.provider || 'anthropic' }}"
+
+      # ── Phase 3: Assess + deliver ───────────────────────────
+      - name: "📊 Score confidence"
+        if: always()
+        id: confidence
+        env:
+          GITHUB_RUN_ID: ${{ github.run_id }}
+        run: |
+          python3 .ci/stages/score_confidence.py \
+            --verify /tmp/verify-results.json \
+            --test-passed "${{ steps.verify.outputs.test_passed || 'false' }}" \
+            --slices "${{ matrix.slices }}" \
+            --classification /tmp/classification.json \
+            --repair /tmp/repair-results.json \
+            --claude-stats /tmp/claude-stats.json
+
       - name: "📈 Collect metrics"
         if: always()
         run: |
-          # Determine final test status
-          if [ "${{ steps.retests.outcome }}" = "success" ]; then
-            TEST_PASSED=true
-          elif [ "${{ steps.retests.outcome }}" = "failure" ]; then
-            TEST_PASSED=false
-          elif [ "${{ steps.tests.outcome }}" = "success" ]; then
-            TEST_PASSED=true
-          else
-            TEST_PASSED=false
-          fi
-
-          EXTRA_ARGS=""
-          if [ -f /tmp/classification.json ]; then
-            EXTRA_ARGS="$EXTRA_ARGS --classification /tmp/classification.json"
-          fi
-          if [ -f /tmp/repair-results.json ]; then
-            EXTRA_ARGS="$EXTRA_ARGS --repair /tmp/repair-results.json"
-          fi
-          if [ -f /tmp/confidence.json ]; then
-            EXTRA_ARGS="$EXTRA_ARGS --confidence /tmp/confidence.json"
-          fi
-          if [ -f /tmp/claude-stats.txt ]; then
-            EXTRA_ARGS="$EXTRA_ARGS --claude-stats /tmp/claude-stats.txt"
-          fi
-
-          python3 .claude/scripts/metrics_collector.py \
+          python3 .ci/stages/collect_metrics.py \
             --context "${{ matrix.context_pascal }}" \
             --slices "${{ matrix.slices }}" \
             --workflow-run-id "${{ github.run_id }}" \
-            --provider "${{ github.event.inputs.provider || 'anthropic' }}" \
-            --duration "${{ steps.claude.outputs.duration }}" \
+            --provider "${{ inputs.provider || 'anthropic' }}" \
+            --duration "${{ steps.implement.outputs.duration }}" \
             --root . \
             --verify /tmp/verify-results.json \
-            --test-passed "$TEST_PASSED" \
-            $EXTRA_ARGS \
-            --output /tmp/slice-metrics.jsonl
+            --test-passed "${{ steps.verify.outputs.test_passed || 'false' }}" \
+            --classification /tmp/classification.json \
+            --repair /tmp/repair-results.json \
+            --confidence /tmp/confidence.json \
+            --claude-stats /tmp/claude-stats.json \
+            --output /tmp/slice-metrics.jsonl \
+          2>/dev/null || true
 
-      - name: Upload metrics artifact
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: slice-metrics-${{ matrix.context_pascal }}
-          path: /tmp/slice-metrics.jsonl
-          retention-days: 30
-
-      # ── Write job summary ────────────────────────────────────────
-      - name: "📝 Write summary"
+      - name: "📝 Job summary"
         if: always()
         run: |
-          python3 .ci/write_summary.py \
+          python3 .ci/render/job_summary.py \
             --summary-path "$GITHUB_STEP_SUMMARY" \
             --context "${{ matrix.context_pascal }}" \
-            --duration "${{ steps.claude.outputs.duration }}" \
-            --cost "${{ steps.claude.outputs.cost }}" \
-            --turns "${{ steps.claude.outputs.num_turns }}" \
-            --repaired "${{ steps.repair.outputs.total_repaired || '0' }}"
+            --duration "${{ steps.implement.outputs.duration }}" \
+            --cost "${{ steps.implement.outputs.cost }}" \
+            --turns "${{ steps.implement.outputs.num_turns }}" \
+            --repaired "${{ steps.repair.outputs.total_repaired || '0' }}" \
+            --max-repair-level "${{ steps.repair.outputs.max_repair_level || '0' }}"
 
-      # ── Clean up + Commit + PR ───────────────────────────────────
-      - name: "🧹 Clean up"
+      # ── Clean + commit + PR ─────────────────────────────────
+      - name: Clean up
         run: |
-          find "src/BusinessCapabilities/${{ matrix.context_pascal }}/" -name "TODO_CONTEXT.md" -delete 2>/dev/null || true
-          # Remove ephemeral event model files — config.json and split output are input, not output
+          find "src/BusinessCapabilities/${{ matrix.context_pascal }}/" \
+            -name "TODO_CONTEXT.md" -delete 2>/dev/null || true
           rm -rf .eventmodel/ .eventmodel2/
 
-      - name: "💾 Commit business logic"
+      - name: Commit business logic
         run: |
           git add "src/BusinessCapabilities/${{ matrix.context_pascal }}/" || true
           git add ".implementation-hashes/" || true
-          # Stage removal of ephemeral event model files
           git rm -rf --cached .eventmodel/ .eventmodel2/ 2>/dev/null || true
-
-          if git diff --cached --quiet; then
-            echo "No business logic changes to commit"
-          else
+          if ! git diff --cached --quiet; then
             git commit -m "feat(${{ matrix.context_pascal }}): implement slice business logic
 
           Slices: ${{ matrix.slices }}
@@ -670,59 +305,102 @@ jobs:
           Co-Authored-By: Claude Code <noreply@anthropic.com>"
           fi
 
-      - name: "🚀 Push + Create PR"
+      - name: "🚀 Push + create PR"
         if: steps.confidence.outputs.worst_band != 'BLOCKED'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Warn but still push for LOW confidence
-          if [ "${{ steps.confidence.outputs.worst_band }}" = "LOW" ]; then
-            echo "::warning::LOW confidence — PR will be created as draft"
+          DRAFT_FLAG=""
+          WORST="${{ steps.confidence.outputs.worst_band }}"
+          PR_MODE="${{ matrix.pr_mode }}"
+          if [ "$WORST" = "LOW" ] || [ "$WORST" = "MEDIUM" ] || [ "$PR_MODE" = "draft" ]; then
+            DRAFT_FLAG="--draft"
           fi
 
           git push --force-with-lease -u origin "${{ matrix.branch }}"
 
-          # Check if PR already exists for this branch
-          EXISTING_PR=$(gh pr list --head "${{ matrix.branch }}" --json number -q '.[0].number' 2>/dev/null || echo "")
-          if [ -n "$EXISTING_PR" ]; then
-            echo "PR #$EXISTING_PR already exists — branch updated"
-            echo "pr_url=https://github.com/${{ github.repository }}/pull/$EXISTING_PR" >> "$GITHUB_OUTPUT"
+          EXISTING=$(gh pr list --head "${{ matrix.branch }}" --json number -q '.[0].number' 2>/dev/null || echo "")
+          if [ -n "$EXISTING" ]; then
+            echo "PR #$EXISTING already exists — branch updated"
             exit 0
           fi
 
-          # Create as draft if LOW confidence
-          DRAFT_FLAG=""
-          if [ "${{ steps.confidence.outputs.worst_band }}" = "LOW" ]; then
-            DRAFT_FLAG="--draft"
-          fi
-
-          PR_BODY=$(python3 .ci/build_pr_body.py \
+          PR_BODY=$(python3 .ci/render/pr_body.py \
             --context "${{ matrix.context }}" \
             --slices "${{ matrix.slices }}" \
             --base-branch "${{ matrix.base_branch }}")
 
-          PR_URL=$(gh pr create \
-            $DRAFT_FLAG \
+          gh pr create $DRAFT_FLAG \
             --title "feat(${{ matrix.context_pascal }}): implement planned slices — $(date +%Y%m%d-%H%M)" \
             --body "$PR_BODY" \
-            --base "${{ matrix.base_branch }}")
+            --base "${{ matrix.base_branch }}"
 
-          echo "pr_url=$PR_URL" >> "$GITHUB_OUTPUT"
-
-      - name: "💬 Add stats comment"
+      - name: "💬 Stats comment"
         if: always() && steps.confidence.outputs.worst_band != 'BLOCKED'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          COMMENT=$(python3 .ci/build_pr_comment.py \
+          COMMENT=$(python3 .ci/render/pr_comment.py \
             --context "${{ matrix.context }}" \
             --slices "${{ matrix.slices }}" \
-            --duration "${{ steps.claude.outputs.duration }}" \
+            --duration "${{ steps.implement.outputs.duration }}" \
             --run-id "${{ github.run_id }}" \
             --run-number "${{ github.run_number }}" \
             --repo "${{ github.repository }}" \
             --worst-band "${{ steps.confidence.outputs.worst_band }}" \
             --avg-score "${{ steps.confidence.outputs.avg_score }}" \
             --repaired "${{ steps.repair.outputs.total_repaired || '0' }}")
-
           gh pr comment "${{ matrix.branch }}" --body "$COMMENT"
+
+      - name: Create issue (L4 escalation)
+        if: steps.repair.outputs.human_escalation == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh issue create \
+            --title "Manual repair needed: ${{ matrix.context_pascal }}" \
+            --body "Repair ladder exhausted (L4). See run #${{ github.run_number }}." \
+            --label "codegen-escalation"
+
+      - name: Upload run artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: run-${{ matrix.context_pascal }}
+          path: |
+            /tmp/slice-metrics.jsonl
+            /tmp/confidence.json
+            /tmp/repair-results.json
+            /tmp/risk-scores.json
+            /tmp/decisions.json
+            /tmp/audit.jsonl
+          retention-days: 90
+
+  # ═══════════════════════════════════════════════════════════════
+  # Phase 4: Aggregate — seal audit across all contexts
+  # ═══════════════════════════════════════════════════════════════
+  aggregate:
+    needs: [plan, codegen]
+    if: always() && needs.plan.outputs.has_contexts == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ./.github/actions/setup-env
+
+      - name: Download all run artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: run-*
+          merge-multiple: true
+
+      - name: Finalize audit
+        run: |
+          python3 .ci/stages/finalize_audit.py \
+            --run-id "${{ github.run_id }}"
+
+      - name: Upload sealed audit
+        uses: actions/upload-artifact@v4
+        with:
+          name: audit-${{ github.run_id }}
+          path: /tmp/audit-bundle.json
+          retention-days: 90
