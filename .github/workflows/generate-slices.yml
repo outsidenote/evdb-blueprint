@@ -419,11 +419,11 @@ jobs:
               if [ "$SLICE_MODEL" = "opus" ]; then
                 MODEL_FLAG=""
                 [ -n "$OPUS_MODEL" ] && MODEL_FLAG="--model $OPUS_MODEL"
-                MAX_TURNS=12
+                MAX_TURNS=20
                 MAX_BUDGET="2.00"
               else
                 MODEL_FLAG="--model $SONNET_MODEL"
-                MAX_TURNS=12
+                MAX_TURNS=16
                 MAX_BUDGET="0.75"
               fi
             elif [ "$MODEL_TIER" = "sonnet" ]; then
