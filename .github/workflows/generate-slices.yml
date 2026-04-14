@@ -190,6 +190,27 @@ jobs:
       - name: Install Claude Code
         run: npm install -g @anthropic-ai/claude-code@2.1.105
 
+      # ── Load prior learning ─────────────────────────────────
+      - name: "📚 Load prior discoveries"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Download learned discoveries from the most recent successful run
+          # so hint retrieval can use patterns from prior implementations
+          LATEST_RUN=$(gh run list --workflow generate-slices.yml --status completed --conclusion success --limit 1 --json databaseId --jq '.[0].databaseId' 2>/dev/null || echo "")
+          if [ -n "$LATEST_RUN" ]; then
+            gh run download "$LATEST_RUN" --name "run-${{ matrix.context_pascal }}" --dir /tmp/prior-run 2>/dev/null || true
+            if [ -f "/tmp/prior-run/learned-discoveries.json" ]; then
+              cp /tmp/prior-run/learned-discoveries.json /tmp/learned-discoveries.json
+              COUNT=$(python3 -c "import json; d=json.load(open('/tmp/learned-discoveries.json')); print(d.get('record_count', len(d.get('records', []))))" 2>/dev/null || echo "0")
+              echo "  Loaded $COUNT discovery records from run $LATEST_RUN"
+            else
+              echo "  No prior discoveries found"
+            fi
+          else
+            echo "  No prior successful runs found"
+          fi
+
       # ── Phase 1: AI implementation ──────────────────────────
       - name: "🧠 Implement slices"
         id: implement
@@ -295,13 +316,41 @@ jobs:
 
       - name: "🧠 Learn from success"
         if: steps.verify.outputs.passed == 'true' || steps.repair.outputs.total_repaired != '0'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          # Download prior discoveries from the most recent successful run (if any)
+          # This enables cross-run deduplication and reuse tracking
+          PRIOR_FLAG=""
+          PRIOR_PATH="/tmp/prior-discoveries.json"
+          LATEST_RUN=$(gh run list --workflow generate-slices.yml --status completed --conclusion success --limit 1 --json databaseId --jq '.[0].databaseId' 2>/dev/null || echo "")
+          if [ -n "$LATEST_RUN" ]; then
+            gh run download "$LATEST_RUN" --name "run-${{ matrix.context_pascal }}" --dir /tmp/prior-run 2>/dev/null || true
+            if [ -f "/tmp/prior-run/learned-discoveries.json" ]; then
+              cp /tmp/prior-run/learned-discoveries.json "$PRIOR_PATH"
+              PRIOR_FLAG="--prior-discoveries $PRIOR_PATH"
+              echo "  Using prior discoveries from run $LATEST_RUN"
+            fi
+          fi
+
           python3 .ci/stages/learn.py \
             --root . \
             --context "${{ matrix.context_pascal }}" \
             --slices "${{ matrix.slices }}" \
             --verify-passed "${{ steps.verify.outputs.verify_passed || 'false' }}" \
-            --test-passed "${{ steps.verify.outputs.test_passed || 'false' }}"
+            --test-passed "${{ steps.verify.outputs.test_passed || 'false' }}" \
+            $PRIOR_FLAG
+
+      - name: "📌 Stamp implementation hashes"
+        if: steps.verify.outputs.passed == 'true' || steps.repair.outputs.total_repaired != '0'
+        run: |
+          STAMP_SCRIPT=".claude/skills/evdb-dev-v2/scripts/stamp_hash.py"
+          if [ -f "$STAMP_SCRIPT" ]; then
+            IFS=',' read -ra SLICE_ARRAY <<< "${{ matrix.slices }}"
+            for SLICE in "${SLICE_ARRAY[@]}"; do
+              python3 "$STAMP_SCRIPT" --root . --slice "$SLICE" 2>/dev/null || true
+            done
+          fi
 
       # ── Clean + commit + PR ─────────────────────────────────
       - name: Clean up
@@ -416,6 +465,7 @@ jobs:
             /tmp/decisions.json
             /tmp/audit.jsonl
             /tmp/learned-discoveries.json
+            /tmp/learned-discoveries.updated.json
           retention-days: 90
 
   # ═══════════════════════════════════════════════════════════════
