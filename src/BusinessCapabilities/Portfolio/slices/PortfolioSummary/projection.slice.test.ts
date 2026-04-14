@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import { ProjectionSliceTester } from "#abstractions/slices/ProjectionSliceTester.js";
 import { portfolioSummarySlice } from "./index.js";
 
@@ -6,42 +5,97 @@ ProjectionSliceTester.run(portfolioSummarySlice, [
   {
     description: "LoanRiskAssessed: first event creates initial state",
     run: () => {
-      // TODO: create test data and fill expected state
-      // The payload should contain the fields from the LoanRiskAssessed event,
-      // NOT the readmodel fields. Check the event schema in TODO_CONTEXT.md.
-      // Key should match how the projection handler builds it.
-      const key = randomUUID();
+      const portfolioId = "PORT-01";
       return {
         given: [
-          { messageType: "LoanRiskAssessed", payload: {
-            // TODO: fill with LoanRiskAssessed event fields
-          } },
+          {
+            messageType: "LoanRiskAssessed",
+            payload: {
+              portfolioId,
+              loanAmount: 10000,
+              capitalRequirement: 800,
+              expectedLoss: 200,
+              riskWeight: 0.20,
+              probabilityOfDefault: 0.02,
+            },
+          },
         ],
-        then: [{ key, expectedState: {
-          // TODO: expected stored state after first event
-        } }],
+        then: [
+          {
+            key: portfolioId,
+            expectedState: {
+              portfolioId,
+              totalLoans: 1,
+              totalExposure: 10000,
+              totalCapitalRequirement: 800,
+              totalExpectedLoss: 200,
+              totalRiskWeightedAmount: 2000,
+              totalPDWeightedAmount: 200,
+              averageRiskWeight: 0.20,
+              averageProbabilityOfDefault: 0.02,
+              averageRating: "AA",
+              riskBand: "Investment Grade",
+              worstRiskWeight: 0.20,
+              worstRating: "AA",
+            },
+          },
+        ],
       };
     },
   },
   {
     description: "two LoanRiskAssessed events: fields accumulate correctly",
     run: () => {
-      // Spec: Aggregates per portfolio. Each LoanRiskAssessed increments totalLoans by 1, adds loanAmount to totalExposure, adds capit...
-      // TODO: send two events with DIFFERENT numeric values,
-      // then assert the accumulated/averaged result.
-      const key = randomUUID();
+      // Event 1: riskWeight=0.20, loanAmount=10000 → totalRiskWeightedAmount=2000
+      // Event 2: riskWeight=0.40, loanAmount=10000 → totalRiskWeightedAmount+=4000 → total=6000
+      // averageRiskWeight = 6000 / 20000 = 0.30 → 'A'
+      // worstRiskWeight = GREATEST(0.20, 0.40) = 0.40 → worstRating='BBB'
+      const portfolioId = "PORT-02";
       return {
         given: [
-          { messageType: "LoanRiskAssessed", payload: {
-            // TODO: first event payload
-          } },
-          { messageType: "LoanRiskAssessed", payload: {
-            // TODO: second event payload (different numbers)
-          } },
+          {
+            messageType: "LoanRiskAssessed",
+            payload: {
+              portfolioId,
+              loanAmount: 10000,
+              capitalRequirement: 800,
+              expectedLoss: 200,
+              riskWeight: 0.20,
+              probabilityOfDefault: 0.02,
+            },
+          },
+          {
+            messageType: "LoanRiskAssessed",
+            payload: {
+              portfolioId,
+              loanAmount: 10000,
+              capitalRequirement: 600,
+              expectedLoss: 100,
+              riskWeight: 0.40,
+              probabilityOfDefault: 0.04,
+            },
+          },
         ],
-        then: [{ key, expectedState: {
-          // TODO: expected accumulated state after two events
-        } }],
+        then: [
+          {
+            key: portfolioId,
+            expectedState: {
+              portfolioId,
+              totalLoans: 2,
+              totalExposure: 20000,
+              totalCapitalRequirement: 1400,
+              totalExpectedLoss: 300,
+              totalRiskWeightedAmount: 6000,
+              totalPDWeightedAmount: 600,
+              averageRiskWeight: 0.30,
+              averageProbabilityOfDefault: 0.03,
+              averageRating: "A",
+              riskBand: "Investment Grade",
+              worstRiskWeight: 0.40,
+              worstRating: "BBB",
+            },
+          },
+        ],
       };
     },
   },

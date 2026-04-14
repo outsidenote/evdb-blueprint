@@ -32,7 +32,27 @@ describe("Projection: PortfolioLoanDetails", () => {
 
     assert.ok(result.length > 0, 'should have at least one SQL statement');
     assert.ok(result[0].sql.length > 0, 'SQL should not be empty');
-    assert.ok(result[0].params.length > 0, 'params should not be empty');
+
+    const params = result[0].params;
+    assert.strictEqual(params[0], "PortfolioLoanDetails", 'params[0] should be projectionName');
+    assert.strictEqual(params[1], "test-portfolioId-001:test-loanId-001", 'params[1] should be composite key');
+    assert.strictEqual(params[2], payload.portfolioId, 'params[2] should be portfolioId');
+    assert.strictEqual(params[3], payload.loanId, 'params[3] should be loanId');
+    assert.deepStrictEqual(params[4], payload.acquisitionDate, 'params[4] should be acquisitionDate');
+    assert.strictEqual(params[5], payload.borrowerName, 'params[5] should be borrowerName');
+    assert.strictEqual(params[6], payload.capitalRequirement, 'params[6] should be capitalRequirement');
+    assert.strictEqual(params[7], payload.creditRating, 'params[7] should be creditRating');
+    assert.strictEqual(params[8], payload.expectedLoss, 'params[8] should be expectedLoss');
+    assert.strictEqual(params[9], payload.interestRate, 'params[9] should be interestRate');
+    assert.strictEqual(params[10], payload.loanAmount, 'params[10] should be loanAmount');
+    assert.deepStrictEqual(params[11], payload.maturityDate, 'params[11] should be maturityDate');
+    assert.strictEqual(params[12], payload.probabilityOfDefault, 'params[12] should be probabilityOfDefault');
+    assert.strictEqual(params[13], payload.riskBand, 'params[13] should be riskBand');
+    assert.strictEqual(params[14], payload.expectedPortfolioLoss, 'params[14] should be expectedPortfolioLoss');
+    assert.strictEqual(params[15], payload.riskNarrative, 'params[15] should be riskNarrative');
+    assert.strictEqual(params[16], payload.simulatedDefaultRate, 'params[16] should be simulatedDefaultRate');
+    assert.strictEqual(params[17], payload.tailRiskLoss, 'params[17] should be tailRiskLoss');
+    assert.strictEqual(params[18], payload.worstCaseLoss, 'params[18] should be worstCaseLoss');
   });
 
 });
