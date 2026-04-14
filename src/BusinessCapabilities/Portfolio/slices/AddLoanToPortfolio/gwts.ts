@@ -6,6 +6,10 @@ import type { SliceStateAddLoanToPortfolioViewState } from "#BusinessCapabilitie
  * Each function maps 1:1 to a named spec in the event model diagram.
  */
 
+// Standard credit rating scale, ordered from best (index 0) to worst (highest index).
+// Unknown/invalid ratings get indexOf() === -1, treated as better than any known rating.
+const RATING_ORDER = ["AAA", "AA", "A", "BBB", "BB", "B", "CCC", "CC", "C", "D"];
+
 /**
  * spec: amountLessThanZero
  * GIVEN state fields: none
@@ -13,7 +17,7 @@ import type { SliceStateAddLoanToPortfolioViewState } from "#BusinessCapabilitie
  * THEN: LoanRejectedFromPortfolio
  */
 export const amountLessThanZero = (state: SliceStateAddLoanToPortfolioViewState, command: AddLoanToPortfolio): boolean =>
-  false; // TODO: return boolean comparing state.field vs command.portfolioId
+  command.loanAmount <= 0;
 
 /**
  * spec: portfolioRatingBreached
@@ -21,8 +25,13 @@ export const amountLessThanZero = (state: SliceStateAddLoanToPortfolioViewState,
  * WHEN command fields: portfolioId, acquisitionDate, borrowerName, creditRating, interestRate, loanAmount, loanId, maturityDate
  * THEN: LoanRejectedFromPortfolio
  */
-export const portfolioRatingBreached = (state: SliceStateAddLoanToPortfolioViewState, command: AddLoanToPortfolio): boolean =>
-  false; // TODO: return boolean comparing state.portfolioId vs command.portfolioId
+export const portfolioRatingBreached = (state: SliceStateAddLoanToPortfolioViewState, command: AddLoanToPortfolio): boolean => {
+  if (command.loanAmount <= 0) return false;
+  if (!state.portfolioId) return false;
+  const stateRatingIdx = RATING_ORDER.indexOf(state.creditRating);
+  const commandRatingIdx = RATING_ORDER.indexOf(command.creditRating);
+  return commandRatingIdx > stateRatingIdx;
+};
 
 /**
  * spec: portfolioRatingMaintained
@@ -31,4 +40,4 @@ export const portfolioRatingBreached = (state: SliceStateAddLoanToPortfolioViewS
  * THEN: LoanAddedToPortfolio
  */
 export const portfolioRatingMaintained = (state: SliceStateAddLoanToPortfolioViewState, command: AddLoanToPortfolio): boolean =>
-  false; // TODO: return boolean comparing state.portfolioId vs command.portfolioId
+  command.loanAmount > 0 && !portfolioRatingBreached(state, command);

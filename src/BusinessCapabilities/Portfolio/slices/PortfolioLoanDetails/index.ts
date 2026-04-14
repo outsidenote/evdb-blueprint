@@ -40,7 +40,7 @@ export const portfolioLoanDetailsSlice: ProjectionConfig = {
           params: [
             projectionName,
             key,
-            JSON.stringify(p), // TODO: select specific fields to store
+            JSON.stringify(p),
           ],
         },
       ];
