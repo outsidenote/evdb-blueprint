@@ -13,7 +13,7 @@ describe("Projection: PortfolioLoanDetails", () => {
       loanId: "test-loanId-001",
       acquisitionDate: new Date("2025-01-01T11:00:00Z"),
       borrowerName: "test-borrowerName",
-      capitalRequirement: "test-capitalRequirement",
+      capitalRequirement: 1000,
       creditRating: "test-creditRating",
       expectedLoss: 0,
       interestRate: 0,
