@@ -310,6 +310,13 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          # Skip if no commits ahead of base
+          AHEAD=$(git rev-list --count "${{ matrix.base_branch }}".."${{ matrix.branch }}" 2>/dev/null || echo "0")
+          if [ "$AHEAD" = "0" ]; then
+            echo "No commits ahead of ${{ matrix.base_branch }} — skipping PR"
+            exit 0
+          fi
+
           DRAFT_FLAG=""
           WORST="${{ steps.confidence.outputs.worst_band }}"
           PR_MODE="${{ matrix.pr_mode }}"
@@ -340,6 +347,13 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          # Skip if no PR exists for this branch
+          PR_NUM=$(gh pr list --head "${{ matrix.branch }}" --json number -q '.[0].number' 2>/dev/null || echo "")
+          if [ -z "$PR_NUM" ]; then
+            echo "No PR found — skipping comment"
+            exit 0
+          fi
+
           COMMENT=$(python3 .ci/render/pr_comment.py \
             --context "${{ matrix.context }}" \
             --slices "${{ matrix.slices }}" \
