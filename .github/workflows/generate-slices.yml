@@ -22,9 +22,9 @@ on:
         required: false
         default: 'anthropic'
       model:
-        description: 'AI model: auto (routes per slice), opus (all slices), or sonnet (all slices)'
+        description: 'AI model: opus (default) or sonnet (cheaper, faster)'
         required: false
-        default: 'auto'
+        default: 'opus'
 
 permissions:
   contents: write
@@ -71,9 +71,7 @@ jobs:
         run: |
           EM_DIR="${{ github.event.inputs.em_dir }}"
           if [ -z "$EM_DIR" ]; then
-            BEFORE="${{ github.event.before }}"
-            [ "$BEFORE" = "0000000000000000000000000000000000000000" ] && BEFORE=""
-            if git diff --name-only "${BEFORE:-HEAD~1}" HEAD 2>/dev/null | grep -q '.eventmodel2/'; then
+            if git diff --name-only HEAD~1 HEAD 2>/dev/null | grep -q '.eventmodel2/'; then
               EM_DIR=".eventmodel2"
             else
               EM_DIR=".eventmodel"
@@ -106,12 +104,7 @@ jobs:
           print(hashlib.md5(json.dumps(slices, sort_keys=True).encode()).hexdigest())
           ")
 
-            # Use github.event.before for reliable comparison (works with merge commits, multi-commit pushes)
-            BEFORE="${{ github.event.before }}"
-            if [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
-              BEFORE=""
-            fi
-            OLD_HASH=$(git show ${BEFORE:-HEAD~1}:"$CONFIG" 2>/dev/null | python3 -c "
+            OLD_HASH=$(git show HEAD~1:"$CONFIG" 2>/dev/null | python3 -c "
           import json, hashlib, sys
           try:
               data = json.load(sys.stdin)
@@ -274,27 +267,29 @@ jobs:
           fi
 
       - name: "🤖 Install Claude Code"
-        run: npm install -g @anthropic-ai/claude-code@2.1.105
+        run: npm install -g @anthropic-ai/claude-code@latest
 
       - name: "⚙️ Configure AI provider"
         id: provider
         run: |
           PROVIDER="${{ github.event.inputs.provider || 'anthropic' }}"
-          MODEL_TIER="${{ github.event.inputs.model || 'auto' }}"
+          MODEL_TIER="${{ github.event.inputs.model || 'opus' }}"
 
-          echo "model_tier=$MODEL_TIER" >> "$GITHUB_OUTPUT"
-          echo "provider=$PROVIDER" >> "$GITHUB_OUTPUT"
-
-          # For fixed model selection, resolve the model ID now
           if [ "$PROVIDER" = "bedrock" ]; then
-            echo "opus_model=us.anthropic.claude-opus-4-6-v1@bedrock" >> "$GITHUB_OUTPUT"
-            echo "sonnet_model=us.anthropic.claude-sonnet-4-6-v1@bedrock" >> "$GITHUB_OUTPUT"
+            if [ "$MODEL_TIER" = "sonnet" ]; then
+              echo "model=us.anthropic.claude-sonnet-4-6-v1@bedrock" >> "$GITHUB_OUTPUT"
+            else
+              echo "model=us.anthropic.claude-opus-4-6-v1@bedrock" >> "$GITHUB_OUTPUT"
+            fi
+            echo "Using Bedrock provider ($MODEL_TIER)"
           else
-            echo "opus_model=" >> "$GITHUB_OUTPUT"
-            echo "sonnet_model=claude-sonnet-4-6-20250514" >> "$GITHUB_OUTPUT"
+            if [ "$MODEL_TIER" = "sonnet" ]; then
+              echo "model=claude-sonnet-4-6-20250514" >> "$GITHUB_OUTPUT"
+            else
+              echo "model=" >> "$GITHUB_OUTPUT"
+            fi
+            echo "Using Anthropic API ($MODEL_TIER)"
           fi
-
-          echo "Using $PROVIDER provider, model: $MODEL_TIER"
 
 
       - name: "🧠 AI: Fill business logic"
@@ -308,9 +303,10 @@ jobs:
         run: |
           START_TIME=$(date +%s)
 
-          MODEL_TIER="${{ steps.provider.outputs.model_tier }}"
-          OPUS_MODEL="${{ steps.provider.outputs.opus_model }}"
-          SONNET_MODEL="${{ steps.provider.outputs.sonnet_model }}"
+          MODEL_FLAG=""
+          if [ -n "${{ steps.provider.outputs.model }}" ]; then
+            MODEL_FLAG="--model ${{ steps.provider.outputs.model }}"
+          fi
 
           CONTEXT="${{ matrix.context_pascal }}"
 
@@ -319,38 +315,6 @@ jobs:
           if [ -f ".claude/skills/evdb-dev-v2/learned_hints.md" ]; then
             HINTS=$(cat .claude/skills/evdb-dev-v2/learned_hints.md)
           fi
-
-          # Classify TODO_CONTEXT complexity using Haiku (~$0.01 per call)
-          # Haiku reads the spec and decides which model should implement it
-          classify_complexity() {
-            local todo_content="$1"
-            local classify_model="claude-haiku-4-5-20251001"
-            if [ "${{ steps.provider.outputs.provider }}" = "bedrock" ]; then
-              classify_model="us.anthropic.claude-haiku-4-5-v1@bedrock"
-            fi
-
-            # Write prompt to temp file to avoid YAML escaping issues
-            cat > /tmp/classify-prompt.txt <<'CLASSIFY_EOF'
-          You are a complexity classifier for code generation tasks.
-          Read the TODO spec below and reply with ONLY one word.
-          Reply 'sonnet' if the task is straightforward (simple field mapping, basic CRUD, simple predicates, basic SQL upserts).
-          Reply 'opus' if the task requires complex logic (algorithms, simulations, mathematical formulas, multi-step aggregation, weighted calculations, accumulation patterns, complex business rules with many branches).
-          Reply with ONLY 'sonnet' or 'opus'.
-          CLASSIFY_EOF
-            printf "\n---\n%s" "$todo_content" >> /tmp/classify-prompt.txt
-
-            RESULT=$(claude --print --dangerously-skip-permissions \
-              --model "$classify_model" \
-              --max-turns 1 \
-              --output-format text \
-              "$(cat /tmp/classify-prompt.txt)" 2>/dev/null || echo "opus")
-
-            if echo "$RESULT" | grep -qi "sonnet"; then
-              echo "sonnet|haiku_classified"
-            else
-              echo "opus|haiku_classified"
-            fi
-          }
 
           # One conversation per slice — small context, better caching
           IFS=',' read -ra SLICE_ARRAY <<< "${{ matrix.slices }}"
@@ -409,36 +373,6 @@ jobs:
 
             echo "  Found: $TODO_FILE"
 
-            # Classify complexity and pick model
-            if [ "$MODEL_TIER" = "auto" ]; then
-              CLASSIFICATION=$(classify_complexity "$TODO_CONTENT")
-              SLICE_MODEL=$(echo "$CLASSIFICATION" | cut -d'|' -f1)
-              SLICE_METHOD=$(echo "$CLASSIFICATION" | cut -d'|' -f2)
-              echo "  Complexity: $SLICE_METHOD → $SLICE_MODEL"
-
-              if [ "$SLICE_MODEL" = "opus" ]; then
-                MODEL_FLAG=""
-                [ -n "$OPUS_MODEL" ] && MODEL_FLAG="--model $OPUS_MODEL"
-                MAX_TURNS=12
-                MAX_BUDGET="2.00"
-              else
-                MODEL_FLAG="--model $SONNET_MODEL"
-                MAX_TURNS=12
-                MAX_BUDGET="0.75"
-              fi
-            elif [ "$MODEL_TIER" = "sonnet" ]; then
-              MODEL_FLAG="--model $SONNET_MODEL"
-              MAX_TURNS=12
-              MAX_BUDGET="0.75"
-              echo "  Model: sonnet (forced)"
-            else
-              MODEL_FLAG=""
-              [ -n "$OPUS_MODEL" ] && MODEL_FLAG="--model $OPUS_MODEL"
-              MAX_TURNS=12
-              MAX_BUDGET="2.00"
-              echo "  Model: opus (forced)"
-            fi
-
             # Find the test file
             TEST_CMD="echo 'no test found'"
             for tf in "src/BusinessCapabilities/$CONTEXT/slices/$SLICE_DIR/tests/command.slice.test.ts" \
@@ -491,9 +425,9 @@ jobs:
             claude --print --dangerously-skip-permissions \
               --output-format json \
               --exclude-dynamic-system-prompt-sections \
-              --max-budget-usd "$MAX_BUDGET" \
+              --max-budget-usd 1.50 \
               $MODEL_FLAG \
-              --max-turns "$MAX_TURNS" \
+              --max-turns 12 \
               "$PROMPT" > "/tmp/claude-$SLICE.json" 2>&1 || true
 
             # Extract per-slice stats
@@ -567,24 +501,18 @@ jobs:
       - name: "🔍 Verify contracts"
         id: verify
         run: |
-          # JSON output for downstream steps (always write the file)
           python3 .claude/skills/evdb-verify/scripts/verify_slice.py \
-            --all --root . --json > /tmp/verify-results.json 2>/dev/null || echo '{"violations":[]}' > /tmp/verify-results.json
+            --all --root . --json > /tmp/verify-results.json 2>/dev/null || true
 
-          # Human-readable summary — this determines step outcome (no || true)
+          # Also print human-readable summary
           python3 .claude/skills/evdb-verify/scripts/verify_slice.py \
-            --all --root .
+            --all --root . || true
         continue-on-error: true
 
       - name: "🧪 Run tests"
         id: tests
         run: |
-          # Run only tests for this context, not all slices
-          find "src/BusinessCapabilities/${{ matrix.context_pascal }}" \
-            -name "*.test.ts" -type f | sort | while read -r tf; do
-            echo "--- Running: $tf ---"
-            node --import tsx --test "$tf" || exit 1
-          done 2>&1 | tee /tmp/test-output.txt
+          npm run test:slices 2>&1 | tee /tmp/test-output.txt
         continue-on-error: true
 
       # ── Self-Healing Pipeline ────────────────────────────────────
@@ -642,11 +570,7 @@ jobs:
         id: retests
         if: steps.repair.outputs.total_repaired != '0' && steps.repair.outputs.total_repaired != ''
         run: |
-          find "src/BusinessCapabilities/${{ matrix.context_pascal }}" \
-            -name "*.test.ts" -type f | sort | while read -r tf; do
-            echo "--- Running: $tf ---"
-            node --import tsx --test "$tf" || exit 1
-          done 2>&1 | tee /tmp/test-output.txt
+          npm run test:slices 2>&1 | tee /tmp/test-output.txt
         continue-on-error: true
 
       # ── Confidence Scoring ───────────────────────────────────────
@@ -848,15 +772,9 @@ jobs:
           fi
 
       - name: "🚀 Push + Create PR"
-        if: steps.confidence.outputs.worst_band != 'BLOCKED'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Warn but still push for LOW confidence
-          if [ "${{ steps.confidence.outputs.worst_band }}" = "LOW" ]; then
-            echo "::warning::LOW confidence — PR will be created as draft"
-          fi
-
           git push --force-with-lease -u origin "${{ matrix.branch }}"
 
           # Check if PR already exists for this branch
@@ -912,14 +830,7 @@ jobs:
           " 2>/dev/null || echo "")
           fi
 
-          # Create as draft if LOW confidence
-          DRAFT_FLAG=""
-          if [ "${{ steps.confidence.outputs.worst_band }}" = "LOW" ]; then
-            DRAFT_FLAG="--draft"
-          fi
-
           PR_URL=$(gh pr create \
-            $DRAFT_FLAG \
             --title "feat(${{ matrix.context_pascal }}): implement planned slices — $(date +%Y%m%d-%H%M)" \
             --body "$(cat <<EOF
           ## Summary
@@ -951,7 +862,7 @@ jobs:
           echo "pr_url=$PR_URL" >> "$GITHUB_OUTPUT"
 
       - name: "💬 Add stats comment"
-        if: always() && steps.confidence.outputs.worst_band != 'BLOCKED'
+        if: always()
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
