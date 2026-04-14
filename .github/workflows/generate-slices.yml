@@ -101,15 +101,23 @@ jobs:
         run: |
           echo '${{ steps.policy.outputs.matrix }}' | python3 .ci/validate_matrix.py
 
-      - name: Upload plan artifacts
+      - name: Upload scaffolded workspace
         if: steps.detect.outputs.changed == 'true' && steps.policy.outputs.has_contexts == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: plan-output
+          name: scaffolded-workspace
           path: |
             src/BusinessCapabilities/
             .eventmodel/
             .eventmodel2/
+          retention-days: 1
+
+      - name: Upload plan decisions
+        if: steps.detect.outputs.changed == 'true' && steps.policy.outputs.has_contexts == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: plan-decisions
+          path: |
             /tmp/decisions.json
             /tmp/risk-scores.json
             /tmp/audit.jsonl
@@ -150,10 +158,16 @@ jobs:
 
       - uses: ./.github/actions/setup-env
 
-      - name: Download plan artifacts
+      - name: Download scaffolded workspace
         uses: actions/download-artifact@v4
         with:
-          name: plan-output
+          name: scaffolded-workspace
+
+      - name: Download plan decisions
+        uses: actions/download-artifact@v4
+        with:
+          name: plan-decisions
+          path: /tmp
 
       # ── Branch + scaffold commit ────────────────────────────
       - name: Create codegen branch

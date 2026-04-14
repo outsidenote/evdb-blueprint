@@ -37,14 +37,14 @@ def main():
     band = ctx.get("worst_band", "UNKNOWN")
     repair_level = int(args.max_repair_level or 0)
 
-    lines = [f"## {args.context} — v3 Pipeline Report", ""]
+    lines = [f"## {args.context} — Pipeline Report", ""]
 
     # Mermaid
     lines.append("```mermaid")
     lines.append("graph LR")
-    lines.append("  A[config.json] --> B[Risk Score]")
-    lines.append("  B --> C[Policy Engine]")
-    lines.append("  C --> D[Scaffold]")
+    lines.append("  A[Miro Export] --> B[Split + Scaffold]")
+    lines.append("  B --> C[Risk Score]")
+    lines.append("  C --> D[Policy Engine]")
     lines.append("  D --> E[AI Fill]")
     lines.append("  E --> F[Verify + Test]")
     if repair_level >= 1:
