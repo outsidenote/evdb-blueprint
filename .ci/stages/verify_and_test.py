@@ -113,12 +113,14 @@ def run_tests(root: Path, context: str) -> tuple[bool, str]:
             if result.returncode != 0:
                 all_passed = False
                 print(f"FAIL (exit {result.returncode})", file=sys.stderr)
-                # Log first 5 lines of stderr for quick diagnosis in CI
-                stderr_lines = result.stderr.strip().splitlines()
-                for line in stderr_lines[:5]:
-                    print(f"    {line}", file=sys.stderr)
-                if len(stderr_lines) > 5:
-                    print(f"    ... ({len(stderr_lines) - 5} more lines in test-output.txt)", file=sys.stderr)
+                # Log first lines of stdout + stderr for quick diagnosis in CI
+                for label, text in [("stdout", result.stdout), ("stderr", result.stderr)]:
+                    lines = text.strip().splitlines()
+                    if lines:
+                        for line in lines[:5]:
+                            print(f"    [{label}] {line}", file=sys.stderr)
+                        if len(lines) > 5:
+                            print(f"    [{label}] ... ({len(lines) - 5} more lines)", file=sys.stderr)
             else:
                 print("PASS", file=sys.stderr)
         except subprocess.TimeoutExpired:
