@@ -831,7 +831,7 @@ jobs:
           fi
 
           PR_URL=$(gh pr create \
-            --title "feat(${{ matrix.context_pascal }}): implement planned slices" \
+            --title "feat(${{ matrix.context_pascal }}): implement planned slices — $(date +%Y%m%d-%H%M)" \
             --body "$(cat <<EOF
           ## Summary
           Auto-generated slice implementations for the **${{ matrix.context }}** context.
