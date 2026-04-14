@@ -28,7 +28,8 @@ import subprocess
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -42,8 +43,8 @@ from lib.audit import emit
 
 # ── Mode configs ─────────────────────────────────────────────────
 
-FAST_MODE = {"max_turns": 6, "max_budget": 0.30, "timeout_min": 5}
-DEEP_MODE = {"max_turns": 12, "max_budget": 1.50, "timeout_min": 15}
+FAST_MODE = {"max_turns": 10, "max_budget": 0.60, "timeout_min": 5}
+DEEP_MODE = {"max_turns": 20, "max_budget": 2.00, "timeout_min": 15}
 MAX_PARALLEL = 3  # max concurrent Claude processes
 
 
@@ -58,6 +59,7 @@ class SliceResult:
     input_tokens: int = 0
     output_tokens: int = 0
     summary: str = ""
+    hints_used: list[str] = field(default_factory=list)  # record IDs of hints selected
 
 
 # ── Helpers ──────────────────────────────────────────────────────
@@ -156,52 +158,20 @@ def strip_generic_todos(directory: Path) -> int:
 
 # ── Hint retrieval ───────────────────────────────────────────────
 
-HINT_SECTIONS = {
-    "gwts.ts": "## How to derive predicates (gwts.ts)",
-    "commandHandler.ts": "## How to derive computed field values (commandHandler.ts)",
-    "view": "## How to derive view accumulation (SliceState views)",
-    "test.ts": "## How to construct test data (command.slice.test.ts)",
-    "domain": "## Domain-specific discoveries",
-}
+from stages.retrieve_hints import (
+    retrieve as retrieve_hints, format_for_prompt,
+    build_memory_index, MemoryIndex,
+)
 
-
-def select_hints(full_hints: str, todo_files: list[str]) -> str:
-    """Select only hint sections relevant to the files that have TODOs."""
-    if not full_hints or not todo_files:
-        return ""
-
-    needed = set()
-    files_lower = " ".join(f.lower() for f in todo_files)
-    if "gwts" in files_lower:
-        needed.add("gwts.ts")
-    if "commandhandler" in files_lower:
-        needed.add("commandHandler.ts")
-    if "view" in files_lower or "state" in files_lower:
-        needed.add("view")
-    if "test" in files_lower:
-        needed.add("test.ts")
-    needed.add("domain")
-
-    sections = []
-    for key in needed:
-        header = HINT_SECTIONS.get(key, "")
-        if not header or header not in full_hints:
-            continue
-        start = full_hints.index(header)
-        next_section = full_hints.find("\n## ", start + len(header))
-        text = full_hints[start:] if next_section == -1 else full_hints[start:next_section]
-        text = text.strip()
-        if key == "domain" and "No domain-specific discoveries yet" in text:
-            continue
-        sections.append(text)
-
-    return "\n\n---\n\n".join(sections)
+DISCOVERIES_PATH = Path("/tmp/learned-discoveries.json")
+FAST_MAX_HINTS = 3
+DEEP_MAX_HINTS = 7
 
 
 # ── Prompts ──────────────────────────────────────────────────────
 
 def build_fast_prompt(todo_content: str, hints: str) -> str:
-    hint_block = f"\n## Hints\n{hints}\n" if hints else ""
+    hint_block = f"\n## Relevant Hints\n{hints}\n" if hints else ""
     return f"""Implement TODOs in this TypeScript slice.
 {hint_block}
 {todo_content}
@@ -320,7 +290,7 @@ def process_slice(
     claude_path: str,
     provider: str,
     model_resolution: dict,
-    full_hints: str,
+    memory_index: MemoryIndex,
 ) -> SliceResult:
     """Process a single slice. Called from main thread or thread pool.
 
@@ -364,10 +334,21 @@ def process_slice(
     mode = FAST_MODE if is_fast else DEEP_MODE
     mode_label = "FAST" if is_fast else "DEEP"
 
-    # ── Select relevant hints ────────────────────────────────
+    # ── Retrieve relevant hints ────────────────────────────────
     todo_files = list(todo_map.keys())
-    hints = select_hints(full_hints, todo_files)
-    hint_count = hints.count("##") if hints else 0
+    hint_mode = "fast" if is_fast else "deep"
+    max_hints = FAST_MAX_HINTS if is_fast else DEEP_MAX_HINTS
+    hint_records = retrieve_hints(
+        index=memory_index,
+        context=context,
+        slice_name=slice_name,
+        todo_files=todo_files,
+        max_hints=max_hints,
+        mode=hint_mode,
+    )
+    hints = format_for_prompt(hint_records)
+    hint_count = len(hint_records)
+    hint_ids = [r["id"] for r in hint_records if "id" in r]
 
     prompt = build_fast_prompt(todo_content, hints) if is_fast else build_deep_prompt(todo_content, hints)
 
@@ -427,6 +408,69 @@ def process_slice(
         cost=stats["cost"], turns=stats["turns"],
         input_tokens=stats["input_tokens"], output_tokens=stats["output_tokens"],
         summary=stats.get("result", ""),
+        hints_used=hint_ids if stats["turns"] > 0 else [],
+    )
+
+
+# ── Reuse feedback ──────────────────────────────────────────────
+
+UPDATED_DISCOVERIES_PATH = Path("/tmp/learned-discoveries.updated.json")
+
+
+def _record_reuse_feedback(
+    records: list[dict],
+    results: list[SliceResult],
+) -> None:
+    """Update reuse metadata for hints that were actually used.
+
+    Runs in the main thread after all workers complete — no shared
+    mutable state. Writes to a separate artifact file so the original
+    discovery file is never corrupted.
+
+    The updated file feeds back into the learning loop:
+      - learn.py's --prior-discoveries can point here
+      - retrieve_hints scores +1 for times_reused > 0
+      - Over time, frequently useful patterns surface higher
+    """
+    if not records:
+        return
+
+    # Collect hint IDs from successful AI runs only
+    used_ids: set[str] = set()
+    for r in results:
+        if r.path in ("FAST", "DEEP") and r.turns > 0:
+            used_ids.update(r.hints_used)
+
+    if not used_ids:
+        return
+
+    now = datetime.now(timezone.utc).isoformat()
+    updated_count = 0
+
+    # Shallow-copy each record, bump reuse fields on matches
+    updated_records: list[dict] = []
+    for record in records:
+        rec = dict(record)  # shallow copy — don't mutate originals
+        if rec.get("id") in used_ids:
+            rec["times_reused"] = rec.get("times_reused", 0) + 1
+            rec["last_reused_at"] = now
+            updated_count += 1
+        updated_records.append(rec)
+
+    artifact = {
+        "memory_version": 1,
+        "updated_at": now,
+        "source_stage": "implement_slice.py",
+        "reuse_updates": updated_count,
+        "record_count": len(updated_records),
+        "records": updated_records,
+    }
+    write_json(UPDATED_DISCOVERIES_PATH, artifact)
+
+    print(
+        f"  Reuse feedback: {updated_count} hint(s) updated → "
+        f"{UPDATED_DISCOVERIES_PATH}",
+        file=sys.stderr,
     )
 
 
@@ -449,10 +493,10 @@ def main():
     decisions_data = load_json(Path(args.decisions))
     decisions_lookup = {d["slice"]: d for d in decisions_data.get("decisions", [])}
 
-    full_hints = ""
-    hints_path = root / ".claude" / "skills" / "evdb-dev-v2" / "learned_hints.md"
-    if hints_path.exists():
-        full_hints = hints_path.read_text()
+    # Load structured discoveries once, build index for fast per-slice lookup
+    disc_data = load_json(DISCOVERIES_PATH)
+    discoveries = disc_data.get("records", []) if isinstance(disc_data, dict) else []
+    memory_index = build_memory_index(discoveries)
 
     try:
         model_resolution = load_config(POLICY_CONFIG).get("model_resolution", {})
@@ -503,7 +547,7 @@ def main():
                 claude_path=claude_path,
                 provider=args.provider,
                 model_resolution=model_resolution,
-                full_hints=full_hints,
+                memory_index=memory_index,
             )
             futures[future] = name
 
@@ -529,6 +573,9 @@ def main():
     CLAUDE_SUMMARY.write_text(
         "\n".join(f"{r.name}: {r.summary}" for r in results if r.summary)[:1000]
     )
+
+    # ── Phase 4: Record reuse feedback ────────────────────────
+    _record_reuse_feedback(discoveries, results)
 
     elapsed = time.time() - start_time
     duration = f"{int(elapsed // 60)}m {int(elapsed % 60)}s"

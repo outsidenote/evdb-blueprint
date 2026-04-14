@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Stage: Risk scoring — compute 0.0–1.0 risk per slice before any AI runs.
 
-All deterministic. Reads slice specs, normalized data, and optionally
-prior run metrics from artifacts. No AI calls.
+All deterministic. Reads slice specs and scaffold output. No AI calls.
+Five factors, all backed by real data — no stubs or hardcoded defaults.
 
 Usage:
     python3 .ci/stages/risk_score.py \
@@ -28,8 +28,8 @@ from lib.audit import emit
 # ── Risk factor computation ──────────────────────────────────────
 
 def compute_spec_complexity(spec: dict) -> tuple[int, float]:
-    """specs × events product. Raw and normalized."""
-    n_specs = len(spec.get("specs", []))
+    """specifications × events product. Raw and normalized."""
+    n_specs = len(spec.get("specifications", []))
     n_events = len(spec.get("events", []))
     raw = n_specs * n_events
     return raw, min(raw / 12.0, 1.0)
@@ -99,19 +99,11 @@ def score_slice(
             raw, norm = compute_spec_complexity(spec)
         elif name == "slice_type":
             raw, norm = compute_slice_type_risk(spec, fdef.get("values", {}))
-        elif name == "prior_failure_rate":
-            # Lite version: default to 0.5 (unknown). Future: read from metrics artifacts.
-            raw = fdef.get("default_unknown", 0.5)
-            norm = raw
         elif name == "blast_radius":
-            # Count downstream dependencies (simplified: count events)
             raw = len(spec.get("events", []))
             norm = min(raw / 10.0, 1.0)
         elif name == "field_types":
             raw, norm = compute_field_type_risk(spec, fdef.get("risk_types", []))
-        elif name == "spec_novelty":
-            raw = fdef.get("default_novel", 0.5)
-            norm = raw
         elif name == "todo_density":
             raw, norm = compute_todo_density(root, context, slice_name)
         else:
@@ -171,13 +163,13 @@ def main():
         risk_config = load_config(RISK_FACTORS_CONFIG)
         factor_defs = risk_config["factors"]
     except FileNotFoundError:
-        # Fallback defaults
+        # Fallback defaults (must match risk_factors.json weights)
         factor_defs = [
-            {"name": "spec_complexity", "weight": 0.30, "normalization": "min(raw / 12, 1.0)"},
+            {"name": "spec_complexity", "weight": 0.35},
             {"name": "slice_type", "weight": 0.20, "values": {"STATE_CHANGE": 0.2, "QUERY": 0.1, "PROCESSOR": 0.6, "ENRICHMENT": 0.5}},
-            {"name": "prior_failure_rate", "weight": 0.20, "default_unknown": 0.5},
-            {"name": "blast_radius", "weight": 0.15, "normalization": "min(raw / 10, 1.0)"},
-            {"name": "todo_density", "weight": 0.15, "normalization": "min(raw / 10, 1.0)"},
+            {"name": "blast_radius", "weight": 0.20},
+            {"name": "field_types", "weight": 0.15, "risk_types": ["Custom", "List", "DateTime"]},
+            {"name": "todo_density", "weight": 0.10},
         ]
 
     scores = []

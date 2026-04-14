@@ -2,13 +2,13 @@
   "factors": [
     {
       "name": "spec_complexity",
-      "weight": 0.25,
-      "description": "Product of spec count × event count — higher = more branching logic",
+      "weight": 0.35,
+      "description": "Product of spec count x event count — higher = more branching logic",
       "normalization": "min(raw / 12, 1.0)"
     },
     {
       "name": "slice_type",
-      "weight": 0.15,
+      "weight": 0.20,
       "description": "Slice type risk — processors and enrichments have more moving parts",
       "values": {
         "STATE_CHANGE": 0.2,
@@ -18,32 +18,20 @@
       }
     },
     {
-      "name": "prior_failure_rate",
-      "weight": 0.20,
-      "description": "Historical failure rate from run intelligence",
-      "default_unknown": 0.5
-    },
-    {
       "name": "blast_radius",
-      "weight": 0.15,
-      "description": "Count of downstream projections + enrichments consuming this slice's events",
+      "weight": 0.20,
+      "description": "Count of downstream dependencies consuming this slice's events",
       "normalization": "min(raw / 10, 1.0)"
     },
     {
       "name": "field_types",
-      "weight": 0.10,
+      "weight": 0.15,
       "description": "Presence of complex field types increases risk",
       "risk_types": ["Custom", "List", "DateTime"]
     },
     {
-      "name": "spec_novelty",
-      "weight": 0.10,
-      "description": "How different this spec is from previously implemented slices (1.0 = fully novel)",
-      "default_novel": 0.5
-    },
-    {
       "name": "todo_density",
-      "weight": 0.05,
+      "weight": 0.10,
       "description": "Number of TODO placeholders in scaffold output",
       "normalization": "min(raw / 10, 1.0)"
     }
