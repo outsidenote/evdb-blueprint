@@ -76,6 +76,7 @@ def run_tests(root: Path, context: str) -> tuple[bool, str]:
     test_patterns = [
         "slices/*/tests/command.slice.test.ts",
         "slices/*/tests/projection.test.ts",
+        "slices/*/projection.slice.test.ts",
         "endpoints/*/tests/enrichment.test.ts",
     ]
 

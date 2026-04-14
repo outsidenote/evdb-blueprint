@@ -2175,7 +2175,7 @@ def gen_projection(ds: DerivedSlice) -> str:
 
 
 def gen_projection_test(ds: DerivedSlice) -> str:
-    """Generate projection test skeleton."""
+    """Generate projection unit test skeleton (shape checks only)."""
     readmodel = ds.raw["readmodels"][0]
     rm_fields = readmodel.get("fields", [])
 
@@ -2223,6 +2223,191 @@ def gen_projection_test(ds: DerivedSlice) -> str:
         "});",
         "",
     ])
+    return "\n".join(lines)
+
+
+def _format_expected_value(f: dict) -> str:
+    """Format a field's example value for PostgreSQL jsonb comparison.
+
+    PostgreSQL stores jsonb numbers as numbers and strings as strings.
+    deepStrictEqual needs exact type match, so we format accordingly.
+    """
+    ft = f.get("type", "String")
+    example = f.get("example", "")
+    if ft in ("Double", "Decimal"):
+        try:
+            return str(float(example)) if example else "0"
+        except (ValueError, TypeError):
+            return "0"
+    if ft in ("Integer", "Int"):
+        try:
+            return str(int(float(example))) if example else "0"
+        except (ValueError, TypeError):
+            return "0"
+    # Strings, UUIDs, dates — use the same format as _format_example
+    # but dates come back from PG as strings, not Date objects
+    if ft in ("DateTime", "Date"):
+        if not example:
+            return '"2025-01-01T11:00:00Z"'
+        return f'"{example}"'
+    if example:
+        return f'"{example}"'
+    fn = field_name(f.get("name", ""))
+    if ft == "UUID":
+        return f'"test-{fn}-001"'
+    return f'"test-{fn}"'
+
+
+def gen_projection_integration_test(ds: DerivedSlice) -> str:
+    """Generate projection integration test that executes SQL against real PostgreSQL.
+
+    Uses ProjectionSliceTester which:
+    - Spins up a test PostgreSQL instance
+    - Feeds events via applyProjectionEvent (executes the actual SQL)
+    - Queries the projections table and asserts on stored state
+
+    This catches:
+    - Uncast parameters in jsonb_build_object ($3 without ::text)
+    - Wrong accumulation logic (EXCLUDED.payload instead of field-specific SQL)
+    - Missing fields in the stored payload
+    - SQL syntax errors
+
+    Test case 1 (deterministic, no AI needed):
+      Feed one event, assert the stored state matches the input.
+      This alone catches SQL execution errors like missing type casts.
+
+    Test case 2 (AI fills expected values):
+      Feed two events, assert accumulation is correct.
+      Only generated when readmodel has a description with aggregation rules.
+    """
+    readmodel = ds.raw["readmodels"][0]
+    rm_fields = readmodel.get("fields", [])
+    description = readmodel.get("description", "").strip()
+
+    # Find INBOUND events
+    inbound_events = []
+    for dep in readmodel.get("dependencies", []):
+        if dep.get("type") == "INBOUND" and dep.get("elementType") == "EVENT":
+            inbound_events.append(pascal_case(dep["title"]))
+
+    if not inbound_events:
+        return ""
+
+    # Determine the projection key
+    id_fields = [field_name(f["name"]) for f in rm_fields if f.get("idAttribute")]
+    if len(id_fields) > 1:
+        key_parts = ":".join(f"${{{fn}}}" for fn in id_fields)
+        key_template = f"`{key_parts}`"
+    elif len(id_fields) == 1:
+        key_template = id_fields[0]
+    else:
+        key_template = '"test-key"'
+
+    event_name = inbound_events[0]
+
+    lines = [
+        'import { randomUUID } from "node:crypto";',
+        'import { ProjectionSliceTester } from "#abstractions/slices/ProjectionSliceTester.js";',
+        f'import {{ {ds.slice_name_camel}Slice }} from "../index.js";',
+        "",
+        f"ProjectionSliceTester.run({ds.slice_name_camel}Slice, [",
+        "  {",
+        f'    description: "{event_name}: first event creates initial state",',
+        "    run: () => {",
+    ]
+
+    # Generate key variables
+    for fn in id_fields:
+        lines.append(f'      const {fn} = randomUUID();')
+
+    # Build payload and expected state with concrete values
+    lines.append("      return {")
+    lines.append("        given: [")
+    lines.append(f'          {{ messageType: "{event_name}", payload: {{')
+    for f in rm_fields:
+        fn = field_name(f["name"])
+        if fn in id_fields:
+            lines.append(f"            {fn},")
+        else:
+            lines.append(f"            {fn}: {_format_example(f)},")
+    lines.append("          } },")
+    lines.append("        ],")
+
+    # Expected state: concrete values, same as input (first insert = stored as-is)
+    lines.append(f"        then: [{{ key: {key_template}, expectedState: {{")
+    for f in rm_fields:
+        fn = field_name(f["name"])
+        if fn in id_fields:
+            lines.append(f"          {fn},")
+        else:
+            lines.append(f"          {fn}: {_format_expected_value(f)},")
+    lines.append("        } }],")
+    lines.append("      };")
+    lines.append("    },")
+    lines.append("  },")
+
+    # Test case 2: accumulation — only if spec has aggregation description
+    # AI must fill the expectedState because accumulation rules vary per spec
+    if description:
+        lines.append("  {")
+        lines.append(f'    description: "two {event_name} events: fields accumulate correctly",')
+        lines.append("    run: () => {")
+        for fn in id_fields:
+            lines.append(f'      const {fn} = randomUUID();')
+
+        # First event payload
+        lines.append("      return {")
+        lines.append("        given: [")
+        lines.append(f'          {{ messageType: "{event_name}", payload: {{')
+        for f in rm_fields:
+            fn = field_name(f["name"])
+            if fn in id_fields:
+                lines.append(f"            {fn},")
+            else:
+                lines.append(f"            {fn}: {_format_example(f)},")
+        lines.append("          } },")
+
+        # Second event payload — different numbers for numeric fields
+        lines.append(f'          {{ messageType: "{event_name}", payload: {{')
+        for f in rm_fields:
+            fn = field_name(f["name"])
+            ft = f.get("type", "String")
+            if fn in id_fields:
+                lines.append(f"            {fn},")
+            elif ft in ("Double", "Integer", "Int", "Decimal"):
+                try:
+                    val = float(f.get("example", "0") or "0")
+                    lines.append(f"            {fn}: {int(val * 2) if val else 50},")
+                except (ValueError, TypeError):
+                    lines.append(f"            {fn}: 50,")
+            else:
+                lines.append(f"            {fn}: {_format_example(f)},")
+        lines.append("          } },")
+        lines.append("        ],")
+
+        # Expected accumulated state — AI must fill this based on spec
+        desc_short = description[:120].replace('"', "'")
+        if len(description) > 120:
+            desc_short += "..."
+        lines.append(f"        // Spec: {desc_short}")
+        lines.append(f"        then: [{{ key: {key_template}, expectedState: {{")
+        for f in rm_fields:
+            fn = field_name(f["name"])
+            if fn in id_fields:
+                lines.append(f"          {fn},")
+            else:
+                ft = f.get("type", "String")
+                if ft in ("Double", "Integer", "Int", "Decimal"):
+                    lines.append(f"          {fn}: 0, // TODO: expected accumulated value after 2 events")
+                else:
+                    lines.append(f'          {fn}: "", // TODO: expected derived value after 2 events')
+        lines.append("        } }],")
+        lines.append("      };")
+        lines.append("    },")
+        lines.append("  },")
+
+    lines.append("]);")
+    lines.append("")
     return "\n".join(lines)
 
 
@@ -2758,6 +2943,13 @@ def scaffold_slice(root: Path, folder: str, dry_run: bool = False) -> dict:
         projection_test_path = projection_dir / "tests" / "projection.test.ts"
         if not projection_test_path.exists():
             write_file(projection_test_path, gen_projection_test(ds))
+
+        # Integration test — runs SQL against real PostgreSQL
+        integration_test_path = projection_dir / "projection.slice.test.ts"
+        if not integration_test_path.exists():
+            integration_content = gen_projection_integration_test(ds)
+            if integration_content:
+                write_file(integration_test_path, integration_content)
 
         # Update per-context projections.ts
         if not dry_run:
