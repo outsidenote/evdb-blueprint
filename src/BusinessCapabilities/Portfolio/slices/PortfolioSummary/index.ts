@@ -38,6 +38,35 @@ export const portfolioSummarySlice: ProjectionConfig = {
     LoanRiskAssessed: (payload, { projectionName }) => {
       const p = payload as PortfolioSummaryPayload;
       const key = p.portfolioId;
+      const stored = {
+        portfolioId: p.portfolioId,
+        // portfolio-level aggregates (pre-computed in enrichment)
+        totalLoans: p.totalLoans,
+        totalExposure: p.totalExposure,
+        totalCapitalRequirement: p.totalCapitalRequirement,
+        totalExpectedLoss: p.totalExpectedLoss,
+        averageProbabilityOfDefault: p.averageProbabilityOfDefault,
+        averageRiskWeight: p.averageRiskWeight,
+        averageRating: p.averageRating,
+        riskBand: p.riskBand,
+        worstRating: p.worstRating,
+        // latest loan details (overwrite with most recent)
+        loanId: p.loanId,
+        borrowerName: p.borrowerName,
+        loanAmount: p.loanAmount,
+        capitalRequirement: p.capitalRequirement,
+        expectedLoss: p.expectedLoss,
+        creditRating: p.creditRating,
+        probabilityOfDefault: p.probabilityOfDefault,
+        acquisitionDate: p.acquisitionDate,
+        maturityDate: p.maturityDate,
+        interestRate: p.interestRate,
+        riskNarrative: p.riskNarrative,
+        expectedPortfolioLoss: p.expectedPortfolioLoss,
+        simulatedDefaultRate: p.simulatedDefaultRate,
+        tailRiskLoss: p.tailRiskLoss,
+        worstCaseLoss: p.worstCaseLoss,
+      };
       return [
         {
           sql: `
@@ -45,11 +74,7 @@ export const portfolioSummarySlice: ProjectionConfig = {
             VALUES ($1, $2, $3::jsonb)
             ON CONFLICT (name, key) DO UPDATE
               SET payload = EXCLUDED.payload`,
-          params: [
-            projectionName,
-            key,
-            JSON.stringify(p), // TODO: select specific fields to store
-          ],
+          params: [projectionName, key, JSON.stringify(stored)],
         },
       ];
     },

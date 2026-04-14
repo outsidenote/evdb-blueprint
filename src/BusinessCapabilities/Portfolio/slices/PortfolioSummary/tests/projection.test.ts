@@ -41,6 +41,20 @@ describe("Projection: PortfolioSummary", () => {
     assert.ok(result.length > 0, 'should have at least one SQL statement');
     assert.ok(result[0].sql.length > 0, 'SQL should not be empty');
     assert.ok(result[0].params.length > 0, 'params should not be empty');
+
+    // verify correct param values
+    assert.strictEqual(result[0].params[0], 'PortfolioSummary', 'params[0] should be projectionName');
+    assert.strictEqual(result[0].params[1], 'PORT-01', 'params[1] should be portfolioId key');
+
+    const stored = JSON.parse(result[0].params[2] as string);
+    assert.strictEqual(stored.portfolioId, 'PORT-01');
+    assert.strictEqual(stored.totalLoans, 2);
+    assert.strictEqual(stored.totalExpectedLoss, 12);
+    assert.strictEqual(stored.borrowerName, 'test-borrowerName');
+    assert.strictEqual(stored.loanId, 'test-loanId-001');
+    assert.strictEqual(stored.riskNarrative, 'test-riskNarrative');
+    assert.strictEqual(stored.worstRating, 'CC');
+    assert.strictEqual(stored.averageRating, 'A');
   });
 
 });
