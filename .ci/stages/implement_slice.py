@@ -123,7 +123,7 @@ Reply 'opus' if the task requires complex logic (algorithms, simulations, mathem
 Reply with ONLY 'sonnet' or 'opus'.
 
 ---
-""" + todo_content[:3000]  # cap to avoid huge prompts
+""" + todo_content
 
     try:
         result = subprocess.run(
