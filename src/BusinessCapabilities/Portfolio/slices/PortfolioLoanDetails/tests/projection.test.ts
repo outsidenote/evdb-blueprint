@@ -33,6 +33,17 @@ describe("Projection: PortfolioLoanDetails", () => {
     assert.ok(result.length > 0, 'should have at least one SQL statement');
     assert.ok(result[0].sql.length > 0, 'SQL should not be empty');
     assert.ok(result[0].params.length > 0, 'params should not be empty');
+
+    const params = result[0].params;
+    assert.strictEqual(params[0], "PortfolioLoanDetails", 'param $1 should be projectionName');
+    assert.strictEqual(params[1], "test-portfolioId-001:test-loanId-001", 'param $2 should be composite key');
+    assert.strictEqual(params[2], "test-portfolioId-001", 'param $3 should be portfolioId');
+    assert.strictEqual(params[3], "test-loanId-001", 'param $4 should be loanId');
+    assert.deepStrictEqual(params[4], new Date("2025-01-01T11:00:00Z"), 'param $5 should be acquisitionDate');
+    assert.strictEqual(params[5], "test-borrowerName", 'param $6 should be borrowerName');
+    assert.strictEqual(params[7], "test-creditRating", 'param $8 should be creditRating');
+    assert.strictEqual(params[13], "test-riskBand", 'param $14 should be riskBand');
+    assert.strictEqual(params[15], "test-riskNarrative", 'param $16 should be riskNarrative');
   });
 
 });
