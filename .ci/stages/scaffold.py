@@ -30,6 +30,8 @@ from lib.audit import emit
 
 SCRIPTS_DIR = Path(__file__).resolve().parent.parent.parent / ".claude" / "scripts"
 SCAFFOLDABLE_STATUSES = {"Planned", "Created"}
+# Slices with these statuses should be scaffolded if files are missing on disk
+SCAFFOLD_IF_MISSING_STATUSES = {"Done", "Review"}
 
 
 def run_script(script: Path, args: list[str], root: Path) -> subprocess.CompletedProcess:
@@ -44,6 +46,19 @@ def pascal_case(s: str) -> str:
     return "".join(w.capitalize() for w in s.split())
 
 
+def _slice_files_exist(root: Path, context: str, folder: str) -> bool:
+    """Check if a slice has any scaffolded files on disk."""
+    ctx_pascal = pascal_case(context)
+    slice_dir = root / "src" / "BusinessCapabilities" / ctx_pascal / "slices"
+    if not slice_dir.exists():
+        return False
+    # Case-insensitive match (folder is lowercase, dirs are PascalCase)
+    for d in slice_dir.iterdir():
+        if d.is_dir() and d.name.lower() == folder.lower():
+            return True
+    return False
+
+
 def get_planned_slices_by_context(
     root: Path, em_dir: str, filter_context: str | None = None,
 ) -> dict[str, list[dict]]:
@@ -55,15 +70,28 @@ def get_planned_slices_by_context(
     contexts: dict[str, list[dict]] = {}
 
     for s in index_data.get("slices", []):
-        if s.get("status") not in SCAFFOLDABLE_STATUSES:
-            continue
+        status = s.get("status", "")
         ctx = s.get("context", "Unknown")
+        folder = s["folder"]
+
         if filter_context and ctx != filter_context:
             continue
-        contexts.setdefault(ctx, []).append({
-            "folder": s["folder"],
-            "slice_json": f"{em_dir}/.slices/{ctx}/{s['folder']}/slice.json",
-        })
+
+        # Always scaffold Planned/Created slices
+        if status in SCAFFOLDABLE_STATUSES:
+            contexts.setdefault(ctx, []).append({
+                "folder": folder,
+                "slice_json": f"{em_dir}/.slices/{ctx}/{folder}/slice.json",
+            })
+        # Also scaffold Done/Review slices if their files are missing on disk
+        elif status in SCAFFOLD_IF_MISSING_STATUSES:
+            if not _slice_files_exist(root, ctx, folder):
+                print(f"  {folder}: status={status} but files missing — will scaffold",
+                      file=sys.stderr)
+                contexts.setdefault(ctx, []).append({
+                    "folder": folder,
+                    "slice_json": f"{em_dir}/.slices/{ctx}/{folder}/slice.json",
+                })
 
     return contexts
 
