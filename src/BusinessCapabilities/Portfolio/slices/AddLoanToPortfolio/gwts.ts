@@ -6,6 +6,10 @@ import type { SliceStateAddLoanToPortfolioViewState } from "#BusinessCapabilitie
  * Each function maps 1:1 to a named spec in the event model diagram.
  */
 
+// Investment-grade cutoff: BBB and above are acceptable; BB and below (CCC, CC, C, D) are not.
+const CREDIT_RATINGS_ORDER = ["AAA", "AA", "A", "BBB", "BB", "B", "CCC", "CC", "C", "D"];
+const MIN_ACCEPTABLE_RATING_INDEX = CREDIT_RATINGS_ORDER.indexOf("BBB"); // 3
+
 /**
  * spec: amountLessThanZero
  * GIVEN state fields: none
@@ -13,7 +17,7 @@ import type { SliceStateAddLoanToPortfolioViewState } from "#BusinessCapabilitie
  * THEN: LoanRejectedFromPortfolio
  */
 export const amountLessThanZero = (state: SliceStateAddLoanToPortfolioViewState, command: AddLoanToPortfolio): boolean =>
-  false; // TODO: return boolean comparing state.field vs command.portfolioId
+  command.loanAmount <= 0;
 
 /**
  * spec: portfolioRatingBreached
@@ -21,8 +25,10 @@ export const amountLessThanZero = (state: SliceStateAddLoanToPortfolioViewState,
  * WHEN command fields: portfolioId, acquisitionDate, borrowerName, creditRating, interestRate, loanAmount, loanId, maturityDate
  * THEN: LoanRejectedFromPortfolio
  */
-export const portfolioRatingBreached = (state: SliceStateAddLoanToPortfolioViewState, command: AddLoanToPortfolio): boolean =>
-  false; // TODO: return boolean comparing state.portfolioId vs command.portfolioId
+export const portfolioRatingBreached = (state: SliceStateAddLoanToPortfolioViewState, command: AddLoanToPortfolio): boolean => {
+  const commandRatingIndex = CREDIT_RATINGS_ORDER.indexOf(command.creditRating);
+  return state.portfolioId !== "" && commandRatingIndex > MIN_ACCEPTABLE_RATING_INDEX;
+};
 
 /**
  * spec: portfolioRatingMaintained
@@ -31,4 +37,4 @@ export const portfolioRatingBreached = (state: SliceStateAddLoanToPortfolioViewS
  * THEN: LoanAddedToPortfolio
  */
 export const portfolioRatingMaintained = (state: SliceStateAddLoanToPortfolioViewState, command: AddLoanToPortfolio): boolean =>
-  false; // TODO: return boolean comparing state.portfolioId vs command.portfolioId
+  !amountLessThanZero(state, command) && !portfolioRatingBreached(state, command);
