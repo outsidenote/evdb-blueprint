@@ -395,8 +395,11 @@ jobs:
           if [ -f "$STAMP_SCRIPT" ]; then
             IFS=',' read -ra SLICE_ARRAY <<< "${{ matrix.slices }}"
             for SLICE in "${SLICE_ARRAY[@]}"; do
-              python3 "$STAMP_SCRIPT" --root . --slice "$SLICE" 2>/dev/null || true
+              echo "  Stamping: $SLICE"
+              python3 "$STAMP_SCRIPT" --root . --slice "$SLICE" || true
             done
+            echo "  Hashes:"
+            cat .implementation-hashes/*.json 2>/dev/null || echo "  (no hash files created)"
           fi
 
       # ── Clean + commit + PR ─────────────────────────────────
