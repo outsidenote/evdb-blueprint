@@ -129,6 +129,16 @@ def build_record(
         # Confidence
         "confidence_score": confidence.get("score") if confidence else None,
         "confidence_band": confidence.get("band") if confidence else None,
+        # Spec quality — tracks ambiguity over time
+        "clarification_needed": (
+            repair is not None
+            and not repair.get("resolved")
+            and classification is not None
+            and classification.get("failure_class") in (
+                "test_failure", "predicate_mismatch",
+                "missing_handler_branch", "verification_failure",
+            )
+        ),
         # Files
         "files_changed": slice_files,
         "files_changed_count": len(slice_files),

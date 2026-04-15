@@ -260,7 +260,28 @@ def build_deep_prompt(todo_content: str, hints: str) -> str:
 - If the spec says "X = A × B × C", the test comment should show: // X = <value of A> × <value of B> × <value of C> = <result>
 - For projection.slice.test.ts: the payload must use EVENT fields (what the handler receives), not readmodel fields (what the projection stores).
 
-Do NOT run tests — the CI pipeline handles that separately.
+## Self-Test Protocol (command tests only)
+After filling ALL TODOs in all files:
+1. Run: node --import tsx --test tests/command.slice.test.ts
+2. If all tests pass, you are done.
+3. If any test fails:
+   - Read the assertion error — it shows expected vs actual values.
+   - The test is derived from the spec and is CORRECT. Fix your CODE to match the test.
+   - Make the minimal edit that aligns your implementation with the spec.
+   - Re-run the test to verify your fix.
+4. Stop conditions — stop retrying if:
+   - Tests pass.
+   - The same test fails twice with the same error after your fix attempt.
+   - The failure is caused by imports, scaffold, missing dependencies, or test harness — not your logic.
+5. Important:
+   - Do NOT modify test files (*.test.ts) to make them pass.
+   - Do NOT weaken validation or remove checks to satisfy tests.
+   - Do NOT refactor unrelated code.
+   - The spec is the source of truth. Use tests to detect mismatches, not to invent behavior.
+6. Do NOT run projection.slice.test.ts (requires a database).
+7. Do NOT run enrichment tests (requires endpoint wiring).
+8. If there is no tests/command.slice.test.ts file, skip self-testing.
+
 Do NOT read SKILL.md or any reference files. Everything you need is above.
 Do NOT run evdb-diff, evdb-scaffold, or scan sessions.
 Do NOT read files outside 'Files with TODOs'."""
@@ -398,10 +419,26 @@ def process_slice(
     hint_count = len(hint_records)
     hint_ids = [r["id"] for r in hint_records if "id" in r]
 
+    # Load clarification answers from prior PR comments (if any)
+    clarification_answers = ""
+    answers_path = Path("/tmp/pr-clarification-answers.txt")
+    if answers_path.exists():
+        raw = answers_path.read_text().strip()
+        if raw:
+            clarification_answers = (
+                f"\n## Clarification from Developer\n"
+                f"A previous run had questions. The developer answered in PR comments:\n\n"
+                f"{raw[:3000]}\n\n"
+                f"Use these answers to resolve any ambiguity in the spec.\n"
+            )
+
     prompt = build_fast_prompt(todo_content, hints) if is_fast else build_deep_prompt(todo_content, hints)
+    if clarification_answers and not is_fast:
+        prompt = prompt + clarification_answers
 
     print(f"  [{slice_name}] {mode_label} | {model_name} | ${mode['max_budget']} "
-          f"| {sum(len(v) for v in todo_map.values())} TODOs | {hint_count} hint(s)",
+          f"| {sum(len(v) for v in todo_map.values())} TODOs | {hint_count} hint(s)"
+          f"{' + clarifications' if clarification_answers else ''}",
           file=sys.stderr)
 
     # ── Run Claude Code ──────────────────────────────────────
@@ -432,6 +469,10 @@ def process_slice(
     stats = extract_stats(output_path)
     write_json(slice_stats_path(slice_name), stats)
 
+    # Detect whether self-test was available and likely ran
+    command_test = cwd / "tests" / "command.slice.test.ts"
+    self_test_available = command_test.exists() and not is_fast
+
     emit("ai_invocation", "implement_slice.py", slice=slice_name, context=context,
          data={
              "mode": mode_label,
@@ -447,6 +488,7 @@ def process_slice(
              "todo_files": todo_files,
              "hint_sections": hint_count,
              "policy_rule": decision.get("rule_matched", ""),
+             "self_test_available": self_test_available,
          })
 
     print(f"  [{slice_name}] Done: {stats['turns']} turns, ${stats['cost']:.2f}", file=sys.stderr)

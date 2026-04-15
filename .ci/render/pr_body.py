@@ -162,6 +162,287 @@ def review_guide_section(conf: dict | None, repair: dict | None, risk: dict | No
     return "\n".join(lines)
 
 
+# ── Ambiguity classes eligible for clarification ────────────────
+
+SEMANTIC_FAILURE_CLASSES = {
+    "test_failure", "predicate_mismatch", "missing_handler_branch",
+    "verification_failure",
+}
+INFRA_FAILURE_CLASSES = {
+    "flaky_or_env", "import_error", "path_error",
+}
+
+# Question templates keyed by failure pattern
+QUESTION_TEMPLATES = {
+    "wrong_event": (
+        "When {condition}, should the system emit **{expected}** or **{actual}**?\n\n"
+        "- The test (derived from spec) expects `{expected}`\n"
+        "- The current implementation produces `{actual}`\n\n"
+        "**Spec source:** {spec_ref}"
+    ),
+    "wrong_value": (
+        "For `{field}`, the test expects `{expected}` but the code produces `{actual}`.\n\n"
+        "**Question:** Which calculation is correct for this field?\n\n"
+        "**Spec source:** {spec_ref}"
+    ),
+    "generic": (
+        "The test for **{slice}** fails after repair.\n\n"
+        "**Expected:** {expected}\n"
+        "**Actual:** {actual}\n\n"
+        "**Question:** Is the spec description complete for this behavior?\n\n"
+        "**Spec source:** {spec_ref}"
+    ),
+}
+
+
+def _parse_expected_actual(error_text: str) -> tuple[str, str]:
+    """Extract expected and actual values from test error output."""
+    expected = ""
+    actual = ""
+    for line in error_text.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("- ") or stripped.startswith("expected:"):
+            expected = stripped[:200]
+        elif stripped.startswith("+ ") or stripped.startswith("actual:"):
+            actual = stripped[:200]
+    return expected or "(see test output)", actual or "(see test output)"
+
+
+def _classify_unresolved(failure_class: str) -> str:
+    """Classify an unresolved failure into one of three bins."""
+    if failure_class in SEMANTIC_FAILURE_CLASSES:
+        return "clarification_needed"
+    if failure_class in INFRA_FAILURE_CLASSES:
+        return "infra_issue"
+    return "engineering_defect"
+
+
+def _fingerprint_failure(expected: str, actual: str) -> str:
+    """Create a fingerprint for deduplication of similar failures.
+
+    Groups failures that have the same shape (e.g., all boundary condition
+    issues, all wrong event types) even across different slices.
+    """
+    if "eventType" in expected and "eventType" in actual:
+        return "wrong_event"
+    # Extract field names from expected/actual for grouping
+    # e.g., "riskWeight: 0.8625" and "riskWeight: 0.75" → "wrong_value:riskWeight"
+    import re
+    field_match = re.search(r"(\w+):\s*[\d.]", expected)
+    if field_match:
+        return f"wrong_value:{field_match.group(1)}"
+    return "generic"
+
+
+def generate_clarifications(
+    repair: dict | None,
+    classification: dict | None,
+    test_results: dict | None,
+) -> list[dict]:
+    """Generate structured clarification records for unresolved semantic failures.
+
+    Deduplicates by:
+    1. Slice name (one question per slice)
+    2. Failure fingerprint (groups similar failures across slices)
+
+    Returns a list of clarification dicts, each with:
+      slice(s), failure_class, bin, question, expected, actual, spec_ref
+    """
+    if not repair:
+        return []
+
+    # Build lookup: slice → test result for error details
+    test_errors: dict[str, str] = {}
+    if test_results:
+        for r in test_results.get("results", []):
+            if not r.get("passed"):
+                test_errors[r.get("slice", "")] = r.get("error", "")
+
+    # First pass: collect all unresolved semantic failures
+    raw_failures: list[dict] = []
+    seen_slices: set[str] = set()
+
+    for r in repair.get("repairs", []):
+        if r.get("resolved"):
+            continue
+
+        slice_name = r.get("slice", "")
+        fc = r.get("failure_class", "")
+        failure_bin = _classify_unresolved(fc)
+
+        if failure_bin != "clarification_needed":
+            continue
+        if slice_name in seen_slices:
+            continue
+        seen_slices.add(slice_name)
+
+        error_text = test_errors.get(slice_name, "")
+        expected, actual = _parse_expected_actual(error_text)
+        fp = _fingerprint_failure(expected, actual)
+
+        raw_failures.append({
+            "slice": slice_name,
+            "failure_class": fc,
+            "bin": failure_bin,
+            "expected": expected[:200],
+            "actual": actual[:200],
+            "fingerprint": fp,
+            "spec_ref": f"{slice_name}/slice.json",
+        })
+
+    # Second pass: group by fingerprint to deduplicate similar failures
+    groups: dict[str, list[dict]] = {}
+    for f in raw_failures:
+        groups.setdefault(f["fingerprint"], []).append(f)
+
+    # Generate one clarification per group
+    clarifications: list[dict] = []
+    for fp, failures in groups.items():
+        if len(failures) == 1:
+            f = failures[0]
+            slices_text = f["slice"]
+        else:
+            slices_text = ", ".join(f["slice"] for f in failures)
+
+        primary = failures[0]
+
+        # Pick question template
+        if fp == "wrong_event":
+            template = QUESTION_TEMPLATES["wrong_event"]
+        elif fp.startswith("wrong_value:"):
+            template = QUESTION_TEMPLATES["wrong_value"]
+        else:
+            template = QUESTION_TEMPLATES["generic"]
+
+        question = template.format(
+            slice=slices_text,
+            condition=f"the {primary['slice']} command is processed",
+            field=fp.split(":")[-1] if ":" in fp else "(see diff above)",
+            expected=primary["expected"][:150],
+            actual=primary["actual"][:150],
+            spec_ref=f"`slice.json` > specifications / description",
+        )
+
+        # If grouped, add evidence from all slices
+        if len(failures) > 1:
+            evidence = "\n".join(
+                f"- **{f['slice']}**: expected `{f['expected'][:80]}`, got `{f['actual'][:80]}`"
+                for f in failures
+            )
+            question += f"\n\n**Affected slices ({len(failures)}):**\n{evidence}"
+
+        clarifications.append({
+            "slices": [f["slice"] for f in failures],
+            "failure_class": primary["failure_class"],
+            "bin": primary["bin"],
+            "fingerprint": fp,
+            "question": question,
+            "expected": primary["expected"],
+            "actual": primary["actual"],
+            "spec_ref": primary["spec_ref"],
+        })
+
+    return clarifications
+
+
+def _load_spec_locations(clarifications: list[dict]) -> list[dict]:
+    """Load Miro element IDs from slice.json for each clarification."""
+    locations: list[dict] = []
+    seen: set[str] = set()
+
+    for c in clarifications:
+        for slice_name in c.get("slices", []):
+            if slice_name in seen:
+                continue
+            seen.add(slice_name)
+
+            # Try to find slice.json
+            for em_dir in (".eventmodel", ".eventmodel2"):
+                # Search all contexts
+                em_path = Path(em_dir) / ".slices"
+                if not em_path.exists():
+                    continue
+                for ctx_dir in em_path.iterdir():
+                    if not ctx_dir.is_dir():
+                        continue
+                    for slice_dir in ctx_dir.iterdir():
+                        if slice_dir.name.lower() == slice_name.lower():
+                            spec_path = slice_dir / "slice.json"
+                            if spec_path.exists():
+                                try:
+                                    spec = json.load(open(spec_path))
+                                    locations.append({
+                                        "slice": slice_name,
+                                        "path": str(spec_path),
+                                        "miro_id": spec.get("id", "?"),
+                                        "context": spec.get("context", "?"),
+                                        "title": spec.get("title", "?"),
+                                    })
+                                except Exception:
+                                    pass
+    return locations
+
+
+def clarification_section(
+    repair: dict | None,
+    classification: dict | None,
+    test_results: dict | None,
+) -> str:
+    """Render clarification requests for unresolved semantic failures."""
+    clarifications = generate_clarifications(repair, classification, test_results)
+    if not clarifications:
+        return ""
+
+    # Write structured artifact for machine readability
+    try:
+        from pathlib import Path as P
+        artifact = {
+            "status": "clarification_needed",
+            "count": len(clarifications),
+            "clarifications": clarifications,
+        }
+        P("/tmp/clarifications.json").write_text(
+            json.dumps(artifact, indent=2, default=str) + "\n"
+        )
+    except Exception:
+        pass
+
+    # Count by bin
+    engineering = [c for c in clarifications if c["bin"] == "engineering_defect"]
+    infra = [c for c in clarifications if c["bin"] == "infra_issue"]
+
+    lines = [
+        "## Clarification Needed",
+        "",
+        "The following could not be resolved automatically. "
+        "Please clarify the spec in Miro and re-trigger the pipeline.",
+        "",
+    ]
+
+    for i, c in enumerate(clarifications, 1):
+        slices_label = ", ".join(c.get("slices", [c.get("slice", "?")]))
+        lines.append(f"### {i}. {slices_label} — `{c['failure_class']}`")
+        lines.append("")
+        lines.append(c["question"])
+        lines.append("")
+
+    # Load slice IDs for Miro references
+    spec_locations = _load_spec_locations(clarifications)
+    if spec_locations:
+        lines.append("### Spec Locations")
+        lines.append("")
+        lines.append("| Miro Name | Context | Config Path | Miro ID |")
+        lines.append("|-----------|---------|-------------|---------|")
+        for loc in spec_locations:
+            lines.append(f"| **{loc['title']}** | {loc['context']} | `{loc['path']}` | `{loc['miro_id']}` |")
+        lines.append("")
+
+    lines.append("> **How to resolve:** Update the spec description in Miro for the affected slice, "
+                 "re-export `config.json`, push, and re-trigger the pipeline via `workflow_dispatch`.")
+
+    return "\n".join(lines)
+
+
 def healing_section(repair: dict | None) -> str:
     if not repair or repair.get("summary", {}).get("total_slices", 0) == 0:
         return ""
@@ -204,10 +485,13 @@ def main():
     conf = load_json("/tmp/confidence.json")
     repair = load_json("/tmp/repair-results.json")
     risk = load_json("/tmp/risk-scores.json")
+    classification = load_json("/tmp/classification.json")
+    test_results = load_json("/tmp/test-results.json")
 
     sections = [
         summary_section(args.context, args.slices, args.base_branch),
         confidence_section(conf),
+        clarification_section(repair, classification, test_results),
         review_guide_section(conf, repair, risk),
         healing_section(repair),
         "",

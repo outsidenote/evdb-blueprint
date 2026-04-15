@@ -211,6 +211,37 @@ jobs:
             echo "  No prior successful runs found"
           fi
 
+      # ── Load clarification answers from prior PR comments ───
+      - name: "💬 Load clarification answers"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Find existing PR for this context's codegen branch pattern
+          BRANCH_PREFIX="${{ matrix.base_branch }}-codegen/${{ matrix.context_pascal }}"
+          PR_NUM=$(gh pr list --head "$BRANCH_PREFIX" --state open --json number --jq '.[0].number' 2>/dev/null || echo "")
+          if [ -z "$PR_NUM" ]; then
+            # Try closed PRs too — developer may have answered after close
+            PR_NUM=$(gh pr list --head "$BRANCH_PREFIX" --state closed --limit 1 --json number --jq '.[0].number' 2>/dev/null || echo "")
+          fi
+
+          if [ -n "$PR_NUM" ]; then
+            echo "  Found PR #$PR_NUM — checking for clarification answers"
+            # Fetch comments, filter for those that look like answers (not bot comments)
+            gh api "repos/${{ github.repository }}/issues/${PR_NUM}/comments" \
+              --jq '.[] | select(.user.type != "Bot") | "### Comment by @\(.user.login) (\(.created_at))\n\(.body)\n"' \
+              > /tmp/pr-clarification-answers.txt 2>/dev/null || true
+
+            if [ -s /tmp/pr-clarification-answers.txt ]; then
+              LINES=$(wc -l < /tmp/pr-clarification-answers.txt)
+              echo "  Loaded $LINES lines of clarification answers from PR #$PR_NUM"
+            else
+              echo "  No human comments found on PR #$PR_NUM"
+              rm -f /tmp/pr-clarification-answers.txt
+            fi
+          else
+            echo "  No prior PR found for this context"
+          fi
+
       # ── Phase 1: AI implementation ──────────────────────────
       - name: "🧠 Implement slices"
         id: implement
@@ -466,6 +497,8 @@ jobs:
             /tmp/audit.jsonl
             /tmp/learned-discoveries.json
             /tmp/learned-discoveries.updated.json
+            /tmp/clarifications.json
+            /tmp/test-results.json
           retention-days: 90
 
   # ═══════════════════════════════════════════════════════════════
