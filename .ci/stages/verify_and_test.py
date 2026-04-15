@@ -61,6 +61,78 @@ def run_verify(root: Path) -> tuple[bool, str]:
         return False, json_output
 
 
+def run_lint(root: Path, context: str) -> bool:
+    """Run ESLint on generated files. Returns True if no errors/warnings."""
+    bc_dir = root / "src" / "BusinessCapabilities" / context
+    if not bc_dir.exists():
+        print("  No files to lint", file=sys.stderr)
+        return True
+
+    # Only lint .ts files that were actually changed (scaffold or AI)
+    try:
+        result = subprocess.run(
+            ["git", "diff", "--name-only", "HEAD~1",
+             f"src/BusinessCapabilities/{context}/"],
+            capture_output=True, text=True, cwd=str(root),
+        )
+        ts_files = [
+            str(root / f.strip()) for f in result.stdout.strip().splitlines()
+            if f.strip().endswith(".ts") and not f.strip().endswith(".test.ts")
+        ]
+    except Exception:
+        ts_files = []
+    if not ts_files:
+        print("  No .ts files found", file=sys.stderr)
+        return True
+
+    print(f"  Linting {len(ts_files)} file(s)...", file=sys.stderr, end=" ", flush=True)
+    try:
+        result = subprocess.run(
+            ["npx", "eslint", "--max-warnings", "0"] + ts_files,
+            capture_output=True, text=True, cwd=str(root), timeout=60,
+        )
+        if result.returncode == 0:
+            print("PASS", file=sys.stderr)
+            return True
+        else:
+            print(f"FAIL", file=sys.stderr)
+            # Add lint failures to test results so classifier can see them
+            for line in result.stdout.strip().splitlines()[:10]:
+                print(f"    {line}", file=sys.stderr)
+
+            # Append lint failures to test-results.json so repair can pick them up
+            try:
+                existing = load_json(TEST_RESULTS) or {"total": 0, "passed": 0, "failed": 0, "results": []}
+                # Extract slice names from lint errors
+                import re
+                lint_slices: set[str] = set()
+                for line in result.stdout.splitlines():
+                    m = re.search(r"/(?:slices|endpoints)/(\w+)/", line)
+                    if m:
+                        lint_slices.add(m.group(1))
+                for sl in lint_slices:
+                    existing["results"].append({
+                        "file": f"eslint:{sl}",
+                        "slice": sl,
+                        "passed": False,
+                        "exit_code": result.returncode,
+                        "error": result.stdout[:500],
+                    })
+                    existing["failed"] = existing.get("failed", 0) + 1
+                    existing["total"] = existing.get("total", 0) + 1
+                write_json(TEST_RESULTS, existing)
+            except Exception:
+                pass
+
+            return False
+    except subprocess.TimeoutExpired:
+        print("TIMEOUT (60s)", file=sys.stderr)
+        return False
+    except FileNotFoundError:
+        print("SKIP (eslint not found)", file=sys.stderr)
+        return True
+
+
 def run_tests(root: Path, context: str) -> tuple[bool, str]:
     """Run slice tests for a context. Returns (passed, output).
 
@@ -202,8 +274,12 @@ def main():
     print("=== Run tests ===", file=sys.stderr)
     test_passed, test_output = run_tests(root, args.context)
 
+    # Step 4: Lint generated code
+    print("=== Lint ===", file=sys.stderr)
+    lint_passed = run_lint(root, args.context)
+
     # Combined result
-    passed = verify_passed and test_passed
+    passed = verify_passed and test_passed and lint_passed
 
     # Audit
     emit("verify_result", "verify_and_test.py", context=args.context,

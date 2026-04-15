@@ -130,6 +130,13 @@ def classify_test_results(test_results: list[dict], already: set[str]) -> list[S
         if is_flaky:
             results.append(SliceClassification(slice_name, FLAKY_OR_ENV,
                                                [f"Environment: {error[:200]}"]))
+        elif entry.get("file", "").startswith("eslint:"):
+            results.append(SliceClassification(
+                slice_name, "lint_error",
+                [f"ESLint error in {slice_name}", error[:200]],
+                affected_files=[],
+                deterministic=False,
+            ))
         else:
             results.append(SliceClassification(
                 slice_name, TEST_FAILURE,
