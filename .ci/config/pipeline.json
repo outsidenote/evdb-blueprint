@@ -40,18 +40,18 @@
       "L2": {
         "name": "bounded_ai",
         "ai": true,
-        "model": "sonnet",
-        "max_files": 1,
-        "max_turns": 5,
-        "max_budget_usd": 0.25
+        "model": "opus",
+        "max_files": 3,
+        "max_turns": 10,
+        "max_budget_usd": 2.00
       },
       "L3": {
         "name": "expanded_ai",
         "ai": true,
         "model": "opus",
         "max_files": 3,
-        "max_turns": 10,
-        "max_budget_usd": 1.00
+        "max_turns": 20,
+        "max_budget_usd": 5.00
       },
       "L4": {
         "name": "human_escalation",

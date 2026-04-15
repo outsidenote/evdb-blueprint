@@ -218,7 +218,7 @@ Rules:
              "--output-format", "text", "--max-turns", str(max_turns),
              "--max-budget-usd", str(max_budget),
              *model_flag, prompt],
-            capture_output=True, text=True, cwd=str(slice_dir), timeout=300,
+            capture_output=True, text=True, cwd=str(slice_dir), timeout=600,
         )
     except subprocess.TimeoutExpired:
         return RepairAttempt(level=level, level_name=level_name, strategy="ai_repair",
@@ -359,7 +359,7 @@ def repair_slice(
             max_turns=l2.get("max_turns", 5),
             max_files=l2.get("max_files", 1),
             max_budget=l2.get("max_budget_usd", 0.25),
-            allowed_files=allowed_files[:1],  # restrict to first file only
+            allowed_files=allowed_files[:l2.get("max_files", 3)],
             verify_output=verify_output,
             test_output=test_output,
         )

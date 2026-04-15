@@ -239,6 +239,8 @@ def build_deep_prompt(todo_content: str, hints: str) -> str:
 - View state: read from stream.views.SliceStateMySlice.
 - GWTS predicates: each spec branch returns a named predicate matching the spec description.
 - Computed fields (timestamps, generated IDs) belong in endpoints only, never in pure handlers.
+- Boundary conditions: before writing a comparison, mentally test the boundary value. If the spec says "greater than zero", ask: what happens when the value IS zero? Zero is not greater than zero, so it should be rejected. Write the predicate that rejects the boundary case.
+- No leftover TODOs: every field in every appendEvent call MUST have a real value derived from the spec. Never leave empty strings or TODO comments in generated code.
 {hint_block}
 ## Spec & TODO Context
 {todo_content}
