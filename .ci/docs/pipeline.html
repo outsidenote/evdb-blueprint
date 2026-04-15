@@ -811,7 +811,7 @@
     </div>
     <div class="summary-step">
       <div class="summary-step-num" style="background:var(--purple)">2</div>
-      <div class="summary-step-text"><strong>Implement + Self-Test</strong><br>Retrieve hints + clarifications, route to SKIP/FAST/DEEP, AI fills TODOs, self-tests command logic</div>
+      <div class="summary-step-text"><strong>Implement + Self-Test</strong><br>Retrieve hints + clarifications, route to SKIP or AI (Opus), fill TODOs, self-test all unit tests</div>
     </div>
     <div class="summary-step">
       <div class="summary-step-num" style="background:var(--blue)">3</div>
@@ -884,7 +884,7 @@
   <div class="flow-connector"></div>
   <div class="flow-row">
     <div class="flow-node flow-node-ai">AI Implement + Self-Test</div>
-    <span class="flow-label">DEEP: fills TODOs, runs command tests, self-fixes</span>
+    <span class="flow-label">Opus: fills TODOs, self-tests, self-fixes</span>
   </div>
   <div class="flow-connector"></div>
   <div class="flow-row">
@@ -1049,11 +1049,11 @@
         <tr><td>TODO density</td><td>Not yet scaffolded</td><td>0.000</td><td>&times; 0.10</td><td>0.000</td></tr>
         <tr style="font-weight:600"><td colspan="4" style="text-align:right">Total</td><td style="color:var(--green)">0.07 &rarr; LOW</td></tr>
       </table>
-      <p>Score <strong>0.07</strong> &mdash; the lowest in the Portfolio context. The risk score sees almost nothing: 0 specs, 1 event, mostly String/Double fields. But this slice contains an 8-step Basel III risk engine with Monte Carlo simulation. <strong>The risk score is correct</strong> &mdash; it measures structural difficulty for code generation (branching, dependents, types), not algorithmic complexity. Haiku will classify this as <code>opus</code> in Phase 1 because the processor description is complex, and the deep mode + learned hints will handle the algorithm.</p>
+      <p>Score <strong>0.07</strong> &mdash; the lowest in the Portfolio context. The risk score sees almost nothing: 0 specs, 1 event, mostly String/Double fields. But this slice contains an 8-step Basel III risk engine with Monte Carlo simulation. <strong>The risk score is correct</strong> &mdash; it measures structural difficulty for code generation (branching, dependents, types), not algorithmic complexity. The AI will still use Opus with self-test for this slice, and the complexity of the algorithm will drive the number of turns used.</p>
 
       <div class="callout callout-info">
         <div class="callout-title">Structural risk vs algorithmic complexity</div>
-        The risk score measures <strong>how hard the code generation structure is</strong>: how many branches (specs &times; events), how many things break if wrong (blast radius), how tricky the types are (DateTime, Custom). It does <em>not</em> measure <strong>how hard the algorithm is</strong> &mdash; that is Haiku's job during Phase 1. A slice can score 0.07 (LOW) on structural risk but still be routed to Opus because the algorithm is a Monte Carlo simulation. The two signals are complementary, not redundant.
+        The risk score measures <strong>how hard the code generation structure is</strong>: how many branches (specs &times; events), how many things break if wrong (blast radius), how tricky the types are (DateTime, Custom). It does <em>not</em> measure <strong>how hard the algorithm is</strong> &mdash; that shows up in the number of turns the AI needs. A slice can score 0.07 (LOW) on structural risk but still need 18 turns because the algorithm is a Monte Carlo simulation.
       </div>
 
       <p style="font-weight:600;color:var(--gray-700);margin-top:1rem">All 6 Portfolio slices (actual scores from <code>risk_score.py</code>)</p>
@@ -1111,7 +1111,7 @@
     <span class="phase-chevron">&#9656;</span>
   </div>
   <div class="phase-body" onclick="event.stopPropagation()">
-    <p>One job per context via matrix strategy. Claude fills TODO placeholders in scaffolded files. Slices run in parallel via <code>ThreadPoolExecutor</code> (max 3 concurrent). DEEP mode includes a self-test protocol &mdash; the AI runs command tests within its session and self-corrects before handing off. Hints from prior runs and clarification answers from PR comments are injected into prompts.</p>
+    <p>One job per context via matrix strategy. Claude fills TODO placeholders in scaffolded files. Slices run in parallel via <code>ThreadPoolExecutor</code> (max 3 concurrent). Every AI slice uses Opus with a self-test protocol &mdash; the AI runs all available unit tests within its session and self-corrects before handing off. Hints from prior runs and clarification answers from PR comments are injected into prompts. All commits are SSH-signed by the bot account.</p>
 
     <!-- Trivial fast-path -->
     <div class="stage">
@@ -1214,16 +1214,15 @@
     <!-- Self-test protocol -->
     <div class="stage">
       <div class="stage-header">
-        <h3>Self-Test Protocol (DEEP mode only)</h3>
-        <span class="stage-file">implement_slice.py &rarr; build_deep_prompt()</span>
+        <h3>Self-Test Protocol</h3>
+        <span class="stage-file">implement_slice.py &rarr; build_prompt()</span>
       </div>
-      <p>In DEEP mode, after filling all TODOs, the AI runs the command unit test within the same session. If tests fail, it reads the assertion error, fixes its code, and re-runs &mdash; all with full context still alive. This catches boundary condition bugs (e.g., <code>&lt; 0</code> vs <code>&lt;= 0</code>) and missing field values before the code leaves the session.</p>
+      <p>After filling all TODOs, the AI runs every unit test that exists in its CWD. Exact <code>node --import tsx --test</code> commands are embedded in the prompt &mdash; no guessing. If tests fail, the AI reads the assertion error, fixes its code, and re-runs &mdash; all with full context still alive.</p>
       <table>
-        <tr><th>What it self-tests</th><th>What it does NOT self-test</th></tr>
-        <tr><td>Command handler predicates (gwts.ts)</td><td>Projection SQL (needs PostgreSQL + Docker)</td></tr>
-        <tr><td>Command handler branching</td><td>Enrichment logic (needs endpoint wiring)</td></tr>
-        <tr><td>Error messages and field values</td><td>Integration tests (testcontainers)</td></tr>
-        <tr><td>Boundary conditions</td><td>Cross-slice dependencies</td></tr>
+        <tr><th>Self-tests (pure unit tests)</th><th>NOT self-tested (needs infrastructure)</th></tr>
+        <tr><td><code>tests/command.slice.test.ts</code> &mdash; predicates, branching, error messages</td><td><code>projection.slice.test.ts</code> &mdash; needs PostgreSQL via testcontainers</td></tr>
+        <tr><td><code>tests/projection.test.ts</code> &mdash; SQL shape, params, structure</td><td>Cross-slice integration tests</td></tr>
+        <tr><td><code>tests/enrichment.test.ts</code> &mdash; computation logic, formulas</td><td></td></tr>
       </table>
       <p style="font-weight:600;color:var(--gray-700);margin-top:0.75rem">Stopping rules:</p>
       <ul>
@@ -1244,11 +1243,11 @@
         <h3>Clarification Answers Injection</h3>
         <span class="stage-file">generate-slices.yml &rarr; "Load clarification answers"</span>
       </div>
-      <p>If a previous run posted clarification questions on the PR, and a developer answered in comments, those answers are fetched and injected into the DEEP prompt. The flow:</p>
+      <p>If a previous run posted clarification questions on the PR, and a developer answered in comments, those answers are fetched and injected into the prompt. The flow:</p>
       <ul>
         <li>Workflow step fetches human comments from the most recent PR for this context</li>
         <li>Comments are written to <code>/tmp/pr-clarification-answers.txt</code></li>
-        <li>DEEP prompt appends them as <code>## Clarification from Developer</code></li>
+        <li>Prompt appends them as <code>## Clarification from Developer</code></li>
         <li>AI uses the answers to resolve ambiguity in the spec</li>
       </ul>
     </div>
@@ -1259,7 +1258,7 @@
         <h3>Reuse Feedback</h3>
         <span class="stage-file">implement_slice.py &rarr; _record_reuse_feedback()</span>
       </div>
-      <p>After all workers complete, the main thread collects which hint record IDs were used by successful runs (path=FAST or DEEP with turns &gt; 0). For each used hint, it increments <code>times_reused</code> and sets <code>last_reused_at</code>. Written to a separate artifact &mdash; never mutates the original discovery file.</p>
+      <p>After all workers complete, the main thread collects which hint record IDs were used by successful AI runs (turns &gt; 0). For each used hint, it increments <code>times_reused</code> and sets <code>last_reused_at</code>. Written to a separate artifact &mdash; never mutates the original discovery file.</p>
       <div class="io">
         <div class="io-col io-in"><h4>Trigger</h4><ul>
           <li>Phase 2 complete (all workers done)</li>
@@ -1309,10 +1308,18 @@
 
     <div class="stage">
       <div class="stage-header">
+        <h3>ESLint</h3>
+        <span class="stage-file">verify_and_test.py &rarr; run_lint()</span>
+      </div>
+      <p>Runs ESLint on only the <code>.ts</code> files that changed (via <code>git diff --name-only HEAD~1</code>). Excludes test files. Enforces zero warnings &mdash; catches <code>any</code> types, unused imports, and other issues the AI might introduce. Failures are appended to <code>/tmp/test-results.json</code> as <code>lint_error</code> class so the repair ladder can fix them.</p>
+    </div>
+
+    <div class="stage">
+      <div class="stage-header">
         <h3>Classify Failures</h3>
         <span class="stage-file">stages/classify.py</span>
       </div>
-      <p>Deterministic classification from structured test results JSON &mdash; no regex parsing of test output. Each failed test already has its slice name and error text. The classifier checks for flaky patterns (ETIMEOUT, ENOMEM) and bins the rest as the appropriate failure class.</p>
+      <p>Deterministic classification from structured test results JSON &mdash; no regex parsing of test output. Each failed test already has its slice name and error text. The classifier checks for flaky patterns (ETIMEOUT, ENOMEM) and bins the rest as the appropriate failure class. Includes <code>lint_error</code> for ESLint violations.</p>
       <table>
         <tr><th>Class</th><th>Pattern</th><th>Repair Level</th><th>Example</th></tr>
         <tr><td><code>import_error</code></td><td><code>.ts</code> instead of <code>.js</code> extension</td><td>L1 deterministic</td><td><code>Cannot find module './command.ts'</code></td></tr>
@@ -1527,7 +1534,7 @@
         <div class="lifecycle-step" style="background:var(--red-pale);border-color:#fecaca;color:var(--red)">rejected</div>
       </div>
       <table>
-        <tr><th>Status</th><th>Retrieved by FAST?</th><th>Retrieved by DEEP?</th><th>How it gets here</th></tr>
+        <tr><th>Status</th><th>Retrieved?</th><th>Priority</th><th>How it gets here</th></tr>
         <tr><td><code>candidate</code></td><td>No</td><td>Yes</td><td>Initial state from learn.py extraction</td></tr>
         <tr><td><code>approved</code></td><td>Yes</td><td>Yes</td><td>Manual promotion or automated after N successful reuses</td></tr>
         <tr><td><code>deprecated</code></td><td>No</td><td>No</td><td>Pattern superseded or no longer applicable</td></tr>
@@ -1816,9 +1823,9 @@ Run N+1 (next):
     <div class="audit-event"><span class="ev-type">config_gate</span><span class="ev-actor">detect.py</span><span class="ev-detail">changed=true, em_dir=.eventmodel</span></div>
     <div class="audit-event"><span class="ev-type">scaffold_complete</span><span class="ev-actor">scaffold.py</span><span class="ev-detail">6 planned, 6 scaffolded</span></div>
     <div class="audit-event"><span class="ev-type">risk_scored</span><span class="ev-actor">risk_score.py</span><span class="ev-detail">addloantoportfolio: 0.25 (low)</span></div>
-    <div class="audit-event"><span class="ev-type">policy_decision</span><span class="ev-actor">policy_engine</span><span class="ev-detail">approve, model=auto, budget=$2.00</span></div>
+    <div class="audit-event"><span class="ev-type">policy_decision</span><span class="ev-actor">policy_engine</span><span class="ev-detail">approve, model=opus, budget=$5.00</span></div>
     <div class="audit-event"><span class="ev-type">ai_skipped</span><span class="ev-actor">implement_slice.py</span><span class="ev-detail">trivial_slice, cleaned=2 generic TODOs</span></div>
-    <div class="audit-event"><span class="ev-type">ai_invocation</span><span class="ev-actor">implement_slice.py</span><span class="ev-detail">mode=FAST, model=sonnet, cost=$0.38, 3 hints</span></div>
+    <div class="audit-event"><span class="ev-type">ai_invocation</span><span class="ev-actor">implement_slice.py</span><span class="ev-detail">model=opus, 12 turns, self-test=2, 5 hints</span></div>
     <div class="audit-event"><span class="ev-type">verify_result</span><span class="ev-actor">verify_and_test.py</span><span class="ev-detail">verify=true, test=false</span></div>
     <div class="audit-event"><span class="ev-type">classify_result</span><span class="ev-actor">classify.py</span><span class="ev-detail">predicate_mismatch, deterministic=true</span></div>
     <div class="audit-event"><span class="ev-type">repair_attempt</span><span class="ev-actor">repair.py</span><span class="ev-detail">L2 opus --continue, changed index.ts, resolved=true</span></div>
@@ -1870,9 +1877,9 @@ print('VALID' if h == b['sha256'] else 'TAMPERED')"</pre>
       </div>
 
       <div class="journey-step j-det">
-        <div class="journey-title">Policy: Approve, model=auto, $2.00</div>
+        <div class="journey-title">Policy: Approve, Opus, $5.00</div>
         <div class="journey-meta">policy_decide.py &middot; ~0.01s</div>
-        <div class="journey-detail">Rule matched: "approve_moderate_risk" (risk &lt; 0.6). Model deferred to Haiku classification. Repair depth: L3. PR mode: draft.</div>
+        <div class="journey-detail">Rule matched: "approve_moderate_risk" (risk &lt; 0.6). All slices use Opus with self-test. Repair depth: L3. PR mode: draft.</div>
       </div>
 
       <div class="journey-step j-det">
@@ -1881,10 +1888,10 @@ print('VALID' if h == b['sha256'] else 'TAMPERED')"</pre>
         <div class="journey-detail"><code>scan_todos()</code> finds TODO markers in gwts.ts, commandHandler.ts, and index.ts. Not generic scaffold TODOs &rarr; needs AI.</div>
       </div>
 
-      <div class="journey-step j-ai">
-        <div class="journey-title">Haiku Classification &rarr; opus</div>
-        <div class="journey-meta">implement_slice.py &middot; ~2s &middot; $0.02</div>
-        <div class="journey-detail">3 GWT branches with portfolio rating constraint logic. Haiku classifies as <strong>opus</strong> (complex branching). Mode: DEEP.</div>
+      <div class="journey-step j-learn">
+        <div class="journey-title">Load Clarification Answers</div>
+        <div class="journey-meta">generate-slices.yml &middot; ~1s</div>
+        <div class="journey-detail">Check for prior PR comments with developer answers. None found (first run). If answers existed, they would be injected into the prompt.</div>
       </div>
 
       <div class="journey-step j-learn">
@@ -1894,9 +1901,9 @@ print('VALID' if h == b['sha256'] else 'TAMPERED')"</pre>
       </div>
 
       <div class="journey-step j-ai">
-        <div class="journey-title">DEEP Mode: Opus fills TODOs</div>
-        <div class="journey-meta">implement_slice.py &middot; ~4min &middot; $1.20</div>
-        <div class="journey-detail">CWD locked to <code>src/BusinessCapabilities/Portfolio/slices/addLoanToPortfolio/</code>. 12 turns. Fills predicates (amountLessThanZero, portfolioRatingBreached, portfolioRatingMaintained), command handler branching, projection SQL.</div>
+        <div class="journey-title">Opus: Fill TODOs + Self-Test</div>
+        <div class="journey-meta">implement_slice.py &middot; ~4min &middot; 12 turns</div>
+        <div class="journey-detail">CWD locked to <code>slices/AddLoanToPortfolio/</code>. Fills predicates, command handler branching. Runs <code>node --import tsx --test tests/command.slice.test.ts</code>. Finds boundary bug (<code>&lt; 0</code> vs <code>&lt;= 0</code>), fixes it, re-runs, passes. All within one session.</div>
       </div>
 
       <div class="journey-step j-learn">
@@ -1918,9 +1925,9 @@ print('VALID' if h == b['sha256'] else 'TAMPERED')"</pre>
       </div>
 
       <div class="journey-step j-ai">
-        <div class="journey-title">Repair L2: Sonnet fixes gwts.ts</div>
-        <div class="journey-meta">repair.py &middot; ~90s &middot; $0.50</div>
-        <div class="journey-detail">L1 (deterministic) skipped &mdash; not an import/type/path error. L2 (Opus <code>--continue</code>) resumes the implement session, reads the spec + failing test, fixes <code>amountLessThanZero</code> predicate: <code>command.loanAmount &lt;= 0</code> instead of <code>&lt; 0</code>. Re-verify: pass. Re-test: pass.</div>
+        <div class="journey-title">Repair L2: Opus --continue fixes projection SQL</div>
+        <div class="journey-meta">repair.py &middot; ~90s &middot; 5 turns</div>
+        <div class="journey-detail">L1 (deterministic) skipped &mdash; not an import/type/path error. L2 (Opus <code>--continue</code>) resumes the implement session with full context. Reads the spec + failing test + test output. Fixes the projection <code>index.ts</code> date serialization. Re-verify: pass. Re-test: pass.</div>
       </div>
 
       <div class="journey-step j-learn">
@@ -1938,7 +1945,7 @@ print('VALID' if h == b['sha256'] else 'TAMPERED')"</pre>
       <div class="journey-step j-human">
         <div class="journey-title">PR Created: Ready for Review</div>
         <div class="journey-meta">render/pr_body.py &middot; ~1s</div>
-        <div class="journey-detail">PR body includes confidence table, review guide (flags gwts.ts as AI-repaired), model traceability (Opus $1.20 + Sonnet $0.18 = $1.40 total), learning summary (3 new patterns).</div>
+        <div class="journey-detail">PR body includes confidence table, review guide (flags index.ts as AI-repaired), cost breakdown (implement vs repair), clarification section (if any unresolved), learning summary (3 new patterns). Commit signed by bot SSH key.</div>
       </div>
 
       <div class="journey-step j-done">
@@ -1966,12 +1973,12 @@ print('VALID' if h == b['sha256'] else 'TAMPERED')"</pre>
         <div class="cost-detail">Deterministic TODO strip<br>0 turns &middot; no AI needed</div>
       </div>
       <div class="cost-card cost-fast">
-        <h4>FAST Path</h4>
+        <h4>AI Path</h4>
         <div class="cost-amount">~2 min</div>
-        <div class="cost-detail">Sonnet &middot; 4&ndash;6 turns<br>simple mapping &amp; predicates</div>
+        <div class="cost-detail">Opus &middot; simple slices<br>self-test catches issues</div>
       </div>
       <div class="cost-card cost-deep">
-        <h4>DEEP Path</h4>
+        <h4>AI Path (complex)</h4>
         <div class="cost-amount">~8 min</div>
         <div class="cost-detail">Opus &middot; 12&ndash;18 turns<br>algorithms &amp; complex branching</div>
       </div>
@@ -2020,7 +2027,7 @@ print('VALID' if h == b['sha256'] else 'TAMPERED')"</pre>
     <p style="color:var(--gray-500);font-size:0.85rem;margin-bottom:0.75rem">How each slice gets routed to SKIP, FAST, or DEEP. Three deterministic checks happen before any AI runs.</p>
 
     <div class="dtree">
-      <div class="dtree-node dtree-q">Does the slice have real TODOs?<br><span style="font-size:0.72rem;font-style:normal;color:var(--gray-400)">scan_todos() &rarr; filter generic patterns</span></div>
+      <div class="dtree-node dtree-q">Does the slice have real TODOs or spec descriptions?<br><span style="font-size:0.72rem;font-style:normal;color:var(--gray-400)">scan_todos() + has_spec_logic()</span></div>
       <div class="flow-connector"></div>
       <div class="dtree-fork">
         <div class="dtree-branch">
@@ -2031,33 +2038,7 @@ print('VALID' if h == b['sha256'] else 'TAMPERED')"</pre>
         <div class="dtree-branch">
           <div class="dtree-label dtree-yes">Yes</div>
           <div class="flow-connector"></div>
-          <div class="dtree-node dtree-q">Is model=auto in policy decision?</div>
-          <div class="flow-connector"></div>
-          <div class="dtree-fork">
-            <div class="dtree-branch">
-              <div class="dtree-label dtree-no">No (forced)</div>
-              <div class="flow-connector"></div>
-              <div class="dtree-node" style="font-size:0.78rem">Use policy model<br><span style="font-size:0.7rem;font-weight:400;color:var(--gray-400)">sonnet or opus</span></div>
-            </div>
-            <div class="dtree-branch">
-              <div class="dtree-label dtree-yes">Yes</div>
-              <div class="flow-connector"></div>
-              <div class="dtree-node dtree-q">Haiku: is it complex?<br><span style="font-size:0.72rem;font-style:normal;color:var(--gray-400)">1 turn &middot; ~2 seconds</span></div>
-              <div class="flow-connector"></div>
-              <div class="dtree-fork">
-                <div class="dtree-branch">
-                  <div class="dtree-label dtree-no">Straightforward</div>
-                  <div class="flow-connector"></div>
-                  <div class="dtree-result" style="background:var(--green-pale);border:1.5px solid #a7f3d0;color:var(--green)">FAST<br><span style="font-size:0.7rem;font-weight:400">Sonnet &middot; ~2 min</span></div>
-                </div>
-                <div class="dtree-branch">
-                  <div class="dtree-label dtree-yes">Complex</div>
-                  <div class="flow-connector"></div>
-                  <div class="dtree-result" style="background:var(--purple-pale);border:1.5px solid #c4b5fd;color:var(--purple)">DEEP<br><span style="font-size:0.7rem;font-weight:400">Opus &middot; ~8 min</span></div>
-                </div>
-              </div>
-            </div>
-          </div>
+          <div class="dtree-result" style="background:var(--purple-pale);border:1.5px solid #c4b5fd;color:var(--purple)">AI (Opus)<br><span style="font-size:0.7rem;font-weight:400">20 turns &middot; self-test &middot; ~2&ndash;8 min</span></div>
         </div>
       </div>
     </div>
@@ -2079,9 +2060,9 @@ print('VALID' if h == b['sha256'] else 'TAMPERED')"</pre>
       <tr><td><code>stages/scaffold.py</code></td><td><span class="badge badge-det">Det</span></td><td>Split &rarr; diff &rarr; scaffold &rarr; normalize pipeline</td></tr>
       <tr><td><code>stages/risk_score.py</code></td><td><span class="badge badge-det">Det</span></td><td>7-factor weighted risk scoring (0.0&ndash;1.0)</td></tr>
       <tr><td><code>stages/policy_decide.py</code></td><td><span class="badge badge-det">Det</span></td><td>5-rule policy engine (approve/gate/block)</td></tr>
-      <tr><td><code>stages/implement_slice.py</code></td><td><span class="badge badge-ai">AI</span></td><td>SKIP/FAST/DEEP code generation with memory retrieval + reuse feedback</td></tr>
+      <tr><td><code>stages/implement_slice.py</code></td><td><span class="badge badge-ai">AI</span></td><td>SKIP or Opus with self-test, memory retrieval, clarification injection</td></tr>
       <tr><td><code>stages/retrieve_hints.py</code></td><td><span class="badge badge-learn">Learn</span></td><td>Pre-indexed memory retrieval with deterministic +3/+2/+1/+1 scoring</td></tr>
-      <tr><td><code>stages/verify_and_test.py</code></td><td><span class="badge badge-det">Det</span></td><td>Contract verification (evdb-verify) + node test runner</td></tr>
+      <tr><td><code>stages/verify_and_test.py</code></td><td><span class="badge badge-det">Det</span></td><td>Contract verification + node test runner + ESLint (changed files only)</td></tr>
       <tr><td><code>stages/classify.py</code></td><td><span class="badge badge-det">Det</span></td><td>8-type regex failure classification</td></tr>
       <tr><td><code>stages/repair.py</code></td><td><span class="badge badge-ai">AI</span></td><td>L1&ndash;L4 repair ladder with <code>--continue</code>, spec context, smart CWD</td></tr>
       <tr><td><code>stages/learn.py</code></td><td><span class="badge badge-learn">Learn</span></td><td>Pattern extraction, fingerprinting, dedup, memory record construction</td></tr>
@@ -2118,9 +2099,60 @@ print('VALID' if h == b['sha256'] else 'TAMPERED')"</pre>
   </div>
 </div>
 
+<!-- ======= INFRASTRUCTURE ======================================= -->
+<div class="phase" onclick="this.classList.toggle('open')">
+  <div class="phase-header">
+    <h2>Infrastructure &amp; Security</h2>
+    <span class="badge badge-det">Deterministic</span>
+    <span class="phase-chevron">&#9656;</span>
+  </div>
+  <div class="phase-body" onclick="event.stopPropagation()">
+
+    <div class="stage">
+      <div class="stage-header">
+        <h3>SSH Signed Commits</h3>
+        <span class="stage-file">generate-slices.yml &rarr; "Configure signed commits"</span>
+      </div>
+      <p>All pipeline commits are SSH-signed by a dedicated bot account for SOC2 compliance. The bot cannot merge PRs &mdash; humans review and merge. Branch protection rules remain enforced.</p>
+      <table>
+        <tr><th>Secret</th><th>What it is</th></tr>
+        <tr><td><code>BOT_SSH_SIGNING_KEY</code></td><td>SSH private key (ed25519, no passphrase)</td></tr>
+        <tr><td><code>BOT_GIT_NAME</code></td><td>Git author name (e.g., <code>evdb-codegen-bot</code>)</td></tr>
+        <tr><td><code>BOT_GIT_EMAIL</code></td><td>Git author email (registered as signing key on GitHub)</td></tr>
+        <tr><td><code>BOT_GITHUB_TOKEN</code></td><td>Fine-grained PAT: contents:write + pull-requests:write</td></tr>
+      </table>
+      <p>Commits appear as:</p>
+<pre>Author:  evdb-codegen-bot &lt;evdb-codegen-bot@users.noreply.github.com&gt;
+Signed:  Verified (SSH key: SHA256:xxxx)
+Co-Authored-By: Claude Code &lt;noreply@anthropic.com&gt;</pre>
+    </div>
+
+    <div class="stage">
+      <div class="stage-header">
+        <h3>ESLint Enforcement</h3>
+      </div>
+      <p>Zero-warning ESLint policy on AI-generated code. Only changed <code>.ts</code> files are linted (via <code>git diff</code>). The <code>lint_error</code> failure class in the classifier allows the repair ladder to fix violations like <code>any</code> types.</p>
+    </div>
+
+    <div class="stage">
+      <div class="stage-header">
+        <h3>Date Serialization Convention</h3>
+      </div>
+      <p>JavaScript <code>Date</code> objects serialize differently through the pg driver vs <code>JSON.stringify()</code>. The scaffold template instructs the AI: <em>"convert Date fields to <code>.toISOString()</code> before passing as SQL params."</em> This ensures consistent ISO format in PostgreSQL jsonb and matching test assertions.</p>
+    </div>
+
+    <div class="stage">
+      <div class="stage-header">
+        <h3>Projection SQL Type Casts</h3>
+      </div>
+      <p>Parameters inside <code>jsonb_build_object()</code> must have explicit type casts (<code>$3::text</code>, <code>$4::numeric</code>). PostgreSQL cannot infer types in jsonb context. The scaffold template shows this pattern and the integration tests catch violations by executing SQL against real PostgreSQL.</p>
+    </div>
+  </div>
 </div>
 
-<div class="footer">evdb CI Pipeline &mdash; with structured learning</div>
+</div>
+
+<div class="footer">evdb CI Pipeline &mdash; autonomous code generation with structured learning, self-test, and clarification</div>
 
 </body>
 </html>
