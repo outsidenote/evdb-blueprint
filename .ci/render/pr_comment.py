@@ -71,6 +71,26 @@ def main():
                           f"max level L{s['max_level_used']}, "
                           f"cost ${s['total_cost_usd']:.2f}")
 
+    # Cost breakdown by stage
+    implement_cost = float(stats.get('cost', 0))
+    implement_turns = int(stats.get('turns', stats.get('num_turns', 0)))
+    repair_cost = float(repair.get("summary", {}).get("total_cost_usd", 0)) if repair else 0
+    repair_turns = sum(
+        a.get("turns", 0)
+        for r in (repair.get("repairs", []) if repair else [])
+        for a in r.get("attempts", [])
+    )
+    total_cost = implement_cost + repair_cost
+    total_turns = implement_turns + repair_turns
+
+    cost_breakdown = f"""### Cost Breakdown
+
+| Stage | Turns | Cost |
+|-------|:-----:|-----:|
+| Implement (code generation) | {implement_turns} | ${implement_cost:.2f} |
+| Repair (self-healing) | {repair_turns} | ${repair_cost:.2f} |
+| **Total** | **{total_turns}** | **${total_cost:.2f}** |"""
+
     comment = f"""## Generation Stats
 
 | Metric | Value |
@@ -78,12 +98,11 @@ def main():
 | Context | **{args.context}** |
 | Slices | `{args.slices}` |
 | Duration | **{args.duration}** |
-| Turns | {stats.get('turns', stats.get('num_turns', 0))} |
-| Tokens | {int(stats.get('total_tokens', 0)):,} |
-| Cost | **${stats.get('cost', 0):.2f}** |
 | Confidence | **{args.worst_band}** (avg {args.avg_score}) |
 | Repairs | {args.repaired} |
 | Run | {run_link} |
+
+{cost_breakdown}
 
 {model_section}
 
