@@ -561,6 +561,13 @@ def verify(normalized_path: Path, src_root: Path) -> SliceReport:
     if norm["slice"]["sliceType"] == "STATE_VIEW":
         raw_slice = _load_raw_slice(normalized_path, src_root)
         if raw_slice and raw_slice.get("readmodels"):
+            # Skip todoList readmodels — these are pg-boss work queues,
+            # not Kafka projections. The scaffold intentionally does not
+            # generate index.ts or projection.test.ts for them.
+            if any(rm.get("todoList") for rm in raw_slice.get("readmodels", [])):
+                add(report, "(skip)", "slice_type",
+                    WARN, "STATE_VIEW with todoList — handled by pg-boss, not projection")
+                return report
             paths = projection_src_paths(norm, src_root)
             check_projection(norm, raw_slice, paths, report)
             return report

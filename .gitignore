@@ -145,3 +145,6 @@ vite.config.ts.timestamp-*
 .claude/test-fixtures/dev-results/
 .claude/test-fixtures/golden-results/
 .claude/test-fixtures/test-coverage.html
+
+# Local-only workflows (act testing)
+.github/workflows/generate-slices-local.yml

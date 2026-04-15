@@ -1,0 +1,76 @@
+{
+  "version": 3,
+  "rules": [
+    {
+      "name": "block_high_risk_on_push",
+      "description": "High-risk slices must be triggered manually, not on push",
+      "condition": { "risk_score_gte": 0.8, "trigger": "push" },
+      "action": "block",
+      "reason": "Risk score ≥0.8 requires workflow_dispatch"
+    },
+    {
+      "name": "gate_first_run",
+      "description": "First-ever run for a slice — force draft PR + human review",
+      "condition": { "prior_runs_eq": 0 },
+      "action": "gate",
+      "model": "opus",
+      "max_budget_usd": 2.00,
+      "max_turns": 20,
+      "repair_depth": 3,
+      "pr_mode": "draft",
+      "reason": "No prior runs — gating for human review"
+    },
+    {
+      "name": "approve_proven_low_risk",
+      "description": "Low risk + recent success history → auto-approve with Sonnet",
+      "condition": { "risk_score_lt": 0.3, "last_3_passed": true },
+      "action": "approve",
+      "model": "sonnet",
+      "max_budget_usd": 0.50,
+      "max_turns": 16,
+      "repair_depth": 2,
+      "pr_mode": "ready",
+      "reason": "Low risk + proven track record"
+    },
+    {
+      "name": "approve_moderate_risk",
+      "description": "Moderate risk — use auto model selection, full repair depth",
+      "condition": { "risk_score_lt": 0.6 },
+      "action": "approve",
+      "model": "auto",
+      "max_budget_usd": 2.00,
+      "max_turns": 20,
+      "repair_depth": 3,
+      "pr_mode": "draft",
+      "reason": "Moderate risk — standard pipeline"
+    },
+    {
+      "name": "approve_high_risk_manual",
+      "description": "High risk but manually triggered — proceed with Opus + full ladder",
+      "condition": { "risk_score_lt": 1.0 },
+      "action": "approve",
+      "model": "opus",
+      "max_budget_usd": 3.00,
+      "max_turns": 20,
+      "repair_depth": 4,
+      "pr_mode": "draft",
+      "reason": "High risk, manually dispatched"
+    }
+  ],
+  "guardrails": {
+    "max_total_cost_per_run_usd": 15.00,
+    "max_slices_per_run": 20,
+    "require_human_approval_above_cost_usd": 5.00,
+    "blocked_on_weekend": false
+  },
+  "model_resolution": {
+    "anthropic": {
+      "opus": "",
+      "sonnet": "claude-sonnet-4-6"
+    },
+    "bedrock": {
+      "opus": "us.anthropic.claude-opus-4-6-v1@bedrock",
+      "sonnet": "us.anthropic.claude-sonnet-4-6-v1@bedrock"
+    }
+  }
+}

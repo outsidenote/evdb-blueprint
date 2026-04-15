@@ -2175,7 +2175,7 @@ def gen_projection(ds: DerivedSlice) -> str:
 
 
 def gen_projection_test(ds: DerivedSlice) -> str:
-    """Generate projection test skeleton."""
+    """Generate projection unit test skeleton (shape checks only)."""
     readmodel = ds.raw["readmodels"][0]
     rm_fields = readmodel.get("fields", [])
 
@@ -2221,6 +2221,108 @@ def gen_projection_test(ds: DerivedSlice) -> str:
 
     lines.extend([
         "});",
+        "",
+    ])
+    return "\n".join(lines)
+
+
+def gen_projection_integration_test(ds: DerivedSlice) -> str:
+    """Generate projection integration test skeleton for AI to fill.
+
+    Produces a minimal ProjectionSliceTester.run() structure with TODO
+    test cases. The AI fills in event payloads and expected state based
+    on the event schema (from TODO_CONTEXT.md) and the readmodel description.
+
+    The scaffold does NOT attempt to generate payloads because:
+    - The event fields come from a different slice (upstream event producer)
+    - The readmodel fields are the OUTPUT, not the INPUT
+    - The scaffold only has access to the current slice's definition
+
+    What the AI fills:
+    - Event payload fields (from the inbound event schema)
+    - Expected state after one event (initial values)
+    - Expected state after two events (accumulation, if spec has description)
+
+    What this catches when the AI fills it correctly:
+    - Uncast parameters in jsonb_build_object ($3 without ::text)
+    - Wrong accumulation logic (EXCLUDED.payload instead of field-specific SQL)
+    - Missing fields in the stored payload
+    - SQL syntax errors
+    """
+    readmodel = ds.raw["readmodels"][0]
+    description = readmodel.get("description", "").strip()
+
+    # Find INBOUND events
+    inbound_events = []
+    for dep in readmodel.get("dependencies", []):
+        if dep.get("type") == "INBOUND" and dep.get("elementType") == "EVENT":
+            inbound_events.append(pascal_case(dep["title"]))
+
+    if not inbound_events:
+        return ""
+
+    event_name = inbound_events[0]
+
+    lines = [
+        'import { randomUUID } from "node:crypto";',
+        'import { ProjectionSliceTester } from "#abstractions/slices/ProjectionSliceTester.js";',
+        f'import {{ {ds.slice_name_camel}Slice }} from "./index.js";',
+        "",
+        f"ProjectionSliceTester.run({ds.slice_name_camel}Slice, [",
+        "  {",
+        f'    description: "{event_name}: first event creates initial state",',
+        "    run: () => {",
+        f"      // TODO: create test data and fill expected state",
+        f"      // The payload should contain the fields from the {event_name} event,",
+        f"      // NOT the readmodel fields. Check the event schema in TODO_CONTEXT.md.",
+        f"      // Key should match how the projection handler builds it.",
+        "      const key = randomUUID();",
+        "      return {",
+        "        given: [",
+        f'          {{ messageType: "{event_name}", payload: {{',
+        f"            // TODO: fill with {event_name} event fields",
+        "          } },",
+        "        ],",
+        "        then: [{ key, expectedState: {",
+        "          // TODO: expected stored state after first event",
+        "        } }],",
+        "      };",
+        "    },",
+        "  },",
+    ]
+
+    # Second test case only if there's aggregation logic to test
+    if description:
+        desc_short = description[:120].replace('"', "'")
+        if len(description) > 120:
+            desc_short += "..."
+        lines.extend([
+            "  {",
+            f'    description: "two {event_name} events: fields accumulate correctly",',
+            "    run: () => {",
+            f"      // Spec: {desc_short}",
+            f"      // TODO: send two events with DIFFERENT numeric values,",
+            f"      // then assert the accumulated/averaged result.",
+            "      const key = randomUUID();",
+            "      return {",
+            "        given: [",
+            f'          {{ messageType: "{event_name}", payload: {{',
+            f"            // TODO: first event payload",
+            "          } },",
+            f'          {{ messageType: "{event_name}", payload: {{',
+            f"            // TODO: second event payload (different numbers)",
+            "          } },",
+            "        ],",
+            "        then: [{ key, expectedState: {",
+            "          // TODO: expected accumulated state after two events",
+            "        } }],",
+            "      };",
+            "    },",
+            "  },",
+        ])
+
+    lines.extend([
+        "]);",
         "",
     ])
     return "\n".join(lines)
@@ -2759,6 +2861,13 @@ def scaffold_slice(root: Path, folder: str, dry_run: bool = False) -> dict:
         if not projection_test_path.exists():
             write_file(projection_test_path, gen_projection_test(ds))
 
+        # Integration test — runs SQL against real PostgreSQL
+        integration_test_path = projection_dir / "projection.slice.test.ts"
+        if not integration_test_path.exists():
+            integration_content = gen_projection_integration_test(ds)
+            if integration_content:
+                write_file(integration_test_path, integration_content)
+
         # Update per-context projections.ts
         if not dry_run:
             projections_path = paths.bc / "slices" / "projections.ts"
@@ -3078,6 +3187,7 @@ def _gen_todo_context(paths: SlicePaths, ds: DerivedSlice,
     if is_proj:
         todo_files.append(f"- `slices/{sn}/index.ts` — replace generic UPSERT with proper SQL: select specific fields, handle accumulation vs overwrite")
         todo_files.append(f"- `slices/{sn}/tests/projection.test.ts` — verify SQL params contain correct field values")
+        todo_files.append(f"- `slices/{sn}/projection.slice.test.ts` — fill event payloads and expected state (runs against real PostgreSQL via testcontainers)")
     elif is_enrichment:
         todo_files.append(f"- `endpoints/{sn}/enrichment.ts` — implement enrichment logic per backendPrompts below")
         todo_files.append(f"- `endpoints/{sn}/tests/enrichment.test.ts` — verify enrichment output")
@@ -3203,7 +3313,9 @@ def _gen_todo_context(paths: SlicePaths, ds: DerivedSlice,
         lines.append("## Patterns (projection SQL)")
         lines.append("")
         lines.append("```typescript")
-        lines.append("// UPSERT with accumulation — increment numeric fields")
+        lines.append("// UPSERT with accumulation using jsonb_build_object")
+        lines.append("// IMPORTANT: every $N parameter inside jsonb_build_object MUST have an explicit cast")
+        lines.append("// PostgreSQL cannot infer types in jsonb context — uncast params cause runtime errors")
         lines.append("handlers: {")
         lines.append('  EventName: (payload, { projectionName }) => {')
         lines.append("    const p = payload as PayloadType;")
@@ -3211,15 +3323,18 @@ def _gen_todo_context(paths: SlicePaths, ds: DerivedSlice,
         lines.append("    return [{")
         lines.append("      sql: `")
         lines.append("        INSERT INTO projections (name, key, payload)")
-        lines.append("        VALUES ($1, $2, $3::jsonb)")
+        lines.append("        VALUES ($1, $2, jsonb_build_object(")
+        lines.append("          'account', $3::text,")
+        lines.append("          'totalAmount', $4::numeric,")
+        lines.append("          'count', 1")
+        lines.append("        ))")
         lines.append("        ON CONFLICT (name, key) DO UPDATE")
-        lines.append("          SET payload = jsonb_set(")
-        lines.append("            jsonb_set(projections.payload, '{totalAmount}',")
-        lines.append("              to_jsonb((projections.payload->>'totalAmount')::numeric + $4)),")
-        lines.append("            '{count}',")
-        lines.append("            to_jsonb((projections.payload->>'count')::int + 1)")
+        lines.append("          SET payload = jsonb_build_object(")
+        lines.append("            'account', $3::text,")
+        lines.append("            'totalAmount', (projections.payload->>'totalAmount')::numeric + $4::numeric,")
+        lines.append("            'count', (projections.payload->>'count')::int + 1")
         lines.append("          )`,")
-        lines.append("      params: [projectionName, key, JSON.stringify(p), p.amount],")
+        lines.append("      params: [projectionName, key, p.account, p.amount],")
         lines.append("    }];")
         lines.append("  },")
         lines.append("}")
@@ -3227,9 +3342,11 @@ def _gen_todo_context(paths: SlicePaths, ds: DerivedSlice,
         lines.append("")
         lines.append("### Key rules")
         lines.append("- Use `projectionName` param (from meta), never hardcode the projection name")
-        lines.append("- Destructure payload fields explicitly — don't `JSON.stringify(p)` the whole payload for the initial INSERT")
-        lines.append("- For accumulation fields (totals, counts): use `jsonb_set` + cast in the ON CONFLICT clause")
-        lines.append("- For overwrite fields (status, name): use `EXCLUDED.payload` or explicit SET")
+        lines.append("- **Every parameter inside jsonb_build_object() MUST have a type cast** ($3::text, $4::numeric) — PostgreSQL cannot infer types in jsonb context")
+        lines.append("- **Date/DateTime fields: convert to ISO string before passing as SQL param** — use `p.myDate instanceof Date ? p.myDate.toISOString() : p.myDate` in the params array. The pg driver serializes Date objects with timezone offset, but jsonb should store UTC ISO strings.")
+        lines.append("- Pass individual fields as params, not JSON.stringify(p) — this enables field-level accumulation")
+        lines.append("- For accumulation fields (totals, counts): read existing value with `(projections.payload->>'field')::numeric` and add the new param")
+        lines.append("- For overwrite fields (status, name): just use the param directly ($N::text)")
         lines.append("- Composite keys: build as template literal from payload fields")
         lines.append("")
     else:

@@ -1,0 +1,82 @@
+{
+  "confidence": {
+    "weights": {
+      "verify_pass": 35,
+      "test_pass": 35,
+      "no_todos_remaining": 10,
+      "no_repair_needed": 10,
+      "repair_succeeded": 5,
+      "diff_boundary_clean": 5,
+      "scan_session_clean": 5,
+      "token_anomaly_penalty": -5,
+      "turn_anomaly_penalty": -5
+    },
+    "thresholds": {
+      "token_anomaly": 80000,
+      "turn_anomaly": 30
+    },
+    "bands": {
+      "HIGH": 80,
+      "MEDIUM": 50,
+      "LOW": 20,
+      "BLOCKED": 0
+    },
+    "recommendations": {
+      "HIGH": "Ready for review",
+      "MEDIUM": "Review with attention to flagged areas",
+      "LOW": "Significant concerns — manual inspection required",
+      "BLOCKED": "Do not merge — critical failures unresolved"
+    }
+  },
+  "repair": {
+    "levels": {
+      "L1": {
+        "name": "deterministic",
+        "ai": false,
+        "max_files": -1,
+        "max_turns": 0,
+        "max_budget_usd": 0.0
+      },
+      "L2": {
+        "name": "bounded_ai",
+        "ai": true,
+        "model": "opus",
+        "max_files": 3,
+        "max_turns": 10,
+        "max_budget_usd": 2.00
+      },
+      "L3": {
+        "name": "expanded_ai",
+        "ai": true,
+        "model": "opus",
+        "max_files": 3,
+        "max_turns": 20,
+        "max_budget_usd": 5.00
+      },
+      "L4": {
+        "name": "human_escalation",
+        "ai": false,
+        "max_files": 0,
+        "max_turns": 0,
+        "max_budget_usd": 0.0
+      }
+    },
+    "strategies": {
+      "import_error":           { "deterministic": true,  "allowed_files": ["*.ts"] },
+      "type_error":             { "deterministic": true,  "allowed_files": ["command.ts", "gwts.ts", "commandHandler.ts", "state.ts"] },
+      "path_error":             { "deterministic": true,  "allowed_files": ["*"] },
+      "predicate_mismatch":     { "deterministic": false, "allowed_files": ["gwts.ts"] },
+      "missing_handler_branch": { "deterministic": false, "allowed_files": ["commandHandler.ts"] },
+      "verification_failure":   { "deterministic": false, "allowed_files": ["gwts.ts", "commandHandler.ts", "adapter.ts"] },
+      "test_failure":           { "deterministic": false, "allowed_files": ["gwts.ts", "commandHandler.ts", "index.ts", "enrichment.ts"] }
+    }
+  },
+  "cost": {
+    "per_slice_warning_usd": 5.00,
+    "per_run_hard_limit_usd": 15.00
+  },
+  "audit": {
+    "retention_days": 90,
+    "metrics_retention_days": 90
+  }
+}

@@ -1,0 +1,39 @@
+{
+  "factors": [
+    {
+      "name": "spec_complexity",
+      "weight": 0.35,
+      "description": "Product of spec count x event count — higher = more branching logic",
+      "normalization": "min(raw / 12, 1.0)"
+    },
+    {
+      "name": "slice_type",
+      "weight": 0.20,
+      "description": "Slice type risk — processors and enrichments have more moving parts",
+      "values": {
+        "STATE_CHANGE": 0.2,
+        "QUERY": 0.1,
+        "PROCESSOR": 0.6,
+        "ENRICHMENT": 0.5
+      }
+    },
+    {
+      "name": "blast_radius",
+      "weight": 0.20,
+      "description": "Count of downstream dependencies consuming this slice's events",
+      "normalization": "min(raw / 10, 1.0)"
+    },
+    {
+      "name": "field_types",
+      "weight": 0.15,
+      "description": "Presence of complex field types increases risk",
+      "risk_types": ["Custom", "List", "DateTime"]
+    },
+    {
+      "name": "todo_density",
+      "weight": 0.10,
+      "description": "Number of TODO placeholders in scaffold output",
+      "normalization": "min(raw / 10, 1.0)"
+    }
+  ]
+}
