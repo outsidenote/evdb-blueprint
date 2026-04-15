@@ -38,6 +38,7 @@ def main():
     decisions = load_json("/tmp/decisions.json")
     risk = load_json("/tmp/risk-scores.json")
     repair = load_json("/tmp/repair-results.json")
+    diff_summary = load_json("/tmp/diff-summary.json")
 
     run_link = (f"[#{args.run_number}](https://github.com/{args.repo}/actions/runs/{args.run_id})"
                 if args.run_id else "")
@@ -91,6 +92,24 @@ def main():
 | Repair (self-healing) | {repair_turns} | ${repair_cost:.2f} |
 | **Total** | **{total_turns}** | **${total_cost:.2f}** |"""
 
+    # Changes section from diff summary
+    changes_section = ""
+    if diff_summary and diff_summary.get("slices"):
+        slices_data = diff_summary["slices"]
+        total = diff_summary.get("total_files", 0)
+        lines = [
+            "### Changes",
+            f"<details><summary>{total} files changed across {len(slices_data)} slices</summary>",
+            "",
+        ]
+        for sname, items in slices_data.items():
+            lines.append(f"**{sname}:**")
+            for item in items:
+                lines.append(f"- `{item['file']}` \u2014 {item['summary']}")
+            lines.append("")
+        lines.append("</details>")
+        changes_section = "\n".join(lines)
+
     comment = f"""## Generation Stats
 
 | Metric | Value |
@@ -101,6 +120,8 @@ def main():
 | Confidence | **{args.worst_band}** (avg {args.avg_score}) |
 | Repairs | {args.repaired} |
 | Run | {run_link} |
+
+{changes_section}
 
 {cost_breakdown}
 

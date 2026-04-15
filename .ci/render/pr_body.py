@@ -85,6 +85,44 @@ def confidence_section(conf: dict | None) -> str:
     return "\n".join(lines)
 
 
+def _get_slice_types(risk: dict | None) -> set[str]:
+    """Extract unique slice types from risk-scores.json factors."""
+    types: set[str] = set()
+    if not risk:
+        return types
+    for score in risk.get("scores", []):
+        for factor in score.get("factors", []):
+            if factor.get("name") == "slice_type":
+                types.add(str(factor.get("raw", "UNDEFINED")))
+    return types or {"UNDEFINED"}
+
+
+def _dynamic_checklist(risk: dict | None, has_repairs: bool) -> list[str]:
+    """Build checklist items based on slice types present in the PR."""
+    try:
+        config = json.load(open(str(Path(__file__).parent.parent / "config" / "pipeline.json")))
+        checklists = config.get("review_checklists", {})
+    except Exception:
+        checklists = {}
+
+    slice_types = _get_slice_types(risk)
+    items: list[str] = []
+
+    for st in sorted(slice_types):
+        type_items = checklists.get(st, [])
+        if type_items:
+            items.append(f"**{st}**:")
+            items.extend(type_items)
+
+    # Always-included items
+    items.extend(checklists.get("_always", ["Tests cover edge cases, not just happy path"]))
+
+    if has_repairs:
+        items.append("Review all AI-repaired files above")
+
+    return items
+
+
 def review_guide_section(conf: dict | None, repair: dict | None, risk: dict | None) -> str:
     """Generate review intelligence — tells the human WHERE to focus."""
     if not conf:
@@ -150,14 +188,14 @@ def review_guide_section(conf: dict | None, repair: dict | None, risk: dict | No
             lines.append(f"- {note}")
         lines.append("")
 
-    # Static checklist — always included
+    # Dynamic checklist based on slice types present in this PR
     lines.append("### Suggested Checklist")
-    lines.append("- [ ] Predicate logic in `gwts.ts` matches domain rules")
-    lines.append("- [ ] Command handler covers all spec scenarios")
-    lines.append("- [ ] Projection SQL handles null/edge cases")
-    lines.append("- [ ] Tests cover edge cases, not just happy path")
-    if focus_areas:
-        lines.append("- [ ] Review all AI-repaired files above")
+    checklist_items = _dynamic_checklist(risk, bool(focus_areas))
+    for item in checklist_items:
+        if item.startswith("**"):
+            lines.append(f"\n{item}")
+        else:
+            lines.append(f"- [ ] {item}")
 
     return "\n".join(lines)
 
@@ -435,6 +473,16 @@ def clarification_section(
     engineering = [c for c in clarifications if c["bin"] == "engineering_defect"]
     infra = [c for c in clarifications if c["bin"] == "infra_issue"]
 
+    # Check if Discussions were created — render as links instead of inline
+    discussion_links = load_json("/tmp/discussion-links.json")
+    disc_map: dict[str, str] = {}
+    if discussion_links:
+        for d in discussion_links.get("discussions", []):
+            fp = d.get("fingerprint", "")
+            url = d.get("discussion_url", "")
+            if fp and url:
+                disc_map[fp] = url
+
     lines = [
         "## Clarification Needed",
         "",
@@ -443,26 +491,41 @@ def clarification_section(
         "",
     ]
 
-    for i, c in enumerate(clarifications, 1):
-        slices_label = ", ".join(c.get("slices", [c.get("slice", "?")]))
-        lines.append(f"### {i}. {slices_label} — `{c['failure_class']}`")
+    if disc_map:
+        # Compact view — link to Discussions for threaded conversation
+        for i, c in enumerate(clarifications, 1):
+            slices_label = ", ".join(c.get("slices", [c.get("slice", "?")]))
+            fp = c.get("fingerprint", "")
+            url = disc_map.get(fp)
+            if url:
+                lines.append(f"{i}. [{slices_label} — `{c['failure_class']}`]({url})")
+            else:
+                lines.append(f"{i}. {slices_label} — `{c['failure_class']}`")
         lines.append("")
-        lines.append(c["question"])
-        lines.append("")
+        lines.append("> Answer in the linked Discussions above. "
+                     "The pipeline will read answers on the next run.")
+    else:
+        # Full inline view (fallback when Discussions not created)
+        for i, c in enumerate(clarifications, 1):
+            slices_label = ", ".join(c.get("slices", [c.get("slice", "?")]))
+            lines.append(f"### {i}. {slices_label} — `{c['failure_class']}`")
+            lines.append("")
+            lines.append(c["question"])
+            lines.append("")
 
-    # Load slice IDs for Miro references
-    spec_locations = _load_spec_locations(clarifications)
-    if spec_locations:
-        lines.append("### Spec Locations")
-        lines.append("")
-        lines.append("| Miro Name | Context | Config Path | Miro ID |")
-        lines.append("|-----------|---------|-------------|---------|")
-        for loc in spec_locations:
-            lines.append(f"| **{loc['title']}** | {loc['context']} | `{loc['path']}` | `{loc['miro_id']}` |")
-        lines.append("")
+        # Load slice IDs for Miro references
+        spec_locations = _load_spec_locations(clarifications)
+        if spec_locations:
+            lines.append("### Spec Locations")
+            lines.append("")
+            lines.append("| Miro Name | Context | Config Path | Miro ID |")
+            lines.append("|-----------|---------|-------------|---------|")
+            for loc in spec_locations:
+                lines.append(f"| **{loc['title']}** | {loc['context']} | `{loc['path']}` | `{loc['miro_id']}` |")
+            lines.append("")
 
-    lines.append("> **How to resolve:** Update the spec description in Miro for the affected slice, "
-                 "re-export `config.json`, push, and re-trigger the pipeline via `workflow_dispatch`.")
+        lines.append("> **How to resolve:** Update the spec description in Miro for the affected slice, "
+                     "re-export `config.json`, push, and re-trigger the pipeline via `workflow_dispatch`.")
 
     return "\n".join(lines)
 
