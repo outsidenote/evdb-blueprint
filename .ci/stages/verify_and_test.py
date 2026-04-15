@@ -17,7 +17,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from lib.contracts import (
     VERIFY_RESULTS, TEST_OUTPUT, TEST_RESULTS, NORMALIZE_SCRIPT, VERIFY_SCRIPT,
-    write_json, set_output,
+    load_json, write_json, set_output,
 )
 from lib.audit import emit
 
