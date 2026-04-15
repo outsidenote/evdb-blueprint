@@ -67,7 +67,6 @@ ViewSliceTester.run(sliceStateAddLoanToPortfolioView, [
         },
       },
     ],
-    // TODO: adjust 'then' — does state overwrite or accumulate?
     then: {
       portfolioId: "port-001",
       acquisitionDate: new Date("2025-01-01T11:00:00Z"),
