@@ -402,16 +402,14 @@ jobs:
         run: |
           find "src/BusinessCapabilities/${{ matrix.context_pascal }}/" \
             -name "TODO_CONTEXT.md" -delete 2>/dev/null || true
-          rm -rf .eventmodel/ .eventmodel2/
 
       - name: Commit business logic
         run: |
           git add "src/BusinessCapabilities/${{ matrix.context_pascal }}/" || true
           git add ".implementation-hashes/" || true
-          # learned_hints.md is NOT committed here — stored as artifact only
-          # to avoid merge conflicts between branches. Patterns are promoted
-          # to the hints file via manual review or a separate merge workflow.
-          git rm -rf --cached .eventmodel/ .eventmodel2/ 2>/dev/null || true
+          # Remove event model files from the branch — they should not be merged
+          # into the target branch. The source of truth is Miro, not the repo.
+          git rm -rf .eventmodel/ .eventmodel2/ 2>/dev/null || true
           if ! git diff --cached --quiet; then
             git commit -m "feat(${{ matrix.context_pascal }}): implement slice business logic
 
