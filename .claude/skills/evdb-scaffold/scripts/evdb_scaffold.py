@@ -3343,6 +3343,7 @@ def _gen_todo_context(paths: SlicePaths, ds: DerivedSlice,
         lines.append("### Key rules")
         lines.append("- Use `projectionName` param (from meta), never hardcode the projection name")
         lines.append("- **Every parameter inside jsonb_build_object() MUST have a type cast** ($3::text, $4::numeric) — PostgreSQL cannot infer types in jsonb context")
+        lines.append("- **Date/DateTime fields: convert to ISO string before passing as SQL param** — use `p.myDate instanceof Date ? p.myDate.toISOString() : p.myDate` in the params array. The pg driver serializes Date objects with timezone offset, but jsonb should store UTC ISO strings.")
         lines.append("- Pass individual fields as params, not JSON.stringify(p) — this enables field-level accumulation")
         lines.append("- For accumulation fields (totals, counts): read existing value with `(projections.payload->>'field')::numeric` and add the new param")
         lines.append("- For overwrite fields (status, name): just use the param directly ($N::text)")
