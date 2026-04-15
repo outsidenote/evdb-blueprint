@@ -196,16 +196,40 @@ QUESTION_TEMPLATES = {
 
 
 def _parse_expected_actual(error_text: str) -> tuple[str, str]:
-    """Extract expected and actual values from test error output."""
+    """Extract expected and actual values from test error output.
+
+    Handles multiple assertion output formats:
+    - TAP: expected: X / actual: Y
+    - Node test runner: + actual / - expected
+    - deepStrictEqual: { field: value } diffs
+    """
     expected = ""
     actual = ""
     for line in error_text.splitlines():
         stripped = line.strip()
-        if stripped.startswith("- ") or stripped.startswith("expected:"):
+        # TAP / assert format
+        if stripped.startswith("expected:") or stripped.startswith("- expected"):
             expected = stripped[:200]
-        elif stripped.startswith("+ ") or stripped.startswith("actual:"):
+        elif stripped.startswith("actual:") or stripped.startswith("+ actual"):
             actual = stripped[:200]
-    return expected or "(see test output)", actual or "(see test output)"
+        # Node diff format (- for expected, + for actual)
+        elif stripped.startswith("-   ") and not expected:
+            expected = stripped[:200]
+        elif stripped.startswith("+   ") and not actual:
+            actual = stripped[:200]
+        # deepStrictEqual key: value diff
+        elif "expected:" in stripped and not expected:
+            expected = stripped[:200]
+        elif "actual:" in stripped and not actual:
+            actual = stripped[:200]
+
+    # If still empty, grab the first meaningful chunk of the error
+    if not expected and not actual and error_text.strip():
+        lines = [l.strip() for l in error_text.splitlines() if l.strip() and not l.strip().startswith("at ")]
+        chunk = "\n".join(lines[:5])
+        return chunk[:200], ""
+
+    return expected or "(no expected value parsed)", actual or "(no actual value parsed)"
 
 
 def _classify_unresolved(failure_class: str) -> str:

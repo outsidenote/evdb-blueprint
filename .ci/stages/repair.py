@@ -235,13 +235,20 @@ Rules:
     before = _snapshot(slice_dir, allowed_files)
 
     model_flag = ["--model", model] if model else []
+    print(f"    [{slice_name}] {level_name}: {model} repair starting ({max_turns} turns, ${max_budget})...",
+          file=sys.stderr, flush=True)
+
+    # Use --continue to resume the implement session's conversation.
+    # This gives the repair AI full context from the implementation — what it wrote,
+    # what it was thinking, what tests it ran. Much better than starting cold.
     try:
         subprocess.run(
-            [claude_path, "--print", "--dangerously-skip-permissions",
+            [claude_path, "--print", "--continue", "--dangerously-skip-permissions",
              "--output-format", "text", "--max-turns", str(max_turns),
              "--max-budget-usd", str(max_budget),
              *model_flag, prompt],
-            capture_output=True, text=True, cwd=str(slice_dir), timeout=600,
+            capture_output=False, text=True, cwd=str(slice_dir), timeout=600,
+            stdout=sys.stderr, stderr=sys.stderr,
         )
     except subprocess.TimeoutExpired:
         return RepairAttempt(level=level, level_name=level_name, strategy="ai_repair",

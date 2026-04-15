@@ -34,18 +34,18 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from lib.contracts import (
-    DECISIONS, CLAUDE_STATS, CLAUDE_SUMMARY, POLICY_CONFIG,
+    DECISIONS, CLAUDE_STATS, CLAUDE_SUMMARY,
     slice_stats_path, slice_claude_output,
-    load_json, load_config, write_json, set_output,
+    load_json, write_json, set_output,
 )
 from lib.audit import emit
 
 
-# ── Mode configs ─────────────────────────────────────────────────
+# ── Config ──────────────────────────────────────────────────────
 
-FAST_MODE = {"max_turns": 10, "max_budget": 0.60, "timeout_min": 5}
-DEEP_MODE = {"max_turns": 20, "max_budget": 2.00, "timeout_min": 15}
+AI_MODE = {"max_turns": 20, "max_budget": 5.00, "timeout_min": 15}
 MAX_PARALLEL = 3  # max concurrent Claude processes
+MAX_HINTS = 7
 
 
 # ── Slice result ─────────────────────────────────────────────────
@@ -201,35 +201,15 @@ from stages.retrieve_hints import (
 )
 
 DISCOVERIES_PATH = Path("/tmp/learned-discoveries.json")
-FAST_MAX_HINTS = 3
-DEEP_MAX_HINTS = 7
 
 
 # ── Prompts ──────────────────────────────────────────────────────
 
-def build_fast_prompt(todo_content: str, hints: str) -> str:
+def build_prompt(todo_content: str, hints: str, test_commands: list[str]) -> str:
+    """Build the implementation prompt. One prompt for all slices — no FAST/DEEP split."""
     hint_block = f"\n## Relevant Hints\n{hints}\n" if hints else ""
-    return f"""Implement TODOs in this TypeScript slice.
-{hint_block}
-{todo_content}
+    test_lines = "\n".join(f"  {cmd}" for cmd in test_commands) if test_commands else "  (no test files found — skip self-testing)"
 
-Tasks:
-- Replace all TODO stubs in gwts.ts with real predicate logic
-- Replace all TODO stubs in commandHandler.ts with real branching logic
-- Replace all TODO stubs in enrichment.ts if present
-- Replace generic UPSERT in projection index.ts with field-specific SQL if present
-
-Rules:
-- Only edit files listed in the spec above
-- Do NOT run tests
-- Do NOT read files outside this directory
-- Do NOT scan or explore the repo
-
-Return when all TODOs are replaced."""
-
-
-def build_deep_prompt(todo_content: str, hints: str) -> str:
-    hint_block = f"\n## Relevant Hints\n{hints}\n" if hints else ""
     return f"""You are filling TODO placeholders in an event-sourced TypeScript codebase (eventualize-js/evdb).
 
 ## Key Conventions
@@ -257,72 +237,26 @@ def build_deep_prompt(todo_content: str, hints: str) -> str:
 ## Test Writing Rules
 - When writing test assertions for computed/derived values, add a comment above each expected value showing the step-by-step derivation using the formulas and lookup tables from the spec.
 - Do NOT hardcode expected values without showing how you computed them from the spec.
-- If the spec says "X = A × B × C", the test comment should show: // X = <value of A> × <value of B> × <value of C> = <result>
 - For projection.slice.test.ts: the payload must use EVENT fields (what the handler receives), not readmodel fields (what the projection stores).
 
-## Self-Test Protocol (command tests only)
-After filling ALL TODOs in all files:
-1. Run: node --import tsx --test tests/command.slice.test.ts
-2. If all tests pass, you are done.
-3. If any test fails:
-   - Read the assertion error — it shows expected vs actual values.
-   - The test is derived from the spec and is CORRECT. Fix your CODE to match the test.
-   - Make the minimal edit that aligns your implementation with the spec.
-   - Re-run the test to verify your fix.
-4. Stop conditions — stop retrying if:
-   - Tests pass.
-   - The same test fails twice with the same error after your fix attempt.
-   - The failure is caused by imports, scaffold, missing dependencies, or test harness — not your logic.
-5. Important:
-   - Do NOT modify test files (*.test.ts) to make them pass.
-   - Do NOT weaken validation or remove checks to satisfy tests.
-   - Do NOT refactor unrelated code.
-   - The spec is the source of truth. Use tests to detect mismatches, not to invent behavior.
-6. Do NOT run projection.slice.test.ts (requires a database).
-7. Do NOT run enrichment tests (requires endpoint wiring).
-8. If there is no tests/command.slice.test.ts file, skip self-testing.
+## Self-Test
+After filling ALL TODOs, run these tests:
+{test_lines}
 
+If any test fails:
+- Read the assertion error — it shows expected vs actual values.
+- The test is derived from the spec and is CORRECT. Fix your CODE to match the test.
+- Make the minimal edit that aligns your implementation with the spec.
+- Re-run the test to verify your fix.
+- If the same test fails twice with the same error, stop — the issue may be structural.
+- Do NOT modify test files (*.test.ts) to make them pass.
+- Do NOT weaken validation or remove checks to satisfy tests.
+- The spec is the source of truth.
+
+Do NOT run projection.slice.test.ts (requires a database).
 Do NOT read SKILL.md or any reference files. Everything you need is above.
 Do NOT run evdb-diff, evdb-scaffold, or scan sessions.
 Do NOT read files outside 'Files with TODOs'."""
-
-
-# ── Haiku classification ─────────────────────────────────────────
-
-def classify_complexity(claude_path: str, todo_content: str, provider: str) -> str:
-    if provider == "bedrock":
-        classify_model = "us.anthropic.claude-haiku-4-5-v1@bedrock"
-    else:
-        classify_model = "claude-haiku-4-5-20251001"
-
-    prompt = """You are a complexity classifier for code generation tasks.
-Read the TODO spec below and reply with ONLY one word.
-Reply 'sonnet' if the task is straightforward (simple field mapping, basic CRUD, simple predicates, basic SQL upserts).
-Reply 'opus' if the task requires complex logic (algorithms, simulations, mathematical formulas, multi-step aggregation, weighted calculations, accumulation patterns, complex business rules with many branches).
-Reply with ONLY 'sonnet' or 'opus'.
-
----
-""" + todo_content
-
-    try:
-        result = subprocess.run(
-            [claude_path, "--print", "--dangerously-skip-permissions",
-             "--model", classify_model, "--max-turns", "1",
-             "--output-format", "text", prompt],
-            capture_output=True, text=True, timeout=30,
-        )
-        return "sonnet" if "sonnet" in result.stdout.strip().lower() else "opus"
-    except Exception:
-        return "opus"
-
-
-def resolve_model_for_auto(
-    claude_path: str, todo_content: str, provider: str, model_resolution: dict,
-) -> tuple[str, str, str]:
-    tier = classify_complexity(claude_path, todo_content, provider)
-    provider_map = model_resolution.get(provider, model_resolution.get("anthropic", {}))
-    model_id = provider_map.get(tier, "")
-    return tier, model_id, "haiku_classified"
 
 
 # ── Stats extraction ─────────────────────────────────────────────
@@ -355,7 +289,6 @@ def process_slice(
     decision: dict,
     claude_path: str,
     provider: str,
-    model_resolution: dict,
     memory_index: MemoryIndex,
 ) -> SliceResult:
     """Process a single slice. Called from main thread or thread pool.
@@ -389,60 +322,52 @@ def process_slice(
     if is_trivial_slice(todo_map) and spec_has_logic:
         print(f"  [{slice_name}] OVERRIDE: generic TODOs but spec has logic — sending to AI", file=sys.stderr)
 
-    # ── Haiku classification ─────────────────────────────────
-    model_name = decision.get("model", "auto")
-    model_id = decision.get("model_id", "")
-
-    if model_name == "auto":
-        model_name, model_id, method = resolve_model_for_auto(
-            claude_path, todo_content, provider, model_resolution)
-        print(f"  [{slice_name}] Complexity: {method} → {model_name}", file=sys.stderr)
-
-    # ── Choose mode ──────────────────────────────────────────
-    is_fast = (model_name == "sonnet")
-    mode = FAST_MODE if is_fast else DEEP_MODE
-    mode_label = "FAST" if is_fast else "DEEP"
-
     # ── Retrieve relevant hints ────────────────────────────────
     todo_files = list(todo_map.keys())
-    hint_mode = "fast" if is_fast else "deep"
-    max_hints = FAST_MAX_HINTS if is_fast else DEEP_MAX_HINTS
     hint_records = retrieve_hints(
         index=memory_index,
         context=context,
         slice_name=slice_name,
         todo_files=todo_files,
-        max_hints=max_hints,
-        mode=hint_mode,
+        max_hints=MAX_HINTS,
+        mode="deep",
     )
     hints = format_for_prompt(hint_records)
     hint_count = len(hint_records)
     hint_ids = [r["id"] for r in hint_records if "id" in r]
 
-    # Load clarification answers from prior PR comments (if any)
-    clarification_answers = ""
+    # ── Discover test files for self-test ────────────────────
+    test_commands: list[str] = []
+    for test_pattern in [
+        "tests/command.slice.test.ts",
+        "tests/projection.test.ts",
+        "tests/enrichment.test.ts",
+    ]:
+        if (cwd / test_pattern).exists():
+            test_commands.append(f"node --import tsx --test {test_pattern}")
+
+    # ── Build prompt ────────────────────────────────────────
+    prompt = build_prompt(todo_content, hints, test_commands)
+
+    # Append clarification answers from prior PR comments (if any)
     answers_path = Path("/tmp/pr-clarification-answers.txt")
     if answers_path.exists():
         raw = answers_path.read_text().strip()
         if raw:
-            clarification_answers = (
-                f"\n## Clarification from Developer\n"
+            prompt += (
+                f"\n\n## Clarification from Developer\n"
                 f"A previous run had questions. The developer answered in PR comments:\n\n"
                 f"{raw[:3000]}\n\n"
                 f"Use these answers to resolve any ambiguity in the spec.\n"
             )
 
-    prompt = build_fast_prompt(todo_content, hints) if is_fast else build_deep_prompt(todo_content, hints)
-    if clarification_answers and not is_fast:
-        prompt = prompt + clarification_answers
-
-    print(f"  [{slice_name}] {mode_label} | {model_name} | ${mode['max_budget']} "
-          f"| {sum(len(v) for v in todo_map.values())} TODOs | {hint_count} hint(s)"
-          f"{' + clarifications' if clarification_answers else ''}",
+    mode = AI_MODE
+    print(f"  [{slice_name}] Opus | ${mode['max_budget']} "
+          f"| {sum(len(v) for v in todo_map.values())} TODOs | {hint_count} hint(s) "
+          f"| {len(test_commands)} self-test(s)",
           file=sys.stderr)
 
     # ── Run Claude Code ──────────────────────────────────────
-    model_flag = ["--model", model_id] if model_id else []
     output_path = slice_claude_output(slice_name)
 
     try:
@@ -451,7 +376,6 @@ def process_slice(
              "--output-format", "json",
              "--exclude-dynamic-system-prompt-sections",
              "--max-budget-usd", str(mode["max_budget"]),
-             *model_flag,
              "--max-turns", str(mode["max_turns"]),
              prompt],
             capture_output=False,
@@ -469,15 +393,10 @@ def process_slice(
     stats = extract_stats(output_path)
     write_json(slice_stats_path(slice_name), stats)
 
-    # Detect whether self-test was available and likely ran
-    command_test = cwd / "tests" / "command.slice.test.ts"
-    self_test_available = command_test.exists() and not is_fast
-
     emit("ai_invocation", "implement_slice.py", slice=slice_name, context=context,
          data={
-             "mode": mode_label,
-             "model": model_name,
-             "model_id": model_id or "default",
+             "mode": "AI",
+             "model": "opus",
              "tokens_in": stats["input_tokens"],
              "tokens_out": stats["output_tokens"],
              "cost_usd": stats["cost"],
@@ -487,14 +406,14 @@ def process_slice(
              "cwd": str(cwd),
              "todo_files": todo_files,
              "hint_sections": hint_count,
+             "self_test_commands": len(test_commands),
              "policy_rule": decision.get("rule_matched", ""),
-             "self_test_available": self_test_available,
          })
 
     print(f"  [{slice_name}] Done: {stats['turns']} turns, ${stats['cost']:.2f}", file=sys.stderr)
 
     return SliceResult(
-        name=slice_name, path=mode_label,
+        name=slice_name, path="AI",
         cost=stats["cost"], turns=stats["turns"],
         input_tokens=stats["input_tokens"], output_tokens=stats["output_tokens"],
         summary=stats.get("result", ""),
@@ -528,7 +447,7 @@ def _record_reuse_feedback(
     # Collect hint IDs from successful AI runs only
     used_ids: set[str] = set()
     for r in results:
-        if r.path in ("FAST", "DEEP") and r.turns > 0:
+        if r.path == "AI" and r.turns > 0:
             used_ids.update(r.hints_used)
 
     if not used_ids:
@@ -588,11 +507,6 @@ def main():
     discoveries = disc_data.get("records", []) if isinstance(disc_data, dict) else []
     memory_index = build_memory_index(discoveries)
 
-    try:
-        model_resolution = load_config(POLICY_CONFIG).get("model_resolution", {})
-    except FileNotFoundError:
-        model_resolution = {"anthropic": {"opus": "", "sonnet": "claude-sonnet-4-6"}}
-
     claude_path = shutil.which("claude")
     if not claude_path:
         print("ERROR: claude CLI not found", file=sys.stderr)
@@ -636,7 +550,6 @@ def main():
                 decision=decision,
                 claude_path=claude_path,
                 provider=args.provider,
-                model_resolution=model_resolution,
                 memory_index=memory_index,
             )
             futures[future] = name
