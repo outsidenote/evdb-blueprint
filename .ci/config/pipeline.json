@@ -68,7 +68,8 @@
       "predicate_mismatch":     { "deterministic": false, "allowed_files": ["gwts.ts"] },
       "missing_handler_branch": { "deterministic": false, "allowed_files": ["commandHandler.ts"] },
       "verification_failure":   { "deterministic": false, "allowed_files": ["gwts.ts", "commandHandler.ts", "adapter.ts"] },
-      "test_failure":           { "deterministic": false, "allowed_files": ["gwts.ts", "commandHandler.ts", "index.ts", "enrichment.ts"] }
+      "test_failure":           { "deterministic": false, "allowed_files": ["gwts.ts", "commandHandler.ts", "index.ts", "enrichment.ts"] },
+      "lint_error":             { "deterministic": false, "allowed_files": ["*.ts"] }
     }
   },
   "cost": {
