@@ -101,10 +101,11 @@ describe("AddLoanToPortfolio Slice - Unit Tests", () => {
       commandType: "AddLoanToPortfolio",
       portfolioId: "port-001",
       acquisitionDate: new Date("2025-01-01T11:00:00Z"),
-      borrowerName: "test-borrowerName",
-      creditRating: "test-creditRating",
+      // spec THEN: borrowerName=Risky Corp, creditRating=CCC, loanAmount=20000000
+      borrowerName: "Risky Corp",
+      creditRating: "CCC",
       interestRate: 0,
-      loanAmount: 0,
+      loanAmount: 20000000,
       loanId: "test-loanId-001",
       maturityDate: new Date("2025-01-01T11:00:00Z"),
     };
@@ -117,10 +118,12 @@ describe("AddLoanToPortfolio Slice - Unit Tests", () => {
           borrowerName: "Risky Corp",
           creditRating: "CCC",
           interestRate: 0,
+          // spec THEN: loanAmount=20000000 (matches command)
           loanAmount: 20000000,
           loanId: "test-loanId-001",
           maturityDate: new Date("2025-01-01T11:00:00Z"),
-          errorMessage: "test-errorMessage",
+          // spec THEN: errorMessage= (blank — portfolio rating breach has no message specified)
+          errorMessage: "",
         },
       },
     ];
@@ -140,6 +143,7 @@ describe("AddLoanToPortfolio Slice - Unit Tests", () => {
         payload: {
           portfolioId: "port-001",
           acquisitionDate: new Date("2025-01-01T11:00:00Z"),
+          // spec GIVEN: borrowerName=Acme Corp, creditRating=BBB, loanAmount=10000000
           borrowerName: "Acme Corp",
           creditRating: "BBB",
           interestRate: 0,
@@ -154,9 +158,11 @@ describe("AddLoanToPortfolio Slice - Unit Tests", () => {
       portfolioId: "port-001",
       acquisitionDate: new Date("2025-01-01T11:00:00Z"),
       borrowerName: "test-borrowerName",
-      creditRating: "test-creditRating",
+      // investment-grade rating so portfolioRatingBreached does not fire
+      creditRating: "BBB",
       interestRate: 0,
-      loanAmount: 0,
+      // positive amount so amountLessThanZero does not fire
+      loanAmount: 5000000,
       loanId: "test-loanId-001",
       maturityDate: new Date("2025-01-01T11:00:00Z"),
     };
@@ -167,9 +173,9 @@ describe("AddLoanToPortfolio Slice - Unit Tests", () => {
           portfolioId: "port-001",
           acquisitionDate: new Date("2025-01-01T11:00:00Z"),
           borrowerName: "test-borrowerName",
-          creditRating: "test-creditRating",
+          creditRating: "BBB",
           interestRate: 0,
-          loanAmount: 0,
+          loanAmount: 5000000,
           loanId: "test-loanId-001",
           maturityDate: new Date("2025-01-01T11:00:00Z"),
         },

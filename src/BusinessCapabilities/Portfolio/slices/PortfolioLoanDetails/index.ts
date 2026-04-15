@@ -34,17 +34,68 @@ export const portfolioLoanDetailsSlice: ProjectionConfig = {
         {
           sql: `
             INSERT INTO projections (name, key, payload)
-            VALUES ($1, $2, $3::jsonb)
+            VALUES ($1, $2, jsonb_build_object(
+              'portfolioId', $3::text,
+              'loanId', $4::text,
+              'acquisitionDate', $5::text,
+              'borrowerName', $6::text,
+              'capitalRequirement', $7::numeric,
+              'creditRating', $8::text,
+              'expectedLoss', $9::numeric,
+              'interestRate', $10::numeric,
+              'loanAmount', $11::numeric,
+              'maturityDate', $12::text,
+              'probabilityOfDefault', $13::numeric,
+              'riskBand', $14::text,
+              'expectedPortfolioLoss', $15::numeric,
+              'riskNarrative', $16::text,
+              'simulatedDefaultRate', $17::numeric,
+              'tailRiskLoss', $18::numeric,
+              'worstCaseLoss', $19::numeric
+            ))
             ON CONFLICT (name, key) DO UPDATE
-              SET payload = EXCLUDED.payload`,
+              SET payload = jsonb_build_object(
+                'portfolioId', $3::text,
+                'loanId', $4::text,
+                'acquisitionDate', $5::text,
+                'borrowerName', $6::text,
+                'capitalRequirement', $7::numeric,
+                'creditRating', $8::text,
+                'expectedLoss', $9::numeric,
+                'interestRate', $10::numeric,
+                'loanAmount', $11::numeric,
+                'maturityDate', $12::text,
+                'probabilityOfDefault', $13::numeric,
+                'riskBand', $14::text,
+                'expectedPortfolioLoss', $15::numeric,
+                'riskNarrative', $16::text,
+                'simulatedDefaultRate', $17::numeric,
+                'tailRiskLoss', $18::numeric,
+                'worstCaseLoss', $19::numeric
+              )`,
           params: [
             projectionName,
             key,
-            JSON.stringify(p), // TODO: select specific fields to store
+            p.portfolioId,
+            p.loanId,
+            p.acquisitionDate instanceof Date ? p.acquisitionDate.toISOString() : p.acquisitionDate,
+            p.borrowerName,
+            p.capitalRequirement,
+            p.creditRating,
+            p.expectedLoss,
+            p.interestRate,
+            p.loanAmount,
+            p.maturityDate instanceof Date ? p.maturityDate.toISOString() : p.maturityDate,
+            p.probabilityOfDefault,
+            p.riskBand,
+            p.expectedPortfolioLoss,
+            p.riskNarrative,
+            p.simulatedDefaultRate,
+            p.tailRiskLoss,
+            p.worstCaseLoss,
           ],
         },
       ];
     },
-
   },
 };
