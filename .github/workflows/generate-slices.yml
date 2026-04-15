@@ -453,15 +453,35 @@ jobs:
             exit 0
           fi
 
+          # Confidence emoji in PR title
+          WORST="${{ steps.confidence.outputs.worst_band }}"
+          AVG="${{ steps.confidence.outputs.avg_score }}"
+          case "$WORST" in
+            HIGH)   EMOJI="🟢" ;;
+            MEDIUM) EMOJI="🟡" ;;
+            LOW)    EMOJI="🟠" ;;
+            *)      EMOJI="🔴" ;;
+          esac
+
           PR_BODY=$(python3 .ci/render/pr_body.py \
             --context "${{ matrix.context }}" \
             --slices "${{ matrix.slices }}" \
             --base-branch "${{ matrix.base_branch }}")
 
-          gh pr create $DRAFT_FLAG \
-            --title "feat(${{ matrix.context_pascal }}): implement planned slices — $(date +%Y%m%d-%H%M)" \
+          PR_URL=$(gh pr create $DRAFT_FLAG \
+            --title "$EMOJI feat(${{ matrix.context_pascal }}): implement planned slices — $WORST ($AVG)" \
             --body "$PR_BODY" \
-            --base "${{ matrix.base_branch }}"
+            --base "${{ matrix.base_branch }}")
+
+          echo "$PR_URL"
+          PR_NUM=$(echo "$PR_URL" | grep -o '[0-9]*$')
+
+          # Assign reviewers from repo variable (comma-separated GitHub usernames)
+          # Set via: gh variable set PR_REVIEWERS --repo <repo> --body "user1,user2"
+          REVIEWERS="${{ vars.PR_REVIEWERS }}"
+          if [ -n "$REVIEWERS" ] && [ -n "$PR_NUM" ]; then
+            gh pr edit "$PR_NUM" --add-reviewer "$REVIEWERS" 2>/dev/null || echo "  Could not assign reviewers: $REVIEWERS"
+          fi
 
       - name: "💬 Stats comment"
         if: always() && steps.confidence.outputs.worst_band != 'BLOCKED'
