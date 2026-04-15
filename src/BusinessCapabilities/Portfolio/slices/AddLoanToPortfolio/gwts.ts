@@ -6,6 +6,10 @@ import type { SliceStateAddLoanToPortfolioViewState } from "#BusinessCapabilitie
  * Each function maps 1:1 to a named spec in the event model diagram.
  */
 
+// Standard non-investment-grade credit ratings (BB and below per S&P/Fitch scale).
+// Investment-grade: BBB and above. Any rating in this list causes a portfolio breach.
+const NON_INVESTMENT_GRADE_RATINGS = ["BB+", "BB", "BB-", "B+", "B", "B-", "CCC+", "CCC", "CCC-", "CC", "C", "D"];
+
 /**
  * spec: amountLessThanZero
  * GIVEN state fields: none
@@ -13,7 +17,7 @@ import type { SliceStateAddLoanToPortfolioViewState } from "#BusinessCapabilitie
  * THEN: LoanRejectedFromPortfolio
  */
 export const amountLessThanZero = (state: SliceStateAddLoanToPortfolioViewState, command: AddLoanToPortfolio): boolean =>
-  false; // TODO: return boolean comparing state.field vs command.portfolioId
+  command.loanAmount <= 0;
 
 /**
  * spec: portfolioRatingBreached
@@ -22,7 +26,7 @@ export const amountLessThanZero = (state: SliceStateAddLoanToPortfolioViewState,
  * THEN: LoanRejectedFromPortfolio
  */
 export const portfolioRatingBreached = (state: SliceStateAddLoanToPortfolioViewState, command: AddLoanToPortfolio): boolean =>
-  false; // TODO: return boolean comparing state.portfolioId vs command.portfolioId
+  NON_INVESTMENT_GRADE_RATINGS.includes(command.creditRating);
 
 /**
  * spec: portfolioRatingMaintained
@@ -31,4 +35,4 @@ export const portfolioRatingBreached = (state: SliceStateAddLoanToPortfolioViewS
  * THEN: LoanAddedToPortfolio
  */
 export const portfolioRatingMaintained = (state: SliceStateAddLoanToPortfolioViewState, command: AddLoanToPortfolio): boolean =>
-  false; // TODO: return boolean comparing state.portfolioId vs command.portfolioId
+  !NON_INVESTMENT_GRADE_RATINGS.includes(command.creditRating);

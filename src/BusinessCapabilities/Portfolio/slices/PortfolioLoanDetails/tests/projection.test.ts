@@ -33,6 +33,46 @@ describe("Projection: PortfolioLoanDetails", () => {
     assert.ok(result.length > 0, 'should have at least one SQL statement');
     assert.ok(result[0].sql.length > 0, 'SQL should not be empty');
     assert.ok(result[0].params.length > 0, 'params should not be empty');
+
+    const params = result[0].params;
+    // $1: projectionName
+    assert.strictEqual(params[0], "PortfolioLoanDetails");
+    // $2: key = portfolioId:loanId
+    assert.strictEqual(params[1], "test-portfolioId-001:test-loanId-001");
+    // $3: portfolioId
+    assert.strictEqual(params[2], "test-portfolioId-001");
+    // $4: loanId
+    assert.strictEqual(params[3], "test-loanId-001");
+    // $5: acquisitionDate as ISO string
+    assert.strictEqual(params[4], "2025-01-01T11:00:00.000Z");
+    // $6: borrowerName
+    assert.strictEqual(params[5], "test-borrowerName");
+    // $7: capitalRequirement
+    assert.strictEqual(params[6], "test-capitalRequirement");
+    // $8: creditRating
+    assert.strictEqual(params[7], "test-creditRating");
+    // $9: expectedLoss
+    assert.strictEqual(params[8], 0);
+    // $10: interestRate
+    assert.strictEqual(params[9], 0);
+    // $11: loanAmount
+    assert.strictEqual(params[10], 0);
+    // $12: maturityDate as ISO string
+    assert.strictEqual(params[11], "2025-01-01T11:00:00.000Z");
+    // $13: probabilityOfDefault
+    assert.strictEqual(params[12], 0);
+    // $14: riskBand
+    assert.strictEqual(params[13], "test-riskBand");
+    // $15: expectedPortfolioLoss
+    assert.strictEqual(params[14], 0);
+    // $16: riskNarrative
+    assert.strictEqual(params[15], "test-riskNarrative");
+    // $17: simulatedDefaultRate
+    assert.strictEqual(params[16], 0);
+    // $18: tailRiskLoss
+    assert.strictEqual(params[17], 0);
+    // $19: worstCaseLoss
+    assert.strictEqual(params[18], 0);
   });
 
 });
