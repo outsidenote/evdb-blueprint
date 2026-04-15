@@ -17,7 +17,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from lib.contracts import (
     VERIFY_RESULTS, TEST_OUTPUT, TEST_RESULTS, NORMALIZE_SCRIPT, VERIFY_SCRIPT,
-    write_json, set_output,
+    load_json, write_json, set_output,
 )
 from lib.audit import emit
 
@@ -62,13 +62,13 @@ def run_verify(root: Path) -> tuple[bool, str]:
 
 
 def run_lint(root: Path, context: str) -> bool:
-    """Run ESLint on generated files. Returns True if no errors/warnings."""
+    """Run ESLint on changed .ts files only. Returns True if no errors/warnings."""
     bc_dir = root / "src" / "BusinessCapabilities" / context
     if not bc_dir.exists():
         print("  No files to lint", file=sys.stderr)
         return True
 
-    # Only lint .ts files that were actually changed (scaffold or AI)
+    # Only lint .ts files that were actually changed (not the whole tree)
     try:
         result = subprocess.run(
             ["git", "diff", "--name-only", "HEAD~1",
@@ -81,8 +81,9 @@ def run_lint(root: Path, context: str) -> bool:
         ]
     except Exception:
         ts_files = []
+
     if not ts_files:
-        print("  No .ts files found", file=sys.stderr)
+        print("  No changed .ts files to lint", file=sys.stderr)
         return True
 
     print(f"  Linting {len(ts_files)} file(s)...", file=sys.stderr, end=" ", flush=True)
@@ -95,16 +96,14 @@ def run_lint(root: Path, context: str) -> bool:
             print("PASS", file=sys.stderr)
             return True
         else:
-            print(f"FAIL", file=sys.stderr)
-            # Add lint failures to test results so classifier can see them
+            print("FAIL", file=sys.stderr)
             for line in result.stdout.strip().splitlines()[:10]:
                 print(f"    {line}", file=sys.stderr)
 
             # Append lint failures to test-results.json so repair can pick them up
+            import re
             try:
                 existing = load_json(TEST_RESULTS) or {"total": 0, "passed": 0, "failed": 0, "results": []}
-                # Extract slice names from lint errors
-                import re
                 lint_slices: set[str] = set()
                 for line in result.stdout.splitlines():
                     m = re.search(r"/(?:slices|endpoints)/(\w+)/", line)
@@ -123,7 +122,6 @@ def run_lint(root: Path, context: str) -> bool:
                 write_json(TEST_RESULTS, existing)
             except Exception:
                 pass
-
             return False
     except subprocess.TimeoutExpired:
         print("TIMEOUT (60s)", file=sys.stderr)
@@ -274,7 +272,7 @@ def main():
     print("=== Run tests ===", file=sys.stderr)
     test_passed, test_output = run_tests(root, args.context)
 
-    # Step 4: Lint generated code
+    # Step 4: Lint changed files
     print("=== Lint ===", file=sys.stderr)
     lint_passed = run_lint(root, args.context)
 
