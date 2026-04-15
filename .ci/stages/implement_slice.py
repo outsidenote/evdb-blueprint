@@ -221,7 +221,7 @@ def build_prompt(todo_content: str, hints: str, test_commands: list[str]) -> str
 - Computed fields (timestamps, generated IDs) belong in endpoints only, never in pure handlers.
 - Boundary conditions: before writing a comparison, mentally test the boundary value. If the spec says "greater than zero", ask: what happens when the value IS zero? Zero is not greater than zero, so it should be rejected. Write the predicate that rejects the boundary case.
 - No leftover TODOs: every field in every appendEvent call MUST have a real value derived from the spec. Never leave empty strings or TODO comments in generated code.
-- No `any` type: ESLint enforces zero warnings. Use proper types (number, string, Record&lt;string, unknown&gt;, etc.) — never `any`.
+- ESLint strict mode: no `any` type, no unused variables (prefix with `_`), use `import type` for type-only imports.
 {hint_block}
 ## Spec & TODO Context
 {todo_content}
@@ -241,7 +241,13 @@ def build_prompt(todo_content: str, hints: str, test_commands: list[str]) -> str
 - For projection.slice.test.ts: the payload must use EVENT fields (what the handler receives), not readmodel fields (what the projection stores).
 
 ## Self-Test
-After filling ALL TODOs, run these tests:
+After filling ALL TODOs:
+
+Step 1 — Lint your code:
+  npx eslint *.ts --max-warnings 0
+If ESLint fails, fix the issue (unused vars → prefix with _, no any types, etc.) and re-run.
+
+Step 2 — Run tests:
 {test_lines}
 
 If any test fails:
