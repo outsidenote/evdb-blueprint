@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import { ProjectionSliceTester } from "#abstractions/slices/ProjectionSliceTester.js";
 import { portfolioSummarySlice } from "./index.js";
 
@@ -6,19 +5,38 @@ ProjectionSliceTester.run(portfolioSummarySlice, [
   {
     description: "LoanRiskAssessed: first event creates initial state",
     run: () => {
-      // TODO: create test data and fill expected state
-      // The payload should contain the fields from the LoanRiskAssessed event,
-      // NOT the readmodel fields. Check the event schema in TODO_CONTEXT.md.
-      // Key should match how the projection handler builds it.
-      const key = randomUUID();
+      const portfolioId = "PORT-T1";
       return {
         given: [
           { messageType: "LoanRiskAssessed", payload: {
-            // TODO: fill with LoanRiskAssessed event fields
+            portfolioId,
+            loanAmount: 1000000,
+            riskWeight: 0.30,
+            probabilityOfDefault: 0.02,
+            capitalRequirement: 80000,
+            expectedLoss: 5000,
           } },
         ],
-        then: [{ key, expectedState: {
-          // TODO: expected stored state after first event
+        then: [{ key: portfolioId, expectedState: {
+          portfolioId: "PORT-T1",
+          // totalLoans: 1st loan → 1
+          totalLoans: 1,
+          // totalExposure: loanAmount = 1000000
+          totalExposure: 1000000,
+          // totalCapitalRequirement: capitalRequirement = 80000
+          totalCapitalRequirement: 80000,
+          // totalExpectedLoss: expectedLoss = 5000
+          totalExpectedLoss: 5000,
+          // averageRiskWeight: single loan → riskWeight = 0.30
+          averageRiskWeight: 0.30,
+          // averageProbabilityOfDefault: single loan → probabilityOfDefault = 0.02
+          averageProbabilityOfDefault: 0.02,
+          // averageRating: 0.30 ≤ 0.35 → A
+          averageRating: "A",
+          // riskBand: 0.30 ≤ 0.55 → Investment Grade
+          riskBand: "Investment Grade",
+          // worstRating: only loan, riskWeight = 0.30, 0.30 ≤ 0.35 → A
+          worstRating: "A",
         } }],
       };
     },
@@ -26,21 +44,49 @@ ProjectionSliceTester.run(portfolioSummarySlice, [
   {
     description: "two LoanRiskAssessed events: fields accumulate correctly",
     run: () => {
-      // Spec: Aggregates per portfolio. Each LoanRiskAssessed increments totalLoans by 1, adds loanAmount to totalExposure, adds capit...
-      // TODO: send two events with DIFFERENT numeric values,
-      // then assert the accumulated/averaged result.
-      const key = randomUUID();
+      const portfolioId = "PORT-T2";
       return {
         given: [
           { messageType: "LoanRiskAssessed", payload: {
-            // TODO: first event payload
+            portfolioId,
+            loanAmount: 1000000,
+            riskWeight: 0.20,
+            probabilityOfDefault: 0.10,
+            capitalRequirement: 50000,
+            expectedLoss: 2000,
           } },
           { messageType: "LoanRiskAssessed", payload: {
-            // TODO: second event payload (different numbers)
+            portfolioId,
+            loanAmount: 1000000,
+            riskWeight: 0.60,
+            probabilityOfDefault: 0.30,
+            capitalRequirement: 200000,
+            expectedLoss: 30000,
           } },
         ],
-        then: [{ key, expectedState: {
-          // TODO: expected accumulated state after two events
+        then: [{ key: portfolioId, expectedState: {
+          portfolioId: "PORT-T2",
+          // totalLoans: 1 + 1 = 2
+          totalLoans: 2,
+          // totalExposure: 1000000 + 1000000 = 2000000
+          totalExposure: 2000000,
+          // totalCapitalRequirement: 50000 + 200000 = 250000
+          totalCapitalRequirement: 250000,
+          // totalExpectedLoss: 2000 + 30000 = 32000
+          totalExpectedLoss: 32000,
+          // totalWeightedRisk: 1000000×0.20 + 1000000×0.60 = 200000 + 600000 = 800000
+          // averageRiskWeight: 800000 / 2000000 = 0.40
+          averageRiskWeight: 0.40,
+          // totalWeightedPd: 1000000×0.10 + 1000000×0.30 = 100000 + 300000 = 400000
+          // averageProbabilityOfDefault: 400000 / 2000000 = 0.20
+          averageProbabilityOfDefault: 0.20,
+          // averageRating: 0.40 ≤ 0.50 → BBB
+          averageRating: "BBB",
+          // riskBand: 0.40 ≤ 0.55 → Investment Grade
+          riskBand: "Investment Grade",
+          // worstRiskWeight: GREATEST(0.20, 0.60) = 0.60
+          // worstRating: 0.60 ≤ 0.75 → BB
+          worstRating: "BB",
         } }],
       };
     },
