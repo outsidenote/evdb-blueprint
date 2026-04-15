@@ -6,14 +6,17 @@ import type { SliceStateAddLoanToPortfolioViewState } from "#BusinessCapabilitie
  * Each function maps 1:1 to a named spec in the event model diagram.
  */
 
+// Credit ratings below investment grade (BBB and above = investment grade)
+const SUB_INVESTMENT_GRADE_RATINGS = ["BB", "B", "CCC", "CC", "C", "D"];
+
 /**
  * spec: amountLessThanZero
  * GIVEN state fields: none
  * WHEN command fields: portfolioId, acquisitionDate, borrowerName, creditRating, interestRate, loanAmount, loanId, maturityDate
  * THEN: LoanRejectedFromPortfolio
  */
-export const amountLessThanZero = (state: SliceStateAddLoanToPortfolioViewState, command: AddLoanToPortfolio): boolean =>
-  false; // TODO: return boolean comparing state.field vs command.portfolioId
+export const amountLessThanZero = (_state: SliceStateAddLoanToPortfolioViewState, command: AddLoanToPortfolio): boolean =>
+  command.loanAmount <= 0;
 
 /**
  * spec: portfolioRatingBreached
@@ -22,7 +25,7 @@ export const amountLessThanZero = (state: SliceStateAddLoanToPortfolioViewState,
  * THEN: LoanRejectedFromPortfolio
  */
 export const portfolioRatingBreached = (state: SliceStateAddLoanToPortfolioViewState, command: AddLoanToPortfolio): boolean =>
-  false; // TODO: return boolean comparing state.portfolioId vs command.portfolioId
+  state.portfolioId !== "" && SUB_INVESTMENT_GRADE_RATINGS.includes(command.creditRating);
 
 /**
  * spec: portfolioRatingMaintained
@@ -31,4 +34,4 @@ export const portfolioRatingBreached = (state: SliceStateAddLoanToPortfolioViewS
  * THEN: LoanAddedToPortfolio
  */
 export const portfolioRatingMaintained = (state: SliceStateAddLoanToPortfolioViewState, command: AddLoanToPortfolio): boolean =>
-  false; // TODO: return boolean comparing state.portfolioId vs command.portfolioId
+  !(state.portfolioId !== "" && SUB_INVESTMENT_GRADE_RATINGS.includes(command.creditRating));
