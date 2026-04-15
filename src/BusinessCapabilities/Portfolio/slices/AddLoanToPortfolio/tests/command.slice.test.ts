@@ -97,14 +97,16 @@ describe("AddLoanToPortfolio Slice - Unit Tests", () => {
         },
       },
     ];
+    // State after given: creditRating="test-creditRating" (not investment grade) → portfolioRatingBreached=true
+    // Command loanAmount=20000000 > 0 → amountLessThanZero=false
     const command: AddLoanToPortfolio = {
       commandType: "AddLoanToPortfolio",
       portfolioId: "port-001",
       acquisitionDate: new Date("2025-01-01T11:00:00Z"),
-      borrowerName: "test-borrowerName",
-      creditRating: "test-creditRating",
+      borrowerName: "Risky Corp",
+      creditRating: "CCC",
       interestRate: 0,
-      loanAmount: 0,
+      loanAmount: 20000000,
       loanId: "test-loanId-001",
       maturityDate: new Date("2025-01-01T11:00:00Z"),
     };
@@ -120,7 +122,7 @@ describe("AddLoanToPortfolio Slice - Unit Tests", () => {
           loanAmount: 20000000,
           loanId: "test-loanId-001",
           maturityDate: new Date("2025-01-01T11:00:00Z"),
-          errorMessage: "test-errorMessage",
+          errorMessage: "Portfolio credit rating would be breached",
         },
       },
     ];
@@ -149,16 +151,18 @@ describe("AddLoanToPortfolio Slice - Unit Tests", () => {
         },
       },
     ];
+    // State after given: creditRating="BBB" (investment grade) → portfolioRatingBreached=false, portfolioRatingMaintained=true
+    // Command loanAmount=5000000 > 0 → amountLessThanZero=false
     const command: AddLoanToPortfolio = {
       commandType: "AddLoanToPortfolio",
       portfolioId: "port-001",
       acquisitionDate: new Date("2025-01-01T11:00:00Z"),
-      borrowerName: "test-borrowerName",
-      creditRating: "test-creditRating",
-      interestRate: 0,
-      loanAmount: 0,
-      loanId: "test-loanId-001",
-      maturityDate: new Date("2025-01-01T11:00:00Z"),
+      borrowerName: "Acme Corp",
+      creditRating: "BBB",
+      interestRate: 5,
+      loanAmount: 5000000,
+      loanId: "test-loanId-002",
+      maturityDate: new Date("2030-01-01T11:00:00Z"),
     };
     const expectedEvents: TestEvent[] = [
       {
@@ -166,12 +170,12 @@ describe("AddLoanToPortfolio Slice - Unit Tests", () => {
         payload: {
           portfolioId: "port-001",
           acquisitionDate: new Date("2025-01-01T11:00:00Z"),
-          borrowerName: "test-borrowerName",
-          creditRating: "test-creditRating",
-          interestRate: 0,
-          loanAmount: 0,
-          loanId: "test-loanId-001",
-          maturityDate: new Date("2025-01-01T11:00:00Z"),
+          borrowerName: "Acme Corp",
+          creditRating: "BBB",
+          interestRate: 5,
+          loanAmount: 5000000,
+          loanId: "test-loanId-002",
+          maturityDate: new Date("2030-01-01T11:00:00Z"),
         },
       },
     ];
