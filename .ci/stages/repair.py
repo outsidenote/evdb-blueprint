@@ -173,25 +173,48 @@ def run_ai_repair(
     fc = classification.get("failure_class", "")
     details_text = "\n".join(classification.get("details", [])[:10])
 
+    # Load the spec (TODO_CONTEXT.md) if it still exists — gives the AI the GWT
+    # examples and business rules so it knows what the correct behavior should be
+    spec_context = ""
+    for subdir in ("slices", "endpoints"):
+        todo_path = root / "src" / "BusinessCapabilities" / context / subdir / slice_name / "TODO_CONTEXT.md"
+        if todo_path.exists():
+            spec_context = todo_path.read_text()[:4000]
+            break
+
+    # Load the failing test file so the AI can see the expected assertions
+    test_file_content = ""
+    for af in classification.get("affected_files", []):
+        af_path = root / af if not Path(af).is_absolute() else Path(af)
+        if af_path.exists() and "test" in af_path.name:
+            test_file_content = af_path.read_text()[:3000]
+            break
+
     # Build targeted repair prompt with full failure context
     sections = [f"Fix a specific CI failure in this TypeScript slice."]
     sections.append(f"\nFailure class: {fc}")
     sections.append(f"\nVerification details:\n{details_text}")
 
     if test_output:
-        # Truncate test output to relevant portion
         test_excerpt = test_output[:2000]
-        sections.append(f"\nTest output:\n{test_excerpt}")
+        sections.append(f"\nTest output (expected vs actual):\n{test_excerpt}")
+
+    if test_file_content:
+        sections.append(f"\nFailing test file:\n```typescript\n{test_file_content}\n```")
+
+    if spec_context:
+        sections.append(f"\nSpec (from TODO_CONTEXT.md):\n{spec_context}")
 
     sections.append(f"\nAllowed files: {', '.join(allowed_files)}")
     sections.append(f"""
 Rules:
+- The test file is derived from the spec and is CORRECT — do NOT modify test files (*.test.ts)
+- Fix the IMPLEMENTATION to match what the test expects
+- Read the spec carefully — it has the exact GWT examples with input/output values
 - Only edit: {', '.join(allowed_files)}
-- Do NOT modify test files (*.test.ts)
 - Do NOT read files outside this directory
 - Do NOT scan or explore the repo
-- Make the MINIMAL change to fix the failure
-- Do NOT refactor unrelated logic""")
+- Make the MINIMAL change to fix the failure""")
 
     prompt = "\n".join(sections)
 
