@@ -171,10 +171,12 @@ jobs:
 
       # ── Signed commits setup ────────────────────────────────
       - name: "🔑 Configure signed commits"
+        env:
+          SSH_SIGNING_KEY: ${{ secrets.BOT_SSH_SIGNING_KEY }}
         run: |
-          # Write the SSH signing key to disk
+          # Write the SSH signing key to disk — use env var to preserve newlines
           mkdir -p ~/.ssh
-          echo "${{ secrets.BOT_SSH_SIGNING_KEY }}" > ~/.ssh/signing_key
+          printf '%s\n' "$SSH_SIGNING_KEY" > ~/.ssh/signing_key
           chmod 600 ~/.ssh/signing_key
 
           # Configure git for SSH signing
