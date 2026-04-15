@@ -169,11 +169,25 @@ jobs:
           name: plan-decisions
           path: /tmp
 
-      # ── Branch + scaffold commit ────────────────────────────
+      # ── Signed commits setup ────────────────────────────────
+      - name: "🔑 Configure signed commits"
+        run: |
+          # Write the SSH signing key to disk
+          mkdir -p ~/.ssh
+          echo "${{ secrets.BOT_SSH_SIGNING_KEY }}" > ~/.ssh/signing_key
+          chmod 600 ~/.ssh/signing_key
+
+          # Configure git for SSH signing
+          BOT_NAME="${{ secrets.BOT_GIT_NAME }}"
+          BOT_EMAIL="${{ secrets.BOT_GIT_EMAIL }}"
+          git config user.name "${BOT_NAME:-evdb-codegen-bot}"
+          git config user.email "${BOT_EMAIL:-evdb-codegen-bot@users.noreply.github.com}"
+          git config gpg.format ssh
+          git config user.signingkey ~/.ssh/signing_key
+          git config commit.gpgsign true
+
       - name: Create codegen branch
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
           git fetch origin "${{ matrix.branch }}" 2>/dev/null || true
           git checkout -B "${{ matrix.branch }}"
 
@@ -193,7 +207,7 @@ jobs:
       # ── Load prior learning ─────────────────────────────────
       - name: "📚 Load prior discoveries"
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.BOT_GITHUB_TOKEN }}
         run: |
           # Download learned discoveries from the most recent successful run
           # so hint retrieval can use patterns from prior implementations
@@ -214,7 +228,7 @@ jobs:
       # ── Load clarification answers from prior PR comments ───
       - name: "💬 Load clarification answers"
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.BOT_GITHUB_TOKEN }}
         run: |
           # Find existing PR for this context's codegen branch pattern
           BRANCH_PREFIX="${{ matrix.base_branch }}-codegen/${{ matrix.context_pascal }}"
@@ -348,7 +362,7 @@ jobs:
       - name: "🧠 Learn from success"
         if: steps.verify.outputs.verify_passed == 'true'
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.BOT_GITHUB_TOKEN }}
         run: |
           # Download prior discoveries from the most recent successful run (if any)
           # This enables cross-run deduplication and reuse tracking
@@ -415,7 +429,7 @@ jobs:
       - name: "🚀 Push + create PR"
         if: steps.confidence.outputs.worst_band != 'BLOCKED'
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.BOT_GITHUB_TOKEN }}
         run: |
           # Skip if no commits ahead of base
           AHEAD=$(git rev-list --count "${{ matrix.base_branch }}".."${{ matrix.branch }}" 2>/dev/null || echo "0")
@@ -452,7 +466,7 @@ jobs:
       - name: "💬 Stats comment"
         if: always() && steps.confidence.outputs.worst_band != 'BLOCKED'
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.BOT_GITHUB_TOKEN }}
         run: |
           # Skip if no PR exists for this branch
           PR_NUM=$(gh pr list --head "${{ matrix.branch }}" --json number -q '.[0].number' 2>/dev/null || echo "")
@@ -476,7 +490,7 @@ jobs:
       - name: Create issue (L4 escalation)
         if: steps.repair.outputs.human_escalation == 'true'
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.BOT_GITHUB_TOKEN }}
         run: |
           gh issue create \
             --title "Manual repair needed: ${{ matrix.context_pascal }}" \

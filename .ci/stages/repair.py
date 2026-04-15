@@ -223,12 +223,26 @@ Rules:
         return RepairAttempt(level=level, level_name=level_name, strategy="ai_repair",
                              resolved=False, detail="Claude CLI not available")
 
-    # CWD locked to slice directory
-    slice_dir = root / "src" / "BusinessCapabilities" / context / "slices" / slice_name
-    if not slice_dir.exists():
-        # Try endpoints
-        slice_dir = root / "src" / "BusinessCapabilities" / context / "endpoints" / slice_name
-    if not slice_dir.exists():
+    # CWD locked to slice or endpoint directory — check which one has the failing file
+    bc = root / "src" / "BusinessCapabilities" / context
+    slice_dir = None
+
+    # Check which directory actually contains the files that need fixing
+    for subdir in ("slices", "endpoints"):
+        candidate = bc / subdir / slice_name
+        if candidate.exists():
+            # Prefer the directory that has the allowed files
+            for af in allowed_files:
+                if list(candidate.rglob(af)):
+                    slice_dir = candidate
+                    break
+            if slice_dir:
+                break
+            # Fallback: directory exists even if allowed files not found yet
+            if not slice_dir:
+                slice_dir = candidate
+
+    if not slice_dir or not slice_dir.exists():
         return RepairAttempt(level=level, level_name=level_name, strategy="ai_repair",
                              resolved=False, detail=f"Slice dir not found: {slice_name}")
 
