@@ -240,7 +240,13 @@ def build_prompt(todo_content: str, hints: str, test_commands: list[str]) -> str
 - For projection.slice.test.ts: the payload must use EVENT fields (what the handler receives), not readmodel fields (what the projection stores).
 
 ## Self-Test
-After filling ALL TODOs, run these tests:
+After filling ALL TODOs:
+
+Step 1 — Lint your code:
+  npx eslint *.ts --max-warnings 0
+If ESLint fails, fix the issue (unused vars → prefix with _, no any types, etc.) and re-run.
+
+Step 2 — Run tests:
 {test_lines}
 
 If any test fails:
