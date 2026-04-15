@@ -79,5 +79,40 @@
   "audit": {
     "retention_days": 90,
     "metrics_retention_days": 90
+  },
+  "discussions": {
+    "enabled": true,
+    "category_name": "Spec Clarifications",
+    "report_category_name": "Usage Reports",
+    "link_in_pr": true
+  },
+  "review_checklists": {
+    "STATE_CHANGE": [
+      "Predicate logic in `gwts.ts` matches domain rules",
+      "All GWT spec scenarios have matching handler branches",
+      "Event fields are complete — all command fields flow through",
+      "Rejection paths emit correct error messages"
+    ],
+    "STATE_VIEW": [
+      "SQL type casts match TS types (numeric → REAL/INT)",
+      "COALESCE used for accumulation fields (avoid null arithmetic)",
+      "DateTime fields use `toISOString()` for storage",
+      "Projection handles all consumed events"
+    ],
+    "PROCESSOR": [
+      "Trigger conditions match spec event types",
+      "Idempotent — handles duplicate events safely",
+      "Error handling doesn't leave inconsistent state",
+      "Output command fields correctly mapped from input event"
+    ],
+    "ENRICHMENT": [
+      "Formula steps match spec (verify intermediate calculations)",
+      "Edge cases: zero, negative, null, boundary values handled",
+      "Rounding and precision match business requirements",
+      "All formula inputs sourced from correct fields"
+    ],
+    "_always": [
+      "Tests cover edge cases, not just happy path"
+    ]
   }
 }

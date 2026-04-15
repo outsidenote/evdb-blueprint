@@ -1,0 +1,92 @@
+name: Monthly Usage Report
+
+on:
+  schedule:
+    - cron: '0 9 1 * *'    # 1st of each month at 9 AM UTC
+  workflow_dispatch:
+    inputs:
+      days:
+        description: 'Report window in days'
+        default: '30'
+
+permissions:
+  actions: read
+  discussions: write
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: ./.github/actions/setup-env
+
+      - name: "📥 Download historical metrics"
+        env:
+          GH_TOKEN: ${{ secrets.BOT_GITHUB_TOKEN }}
+        run: |
+          mkdir -p /tmp/metrics-history
+
+          # Download slice-metrics.jsonl from the last 100 successful codegen runs
+          RUNS=$(gh run list \
+            --workflow generate-slices.yml \
+            --status completed \
+            --conclusion success \
+            --limit 100 \
+            --json databaseId \
+            --jq '.[].databaseId')
+
+          DOWNLOADED=0
+          for RUN_ID in $RUNS; do
+            if gh run download "$RUN_ID" \
+                --pattern "run-*" \
+                --dir "/tmp/metrics-history/$RUN_ID" 2>/dev/null; then
+              DOWNLOADED=$((DOWNLOADED + 1))
+            fi
+          done
+          echo "  Downloaded artifacts from $DOWNLOADED runs"
+
+      - name: "📊 Generate report"
+        run: |
+          DAYS="${{ inputs.days || '30' }}"
+
+          python3 .ci/stages/usage_report.py \
+            --metrics-dir /tmp/metrics-history \
+            --days "$DAYS" \
+            --output /tmp/usage-report.json
+
+          python3 .ci/render/usage_report_md.py \
+            --report /tmp/usage-report.json \
+            --output /tmp/usage-report.md
+
+      - name: "💬 Post to Discussion"
+        env:
+          GH_TOKEN: ${{ secrets.BOT_GITHUB_TOKEN }}
+        run: |
+          # Compute month name for title
+          if command -v gdate &>/dev/null; then
+            MONTH=$(gdate -d "last month" +"%B %Y" 2>/dev/null || date +"%B %Y")
+          else
+            MONTH=$(date -d "last month" +"%B %Y" 2>/dev/null || date +"%B %Y")
+          fi
+
+          python3 .ci/stages/manage_discussions.py \
+            --mode create-report \
+            --repo "${{ github.repository }}" \
+            --title "Usage Report: $MONTH" \
+            --body-file /tmp/usage-report.md \
+            --category "Usage Reports" || echo "  Discussion posting failed (non-fatal)"
+
+      - name: "📝 Job summary"
+        if: always()
+        run: cat /tmp/usage-report.md >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: usage-report-${{ github.run_id }}
+          path: |
+            /tmp/usage-report.json
+            /tmp/usage-report.md
+          retention-days: 365
