@@ -33,6 +33,30 @@ describe("Projection: PortfolioLoanDetails", () => {
     assert.ok(result.length > 0, 'should have at least one SQL statement');
     assert.ok(result[0].sql.length > 0, 'SQL should not be empty');
     assert.ok(result[0].params.length > 0, 'params should not be empty');
+
+    // params: [projectionName, key, portfolioId, loanId, acquisitionDate, borrowerName,
+    //          capitalRequirement, creditRating, expectedLoss, interestRate, loanAmount,
+    //          maturityDate, probabilityOfDefault, riskBand, expectedPortfolioLoss,
+    //          riskNarrative, simulatedDefaultRate, tailRiskLoss, worstCaseLoss]
+    assert.strictEqual(result[0].params[0], "PortfolioLoanDetails", 'params[0] should be projectionName');
+    assert.strictEqual(result[0].params[1], "test-portfolioId-001:test-loanId-001", 'params[1] should be composite key portfolioId:loanId');
+    assert.strictEqual(result[0].params[2], payload.portfolioId, 'params[2] should be portfolioId');
+    assert.strictEqual(result[0].params[3], payload.loanId, 'params[3] should be loanId');
+    assert.strictEqual(result[0].params[4], payload.acquisitionDate.toISOString(), 'params[4] should be acquisitionDate as ISO string');
+    assert.strictEqual(result[0].params[5], payload.borrowerName, 'params[5] should be borrowerName');
+    assert.strictEqual(result[0].params[6], payload.capitalRequirement, 'params[6] should be capitalRequirement');
+    assert.strictEqual(result[0].params[7], payload.creditRating, 'params[7] should be creditRating');
+    assert.strictEqual(result[0].params[8], payload.expectedLoss, 'params[8] should be expectedLoss');
+    assert.strictEqual(result[0].params[9], payload.interestRate, 'params[9] should be interestRate');
+    assert.strictEqual(result[0].params[10], payload.loanAmount, 'params[10] should be loanAmount');
+    assert.strictEqual(result[0].params[11], payload.maturityDate.toISOString(), 'params[11] should be maturityDate as ISO string');
+    assert.strictEqual(result[0].params[12], payload.probabilityOfDefault, 'params[12] should be probabilityOfDefault');
+    assert.strictEqual(result[0].params[13], payload.riskBand, 'params[13] should be riskBand');
+    assert.strictEqual(result[0].params[14], payload.expectedPortfolioLoss, 'params[14] should be expectedPortfolioLoss');
+    assert.strictEqual(result[0].params[15], payload.riskNarrative, 'params[15] should be riskNarrative');
+    assert.strictEqual(result[0].params[16], payload.simulatedDefaultRate, 'params[16] should be simulatedDefaultRate');
+    assert.strictEqual(result[0].params[17], payload.tailRiskLoss, 'params[17] should be tailRiskLoss');
+    assert.strictEqual(result[0].params[18], payload.worstCaseLoss, 'params[18] should be worstCaseLoss');
   });
 
 });

@@ -101,10 +101,11 @@ describe("AddLoanToPortfolio Slice - Unit Tests", () => {
       commandType: "AddLoanToPortfolio",
       portfolioId: "port-001",
       acquisitionDate: new Date("2025-01-01T11:00:00Z"),
-      borrowerName: "test-borrowerName",
-      creditRating: "test-creditRating",
+      // spec WHEN: borrowerName=Risky Corp, creditRating=CCC, loanAmount=20000000
+      borrowerName: "Risky Corp",
+      creditRating: "CCC",
       interestRate: 0,
-      loanAmount: 0,
+      loanAmount: 20000000,
       loanId: "test-loanId-001",
       maturityDate: new Date("2025-01-01T11:00:00Z"),
     };
@@ -120,7 +121,7 @@ describe("AddLoanToPortfolio Slice - Unit Tests", () => {
           loanAmount: 20000000,
           loanId: "test-loanId-001",
           maturityDate: new Date("2025-01-01T11:00:00Z"),
-          errorMessage: "test-errorMessage",
+          errorMessage: "Portfolio credit rating would be breached",
         },
       },
     ];
@@ -154,9 +155,11 @@ describe("AddLoanToPortfolio Slice - Unit Tests", () => {
       portfolioId: "port-001",
       acquisitionDate: new Date("2025-01-01T11:00:00Z"),
       borrowerName: "test-borrowerName",
-      creditRating: "test-creditRating",
+      // spec WHEN: creditRating unspecified — use investment grade (BBB) so portfolioRatingBreached is false
+      creditRating: "BBB",
       interestRate: 0,
-      loanAmount: 0,
+      // spec WHEN: loanAmount unspecified — use >0 so amountLessThanZero is false
+      loanAmount: 5000000,
       loanId: "test-loanId-001",
       maturityDate: new Date("2025-01-01T11:00:00Z"),
     };
@@ -167,9 +170,9 @@ describe("AddLoanToPortfolio Slice - Unit Tests", () => {
           portfolioId: "port-001",
           acquisitionDate: new Date("2025-01-01T11:00:00Z"),
           borrowerName: "test-borrowerName",
-          creditRating: "test-creditRating",
+          creditRating: "BBB",
           interestRate: 0,
-          loanAmount: 0,
+          loanAmount: 5000000,
           loanId: "test-loanId-001",
           maturityDate: new Date("2025-01-01T11:00:00Z"),
         },
