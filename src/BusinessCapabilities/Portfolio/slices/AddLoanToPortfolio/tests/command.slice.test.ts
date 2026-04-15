@@ -101,10 +101,10 @@ describe("AddLoanToPortfolio Slice - Unit Tests", () => {
       commandType: "AddLoanToPortfolio",
       portfolioId: "port-001",
       acquisitionDate: new Date("2025-01-01T11:00:00Z"),
-      borrowerName: "test-borrowerName",
-      creditRating: "test-creditRating",
+      borrowerName: "Risky Corp",
+      creditRating: "CCC",
       interestRate: 0,
-      loanAmount: 0,
+      loanAmount: 20000000,
       loanId: "test-loanId-001",
       maturityDate: new Date("2025-01-01T11:00:00Z"),
     };
@@ -120,7 +120,7 @@ describe("AddLoanToPortfolio Slice - Unit Tests", () => {
           loanAmount: 20000000,
           loanId: "test-loanId-001",
           maturityDate: new Date("2025-01-01T11:00:00Z"),
-          errorMessage: "test-errorMessage",
+          errorMessage: "",
         },
       },
     ];

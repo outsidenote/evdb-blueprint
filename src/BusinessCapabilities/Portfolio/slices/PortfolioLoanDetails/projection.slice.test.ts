@@ -6,19 +6,50 @@ ProjectionSliceTester.run(portfolioLoanDetailsSlice, [
   {
     description: "LoanRiskAssessed: first event creates initial state",
     run: () => {
-      // TODO: create test data and fill expected state
-      // The payload should contain the fields from the LoanRiskAssessed event,
-      // NOT the readmodel fields. Check the event schema in TODO_CONTEXT.md.
-      // Key should match how the projection handler builds it.
-      const key = randomUUID();
+      const portfolioId = randomUUID();
+      const loanId = randomUUID();
+      const acquisitionDate = new Date("2024-03-15T09:00:00Z");
+      const maturityDate = new Date("2029-03-15T09:00:00Z");
       return {
         given: [
           { messageType: "LoanRiskAssessed", payload: {
-            // TODO: fill with LoanRiskAssessed event fields
+            portfolioId,
+            loanId,
+            acquisitionDate,
+            borrowerName: "Acme Corp",
+            capitalRequirement: 120000,
+            creditRating: "A",
+            expectedLoss: 2400,
+            interestRate: 0.045,
+            loanAmount: 400000,
+            maturityDate,
+            probabilityOfDefault: 0.015,
+            riskBand: "Low",
+            expectedPortfolioLoss: 8000,
+            riskNarrative: "Low risk borrower with strong financials",
+            simulatedDefaultRate: 0.02,
+            tailRiskLoss: 20000,
+            worstCaseLoss: 40000,
           } },
         ],
-        then: [{ key, expectedState: {
-          // TODO: expected stored state after first event
+        then: [{ key: `${portfolioId}:${loanId}`, expectedState: {
+          portfolioId,
+          loanId,
+          acquisitionDate: acquisitionDate.toISOString(),
+          borrowerName: "Acme Corp",
+          capitalRequirement: 120000,
+          creditRating: "A",
+          expectedLoss: 2400,
+          interestRate: 0.045,
+          loanAmount: 400000,
+          maturityDate: maturityDate.toISOString(),
+          probabilityOfDefault: 0.015,
+          riskBand: "Low",
+          expectedPortfolioLoss: 8000,
+          riskNarrative: "Low risk borrower with strong financials",
+          simulatedDefaultRate: 0.02,
+          tailRiskLoss: 20000,
+          worstCaseLoss: 40000,
         } }],
       };
     },
