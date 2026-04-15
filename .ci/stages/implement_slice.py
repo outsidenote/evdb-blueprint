@@ -252,6 +252,12 @@ def build_deep_prompt(todo_content: str, hints: str) -> str:
    - projection index.ts: replace generic UPSERT with proper field-specific SQL.
    - tests: verify event fields match spec, fix test data, add edge cases.
 
+## Test Writing Rules
+- When writing test assertions for computed/derived values, add a comment above each expected value showing the step-by-step derivation using the formulas and lookup tables from the spec.
+- Do NOT hardcode expected values without showing how you computed them from the spec.
+- If the spec says "X = A × B × C", the test comment should show: // X = <value of A> × <value of B> × <value of C> = <result>
+- For projection.slice.test.ts: the payload must use EVENT fields (what the handler receives), not readmodel fields (what the projection stores).
+
 Do NOT run tests — the CI pipeline handles that separately.
 Do NOT read SKILL.md or any reference files. Everything you need is above.
 Do NOT run evdb-diff, evdb-scaffold, or scan sessions.
