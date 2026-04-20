@@ -14,6 +14,7 @@ import { ProjectionFactory } from "./abstractions/projections/ProjectionFactory.
 import { discoverAutomations } from "./abstractions/endpoints/discoverAutomations.js";
 import { discoverRoutes } from "./abstractions/endpoints/discoverRoutes.js";
 import { discoverProjections } from "./abstractions/projections/discoverProjections.js";
+import { getActiveContextLabel } from "./abstractions/activeContext.js";
 import EvDbPostgresPrismaClientFactory from "@eventualize/postgres-storage-adapter/EvDbPostgresPrismaClientFactory";
 import EvDbPrismaStorageAdapter from "@eventualize/relational-storage-adapter/EvDbPrismaStorageAdapter";
 
@@ -45,6 +46,8 @@ async function stopServer(server?: Server): Promise<void> {
 }
 
 async function main() {
+  console.log(`[Startup] ACTIVE_CONTEXT=${getActiveContextLabel()}`);
+
   const storeClient = EvDbPostgresPrismaClientFactory.create(config.postgresConnection);
   const storageAdapter = new EvDbPrismaStorageAdapter(storeClient);
 
