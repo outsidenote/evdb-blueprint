@@ -1,4 +1,5 @@
 import { readdir } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ProjectionConfig } from "./ProjectionFactory.js";
@@ -20,6 +21,7 @@ const BC_DIR = join(__dirname, "..", "..", "BusinessCapabilities");
  * Filtered by ACTIVE_CONTEXT env var.
  */
 export async function discoverProjections(): Promise<ProjectionConfig[]> {
+  if (!existsSync(BC_DIR)) return [];
   const contexts = await readdir(BC_DIR);
   const allProjections: ProjectionConfig[] = [];
 

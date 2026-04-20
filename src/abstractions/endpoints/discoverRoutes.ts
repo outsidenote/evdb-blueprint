@@ -1,4 +1,5 @@
 import { readdir } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Router } from "express";
@@ -24,6 +25,7 @@ export interface RouteConfig {
  * Filtered by ACTIVE_CONTEXT env var.
  */
 export async function discoverRoutes(): Promise<RouteConfig[]> {
+  if (!existsSync(BC_DIR)) return [];
   const contexts = await readdir(BC_DIR);
   const allRoutes: RouteConfig[] = [];
 
