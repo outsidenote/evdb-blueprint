@@ -77,7 +77,7 @@ export function parseProjectionQuery(
 }
 
 
-type QueryMode = "byKey" | "byKeys" | "betweenKeys";
+type QueryMode = "byKey" | "byKeys" | "byPrefix" | "betweenKeys";
 
 function detectMode(params: Record<string, unknown>): QueryMode {
   const hasKey = has(params, "key");
