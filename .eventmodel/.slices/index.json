@@ -1,0 +1,20 @@
+{
+  "slices": [
+    {
+      "id": "3458764668385934191",
+      "slice": "slice: create account",
+      "index": 1,
+      "context": "Account",
+      "folder": "createaccount",
+      "status": "Created"
+    },
+    {
+      "id": "3458764668385934687",
+      "slice": "slice: accountView",
+      "index": 3,
+      "context": "Account",
+      "folder": "accountview",
+      "status": "Created"
+    }
+  ]
+}

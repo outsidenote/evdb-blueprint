@@ -1,0 +1,302 @@
+{
+  "slices": [
+    {
+      "id": "3458764668385934191",
+      "status": "Created",
+      "index": 1,
+      "title": "slice: create account",
+      "context": "Account",
+      "sliceType": "STATE_CHANGE",
+      "commands": [
+        {
+          "id": "3458764667153499684",
+          "tags": [],
+          "elementContext": "INTERNAL",
+          "modelContext": "Account",
+          "context": "INTERNAL",
+          "slice": "slice: create account",
+          "title": "create account",
+          "fields": [
+            {
+              "name": "currency",
+              "type": "String",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "name",
+              "type": "String",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "accountId",
+              "type": "UUID",
+              "generated": true,
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            }
+          ],
+          "type": "COMMAND",
+          "description": "",
+          "aggregate": "default",
+          "aggregateDependencies": [],
+          "dependencies": [
+            {
+              "id": "3458764667153961491",
+              "type": "OUTBOUND",
+              "title": "accountCreated",
+              "elementType": "EVENT"
+            },
+            {
+              "id": "3458764668385476298",
+              "type": "INBOUND",
+              "title": "Create Account Screen",
+              "elementType": "SCREEN"
+            }
+          ],
+          "createsAggregate": false,
+          "triggers": [],
+          "sketched": false,
+          "prototype": {
+            "activeByDefault": false
+          }
+        }
+      ],
+      "events": [
+        {
+          "id": "3458764667153961491",
+          "tags": [],
+          "elementContext": "INTERNAL",
+          "modelContext": "Account",
+          "context": "INTERNAL",
+          "slice": "slice: create account",
+          "title": "accountCreated",
+          "fields": [
+            {
+              "name": "currency",
+              "type": "String",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "name",
+              "type": "String",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "accountId",
+              "type": "UUID",
+              "generated": true,
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            }
+          ],
+          "type": "EVENT",
+          "description": "",
+          "aggregate": "default",
+          "aggregateDependencies": [],
+          "dependencies": [
+            {
+              "id": "3458764667154230741",
+              "type": "OUTBOUND",
+              "title": "accountView",
+              "elementType": "READMODEL"
+            },
+            {
+              "id": "3458764667153499684",
+              "type": "INBOUND",
+              "title": "create account",
+              "elementType": "COMMAND"
+            }
+          ],
+          "createsAggregate": false,
+          "triggers": [],
+          "sketched": false,
+          "prototype": {
+            "activeByDefault": false
+          }
+        }
+      ],
+      "readmodels": [],
+      "screens": [
+        {
+          "id": "3458764668385476298",
+          "tags": [],
+          "groupId": "3458764668385476312",
+          "elementContext": "INTERNAL",
+          "modelContext": "Account",
+          "context": "INTERNAL",
+          "slice": "slice: create account",
+          "title": "Create Account Screen",
+          "fields": [
+            {
+              "name": "currency",
+              "type": "String",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "name",
+              "type": "String",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            }
+          ],
+          "type": "SCREEN",
+          "description": "",
+          "aggregate": "default",
+          "aggregateDependencies": [],
+          "dependencies": [
+            {
+              "id": "3458764667153499684",
+              "type": "OUTBOUND",
+              "title": "create account",
+              "elementType": "COMMAND"
+            }
+          ],
+          "createsAggregate": false,
+          "triggers": [],
+          "sketched": true,
+          "prototype": {
+            "activeByDefault": false
+          }
+        }
+      ],
+      "screenImages": [],
+      "screenLayouts": [],
+      "processors": [],
+      "tables": [],
+      "specifications": [],
+      "actors": [],
+      "aggregates": []
+    },
+    {
+      "id": "3458764668385934687",
+      "status": "Created",
+      "index": 3,
+      "title": "slice: accountView",
+      "context": "Account",
+      "sliceType": "STATE_VIEW",
+      "commands": [],
+      "events": [],
+      "readmodels": [
+        {
+          "id": "3458764667154230741",
+          "tags": [],
+          "elementContext": "INTERNAL",
+          "modelContext": "Account",
+          "context": "INTERNAL",
+          "slice": "slice: accountView",
+          "title": "accountView",
+          "fields": [
+            {
+              "name": "accountId",
+              "type": "UUID",
+              "generated": true,
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "currency",
+              "type": "String",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "name",
+              "type": "String",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            }
+          ],
+          "type": "READMODEL",
+          "description": "",
+          "aggregate": "default",
+          "aggregateDependencies": [],
+          "dependencies": [
+            {
+              "id": "3458764668385697423",
+              "type": "OUTBOUND",
+              "title": "Account Info Screen",
+              "elementType": "SCREEN"
+            },
+            {
+              "id": "3458764667153961491",
+              "type": "INBOUND",
+              "title": "accountCreated",
+              "elementType": "EVENT"
+            }
+          ],
+          "createsAggregate": false,
+          "triggers": [],
+          "sketched": false,
+          "prototype": {
+            "activeByDefault": false
+          }
+        }
+      ],
+      "screens": [
+        {
+          "id": "3458764668385697423",
+          "tags": [],
+          "groupId": "3458764668385697435",
+          "elementContext": "INTERNAL",
+          "modelContext": "Account",
+          "context": "INTERNAL",
+          "slice": "slice: accountView",
+          "title": "Account Info Screen",
+          "fields": [],
+          "type": "SCREEN",
+          "description": "",
+          "aggregate": "default",
+          "aggregateDependencies": [],
+          "dependencies": [
+            {
+              "id": "3458764667154230741",
+              "type": "INBOUND",
+              "title": "accountView",
+              "elementType": "READMODEL"
+            }
+          ],
+          "createsAggregate": false,
+          "triggers": [],
+          "sketched": true,
+          "prototype": {
+            "activeByDefault": false
+          }
+        }
+      ],
+      "screenImages": [],
+      "screenLayouts": [],
+      "processors": [],
+      "tables": [],
+      "specifications": [],
+      "actors": [],
+      "aggregates": []
+    }
+  ],
+  "flows": [],
+  "aggregates": [],
+  "actors": [],
+  "context": "Account",
+  "codeGen": {
+    "application": "Context"
+  },
+  "boardId": "uXjVG8ZO-4k=",
+  "sliceGroups": [],
+  "sliceImages": [],
+  "sliceLayouts": []
+}
