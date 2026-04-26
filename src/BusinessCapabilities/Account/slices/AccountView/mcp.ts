@@ -4,7 +4,7 @@ import { defineProjectionMcpTool } from "#abstractions/mcp/defineMcpTool.js";
 export const accountViewMcpTool = defineProjectionMcpTool({
   name: "account.query_account_view",
   title: "Query accountView",
-  description: "@DESCRIPTION_TODO",
+  description: "Queries the AccountView projection to retrieve account details including name and currency. Use this tool when an agent needs to look up information about a specific account by its ID.",
   context: "Account",
   slice: "accountView",
   projectionName: "AccountView",
