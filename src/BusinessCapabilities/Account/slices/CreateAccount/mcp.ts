@@ -4,7 +4,7 @@ import { defineCommandMcpTool } from "#abstractions/mcp/defineMcpTool.js";
 export const createAccountMcpTool = defineCommandMcpTool({
   name: "account.create_account",
   title: "create account",
-  description: "@DESCRIPTION_TODO",
+  description: "Creates a new account and emits an accountCreated event. Call this tool when an agent needs to register a new account with a specified name and currency.",
   context: "Account",
   slice: "create account",
   basePath: "/api/account",

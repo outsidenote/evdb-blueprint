@@ -13,21 +13,25 @@ export const accountViewSlice: ProjectionConfig = {
   mode: { type: ProjectionModeType.Query },
 
   handlers: {
-    Accountcreated: (payload, { projectionName }) => {
+    AccountCreated: (payload, { projectionName }) => {
       const p = payload as AccountViewPayload;
       const key = p.accountId;
       return [
         {
           sql: `
             INSERT INTO projections (name, key, payload)
-            VALUES ($1, $2, $3::jsonb)
+            VALUES ($1, $2, jsonb_build_object(
+              'accountId', $3::text,
+              'currency', $4::text,
+              'name', $5::text
+            ))
             ON CONFLICT (name, key) DO UPDATE
-              SET payload = EXCLUDED.payload`,
-          params: [
-            projectionName,
-            key,
-            JSON.stringify(p), // TODO: select specific fields to store
-          ],
+              SET payload = jsonb_build_object(
+                'accountId', $3::text,
+                'currency', $4::text,
+                'name', $5::text
+              )`,
+          params: [projectionName, key, p.accountId, p.currency, p.name],
         },
       ];
     },

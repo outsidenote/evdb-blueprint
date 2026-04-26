@@ -1,10 +1,10 @@
 import { StreamFactoryBuilder } from "@eventualize/core/factories/StreamFactoryBuilder";
 
-import type { IAccountcreated } from "./events/Accountcreated.js";
-import { accountcreatedMessages } from "./messages/AccountcreatedMessages.js";
+import type { IAccountCreated } from "./events/AccountCreated.js";
+import { accountCreatedMessages } from "./messages/AccountcreatedMessages.js";
 const AccountStreamFactory = new StreamFactoryBuilder("AccountStream")
-  .withEvent("Accountcreated").asType<IAccountcreated>()
-  .withMessages("Accountcreated", accountcreatedMessages)
+  .withEvent("AccountCreated").asType<IAccountCreated>()
+  .withMessages("AccountCreated", accountCreatedMessages)
   .build();
 
 export default AccountStreamFactory;

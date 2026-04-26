@@ -10,7 +10,7 @@ export const handleCreateAccount: CommandHandler<
   AccountStreamType,
   CreateAccount
 > = (stream, command) => {
-  stream.appendEventAccountcreated({
+  stream.appendEventAccountCreated({
     currency: command.currency,
     name: command.name,
     accountId: command.accountId,

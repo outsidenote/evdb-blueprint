@@ -1,14 +1,14 @@
-import type { IAccountcreated } from "../events/Accountcreated.js";
+import type { IAccountCreated } from "../events/AccountCreated.js";
 import type IEvDbEventMetadata from "@eventualize/types/events/IEvDbEventMetadata";
 import EvDbMessage from "@eventualize/types/messages/EvDbMessage";
 
-export const accountcreatedMessages = (
-  payload: Readonly<IAccountcreated>,
+export const accountCreatedMessages = (
+  payload: Readonly<IAccountCreated>,
   _views: unknown,
   metadata: IEvDbEventMetadata,
 ) => {
   return [
-    EvDbMessage.createFromMetadata(metadata, "Accountcreated", {
+    EvDbMessage.createFromMetadata(metadata, "AccountCreated", {
       currency: payload.currency,
       name: payload.name,
       accountId: payload.accountId,
