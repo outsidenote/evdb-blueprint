@@ -10,6 +10,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -20,6 +21,7 @@ from lib.contracts import (
     load_json, write_json, set_output,
 )
 from lib.audit import emit
+from stages.mcp_checks import run_mcp_checks, merge_into_verify
 
 
 def run_normalize(root: Path) -> bool:
@@ -267,6 +269,31 @@ def main():
     # Step 2: Verify contracts
     print("=== Verify contracts ===", file=sys.stderr)
     verify_passed, verify_json = run_verify(root)
+
+    # Step 2b: MCP structural checks (additive — no-op for contexts that
+    # haven't adopted MCP scaffolding yet). Any exception here is swallowed
+    # so a bug in the new stage cannot regress the existing pipeline.
+    print("=== MCP structural checks ===", file=sys.stderr)
+    try:
+        mcp_passed, mcp_reports = run_mcp_checks(root, args.context)
+        if mcp_reports:
+            try:
+                verify_data = json.loads(verify_json) if verify_json else []
+            except (json.JSONDecodeError, ValueError):
+                verify_data = []
+            merged = merge_into_verify(verify_data, mcp_reports)
+            VERIFY_RESULTS.write_text(json.dumps(merged, indent=2))
+            verify_passed = verify_passed and mcp_passed
+            print(
+                f"  MCP: {'PASS' if mcp_passed else 'FAIL'} "
+                f"({len(mcp_reports)} descriptor(s) checked)",
+                file=sys.stderr,
+            )
+        else:
+            print("  MCP: skipped (no descriptors in context)", file=sys.stderr)
+    except Exception as e:
+        # Never block on a bug in the new stage — log and continue.
+        print(f"  MCP: error — skipping ({e})", file=sys.stderr)
 
     # Step 3: Run tests
     print("=== Run tests ===", file=sys.stderr)

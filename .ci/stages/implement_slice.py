@@ -98,7 +98,16 @@ def resolve_slice_cwd(root: Path, context: str, slice_dir: str | None, endpoint_
 # ── Deterministic fast-path ──────────────────────────────────────
 
 def scan_todos(directory: Path) -> dict[str, list[str]]:
-    """Scan .ts files for TODO markers. Returns {filename: [todo_lines]}."""
+    """Scan .ts files for TODO markers. Returns {filename: [todo_lines]}.
+
+    Picks up two shapes:
+      • `// TODO: ...` comments (the historical case)
+      • `@DESCRIPTION_TODO` sentinel placed by evdb-scaffold inside the
+        `description:` field of MCP descriptors (slices/<Slice>/mcp.ts).
+        This must be detected here so the deterministic fast-path doesn't
+        mark the slice trivial — otherwise the AI is skipped and the
+        sentinel survives into the PR.
+    """
     todos: dict[str, list[str]] = {}
     if not directory.exists():
         return todos
@@ -112,6 +121,8 @@ def scan_todos(directory: Path) -> dict[str, list[str]]:
         file_todos = []
         for i, line in enumerate(content.splitlines(), 1):
             if "TODO" in line and "//" in line:
+                file_todos.append(f"L{i}: {line.strip()}")
+            elif "@DESCRIPTION_TODO" in line:
                 file_todos.append(f"L{i}: {line.strip()}")
         if file_todos:
             todos[str(ts_file.relative_to(directory))] = file_todos
@@ -234,6 +245,7 @@ def build_prompt(todo_content: str, hints: str, test_commands: list[str]) -> str
    - enrichment.ts: implement enrich() per Backend Prompts section.
    - projection index.ts: replace generic UPSERT with proper field-specific SQL.
    - tests: verify event fields match spec, fix test data, add edge cases.
+   - mcp.ts (if present): if you see `description: "@DESCRIPTION_TODO"`, replace the sentinel with a 1-3 sentence MCP tool description. Verb-first (e.g., "Approves a pending withdrawal..."). For command tools, mention the emitted event types from the `emits` array. State when an agent should call this tool. Do NOT restate field names — they are in the schema. Do NOT touch any other field in the descriptor.
 
 ## Test Writing Rules
 - When writing test assertions for computed/derived values, add a comment above each expected value showing the step-by-step derivation using the formulas and lookup tables from the spec.
