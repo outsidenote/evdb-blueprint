@@ -46,6 +46,10 @@ def run_mcp_checks(root: Path, context: str) -> tuple[bool, list[dict]]:
     Returns (all_passed, slice_reports). slice_reports is a list of dicts
     in evdb-verify's shape: {slice, passed, checks: [{file, check, status, detail}]}.
 
+    All MCP descriptors live at slices/<Slice>/mcp.ts (commands and
+    queries). Each file's content disambiguates the kind: command files
+    declare a `routePath`, projection files declare a `projectionName`.
+
     Empty list when the context has no MCP descriptor files — caller should
     leave verify-results.json untouched in that case.
     """
@@ -53,10 +57,8 @@ def run_mcp_checks(root: Path, context: str) -> tuple[bool, list[dict]]:
     if not bc_dir.exists():
         return True, []
 
-    cmd_descriptors = sorted(bc_dir.glob("endpoints/*/MCP/index.ts"))
-    query_descriptors = sorted(bc_dir.glob("slices/*/mcp.ts"))
-
-    if not cmd_descriptors and not query_descriptors:
+    descriptors = sorted(bc_dir.glob("slices/*/mcp.ts"))
+    if not descriptors:
         return True, []
 
     routes_text = _read_text_safe(bc_dir / "endpoints" / "routes.ts")
@@ -65,15 +67,17 @@ def run_mcp_checks(root: Path, context: str) -> tuple[bool, list[dict]]:
     reports: list[dict] = []
     all_passed = True
 
-    for path in cmd_descriptors:
-        slice_name = path.parent.parent.name  # endpoints/<Slice>/MCP/index.ts
-        report, passed = _check_command_descriptor(path, root, slice_name, routes_text)
-        reports.append(report)
-        all_passed = all_passed and passed
-
-    for path in query_descriptors:
-        slice_name = path.parent.name  # slices/<Slice>/mcp.ts
-        report, passed = _check_query_descriptor(path, root, slice_name, projections_text)
+    for path in descriptors:
+        slice_name = path.parent.name
+        text = _read_text_safe(path)
+        # Dispatch on content: command descriptors have routePath, query
+        # descriptors have projectionName. Files with neither warn out.
+        if "routePath" in text:
+            report, passed = _check_command_descriptor(path, root, slice_name, text, routes_text)
+        elif "projectionName" in text:
+            report, passed = _check_query_descriptor(path, root, slice_name, text, projections_text)
+        else:
+            report, passed = _check_unknown_descriptor(path, root, slice_name, text)
         reports.append(report)
         all_passed = all_passed and passed
 
@@ -141,10 +145,9 @@ def _sentinel_check(rel: str, text: str) -> dict:
 
 
 def _check_command_descriptor(
-    path: Path, root: Path, slice_name: str, routes_text: str,
+    path: Path, root: Path, slice_name: str, text: str, routes_text: str,
 ) -> tuple[dict, bool]:
     rel = str(path.relative_to(root))
-    text = _read_text_safe(path)
     checks: list[dict] = [_sentinel_check(rel, text)]
 
     m = re.search(r'routePath\s*:\s*[\'"]([^\'"]+)[\'"]', text)
@@ -183,11 +186,34 @@ def _check_command_descriptor(
     return _make_report(slice_name, checks)
 
 
+def _check_unknown_descriptor(
+    path: Path, root: Path, slice_name: str, text: str,
+) -> tuple[dict, bool]:
+    """Descriptor file exists but neither routePath nor projectionName declared.
+
+    Likely a malformed or partially-written descriptor. Surface as WARN so
+    review can investigate without blocking the pipeline.
+    """
+    rel = str(path.relative_to(root))
+    checks: list[dict] = [
+        _sentinel_check(rel, text),
+        {
+            "file": rel,
+            "check": "mcp_descriptor_kind",
+            "status": WARN,
+            "detail": (
+                "descriptor declares neither routePath (command) nor "
+                "projectionName (query) — cannot reconcile against route/projection registry"
+            ),
+        },
+    ]
+    return _make_report(slice_name, checks)
+
+
 def _check_query_descriptor(
-    path: Path, root: Path, slice_name: str, projections_text: str,
+    path: Path, root: Path, slice_name: str, text: str, projections_text: str,
 ) -> tuple[dict, bool]:
     rel = str(path.relative_to(root))
-    text = _read_text_safe(path)
     checks: list[dict] = [_sentinel_check(rel, text)]
 
     m = re.search(r'projectionName\s*:\s*[\'"]([^\'"]+)[\'"]', text)
