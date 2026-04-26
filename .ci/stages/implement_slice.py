@@ -234,6 +234,7 @@ def build_prompt(todo_content: str, hints: str, test_commands: list[str]) -> str
    - enrichment.ts: implement enrich() per Backend Prompts section.
    - projection index.ts: replace generic UPSERT with proper field-specific SQL.
    - tests: verify event fields match spec, fix test data, add edge cases.
+   - MCP/index.ts and mcp.ts (if present): if you see `description: "@DESCRIPTION_TODO"`, replace the sentinel with a 1-3 sentence MCP tool description. Write verb-first (e.g., "Approves a pending withdrawal..."). For command tools, mention the emitted event types from the `emits` array. State when an agent should call this tool. Do NOT restate field names — they are in the schema. Do NOT touch any other field in the descriptor.
 
 ## Test Writing Rules
 - When writing test assertions for computed/derived values, add a comment above each expected value showing the step-by-step derivation using the formulas and lookup tables from the spec.

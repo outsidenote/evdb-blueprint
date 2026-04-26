@@ -15,6 +15,7 @@ import { discoverAutomations } from "./abstractions/endpoints/discoverAutomation
 import { discoverRoutes } from "./abstractions/endpoints/discoverRoutes.js";
 import { discoverProjections } from "./abstractions/projections/discoverProjections.js";
 import { getActiveContextLabel } from "./abstractions/activeContext.js";
+import { buildMcpManifest } from "./abstractions/mcp/manifest.js";
 import EvDbPostgresPrismaClientFactory from "@eventualize/postgres-storage-adapter/EvDbPostgresPrismaClientFactory";
 import EvDbPrismaStorageAdapter from "@eventualize/relational-storage-adapter/EvDbPrismaStorageAdapter";
 
@@ -24,6 +25,8 @@ const config = {
     "postgres://eventualize:eventualize123@localhost:5433/eventualize",
   kafkaBootstrap: process.env.KAFKA_BOOTSTRAP ?? "localhost:9092",
   port: Number(process.env.PORT ?? 3000),
+  // THIS BE's URL as the MCP gateway will reach it. Mirrors OpenAPI `servers[].url`.
+  mcpServiceUrl: process.env.MCP_SERVICE_URL ?? `http://localhost:${Number(process.env.PORT ?? 3000)}`,
 };
 
 async function startServer(app: express.Express, port: number): Promise<Server> {
@@ -92,6 +95,12 @@ async function main() {
 
   app.use("/api/projections", createProjectionRouter(projectionRepository, allowedProjections));
 
+  const mcpManifest = await buildMcpManifest(config.mcpServiceUrl);
+  console.log(`[Startup] MCP tools discovered: ${mcpManifest.tools.map((t) => t.name).join(", ") || "(none)"}`);
+  app.get("/.well-known/mcp-manifest.json", (_req, res) => {
+    res.json(mcpManifest);
+  });
+
   const routeConfigs = await discoverRoutes();
   for (const route of routeConfigs) {
     app.use(route.basePath, route.createRouter(storageAdapter));
@@ -107,6 +116,7 @@ async function main() {
   console.log(`[Startup] Swagger UI: http://localhost:${config.port}/api-docs`);
   console.log(`[Startup] POST /api/funds/approve-withdrawal`);
   console.log(`[Startup] GET  /api/projections/:projectionName`);
+  console.log(`[Startup] GET  /.well-known/mcp-manifest.json (MCP gateway discovery)`);
 
   // Graceful shutdown
   let isShuttingDown = false;
