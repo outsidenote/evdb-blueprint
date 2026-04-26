@@ -3403,10 +3403,21 @@ def _gen_todo_context(paths: SlicePaths, ds: DerivedSlice,
 
     # List files that need AI work
     todo_files = []
+    # MCP descriptor entry — same wording for command + query tools so the AI
+    # always knows what shape the prose should take. Scaffold writes the file
+    # with `description: "@DESCRIPTION_TODO"`; the AI replaces the sentinel.
+    mcp_todo = (
+        f"- `slices/{sn}/mcp.ts` — replace `description: \"@DESCRIPTION_TODO\"` "
+        f"with a 1-3 sentence MCP tool description. Verb-first. For command "
+        f"tools, mention the event types from the `emits` array. State when "
+        f"an agent should call this tool. Do NOT touch any other field in the "
+        f"descriptor."
+    )
     if is_proj:
         todo_files.append(f"- `slices/{sn}/index.ts` — replace generic UPSERT with proper SQL: select specific fields, handle accumulation vs overwrite")
         todo_files.append(f"- `slices/{sn}/tests/projection.test.ts` — verify SQL params contain correct field values")
         todo_files.append(f"- `slices/{sn}/projection.slice.test.ts` — fill event payloads and expected state (runs against real PostgreSQL via testcontainers)")
+        todo_files.append(mcp_todo)
     elif is_enrichment:
         todo_files.append(f"- `endpoints/{sn}/enrichment.ts` — implement enrichment logic per backendPrompts below")
         todo_files.append(f"- `endpoints/{sn}/tests/enrichment.test.ts` — verify enrichment output")
@@ -3420,6 +3431,10 @@ def _gen_todo_context(paths: SlicePaths, ds: DerivedSlice,
                 todo_files.append(f"- `endpoints/{sn}/enrichment.ts` — implement enrichment logic per description below")
                 todo_files.append(f"- `endpoints/{sn}/tests/enrichment.test.ts` — verify enrichment output")
             todo_files.append(f"- `endpoints/{sn}/tests/automation.endpoint.test.ts` — verify endpoint identity and mapping")
+        else:
+            # REST-routed command slice → MCP write-tool descriptor exists.
+            # Automation slices have no MCP file (internal trigger only).
+            todo_files.append(mcp_todo)
         if ds.has_specs:
             todo_files.append(f"- `slices/{sn}/tests/command.slice.test.ts` — verify test payloads match spec examples")
             todo_files.append(f"- `swimlanes/{stream}/views/SliceState{sn}/view.slice.test.ts` — adjust accumulation logic in tests")
