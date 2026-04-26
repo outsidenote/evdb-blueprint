@@ -674,7 +674,6 @@ class SlicePaths:
         self.tests_dir = self.slice_dir / "tests"
         self.rest_endpoint_dir = self.bc / "endpoints" / slice_name / "REST"
         self.pgboss_endpoint_dir = self.bc / "endpoints" / slice_name / "pg-boss"
-        self.mcp_endpoint_dir = self.bc / "endpoints" / slice_name / "MCP"
         self.stream_factory = self.swimlane / "index.ts"
         self.views_type = self.views_dir / f"{stream}Views.ts"
         self.routes = self.bc / "endpoints" / "routes.ts"
@@ -2498,7 +2497,7 @@ export const {sn_camel}McpTool = defineProjectionMcpTool({{
 
 
 def update_context_mcp_tools(
-    paths: SlicePaths, slice_data: dict, slice_name: str, kind: str
+    paths: SlicePaths, slice_data: dict, slice_name: str,
 ) -> str:
     """Create or update per-context endpoints/mcpTools.ts.
 
@@ -2506,19 +2505,17 @@ def update_context_mcp_tools(
     MCP tool descriptors (commands + queries) into one named array per
     context. Discovered at startup by `discoverMcpTools`.
 
-    `kind` is "command" (descriptor lives at endpoints/<Slice>/MCP/index.ts)
-    or "query" (descriptor lives at slices/<Slice>/mcp.ts). Idempotent —
-    repeated calls for the same slice are no-ops.
+    Both command and query descriptors live at slices/<Slice>/mcp.ts so
+    the AI fill step (which CWD-locks to that directory) can edit them.
+    Idempotent — repeated calls for the same slice are no-ops.
     """
     sn_camel = camel_case(slice_name)
     export_name = f"{sn_camel}McpTool"
     mcp_tools_path = paths.bc / "endpoints" / "mcpTools.ts"
     content = mcp_tools_path.read_text() if mcp_tools_path.exists() else ""
 
-    if kind == "command":
-        import_line = f'import {{ {export_name} }} from "./{slice_name}/MCP/index.js";'
-    else:  # query
-        import_line = f'import {{ {export_name} }} from "../slices/{slice_name}/mcp.js";'
+    # Both command and query descriptors live in slices/<Slice>/mcp.ts.
+    import_line = f'import {{ {export_name} }} from "../slices/{slice_name}/mcp.js";'
 
     if export_name in content:
         return content
@@ -3078,7 +3075,7 @@ def scaffold_slice(root: Path, folder: str, dry_run: bool = False) -> dict:
 
         if not dry_run:
             mcp_tools_path = paths.bc / "endpoints" / "mcpTools.ts"
-            updated = update_context_mcp_tools(paths, slice_data, ds.slice_name, "query")
+            updated = update_context_mcp_tools(paths, slice_data, ds.slice_name)
             existing = mcp_tools_path.read_text() if mcp_tools_path.exists() else ""
             if updated != existing:
                 write_file(mcp_tools_path, updated, is_update=bool(existing))
@@ -3278,14 +3275,17 @@ def scaffold_slice(root: Path, folder: str, dry_run: bool = False) -> dict:
                 if not behaviour_test_path.exists():
                     write_file(behaviour_test_path, gen_rest_behaviour_test(ds))
 
-                # 7d. MCP command tool descriptor (write tool) + register in mcpTools.ts
-                mcp_index_path = paths.mcp_endpoint_dir / "index.ts"
-                if not mcp_index_path.exists():
-                    write_file(mcp_index_path, gen_mcp_command_descriptor(ds))
+                # 7d. MCP command tool descriptor (write tool) + register in mcpTools.ts.
+                # Located inside the slice dir (NOT endpoints/<Slice>/MCP/) so it sits
+                # within implement_slice.py's CWD-lock; the AI can read & fill the
+                # @DESCRIPTION_TODO sentinel without crossing directory trees.
+                mcp_descriptor_path = paths.slice_dir / "mcp.ts"
+                if not mcp_descriptor_path.exists():
+                    write_file(mcp_descriptor_path, gen_mcp_command_descriptor(ds))
 
                 if not dry_run:
                     mcp_tools_path = paths.bc / "endpoints" / "mcpTools.ts"
-                    updated = update_context_mcp_tools(paths, slice_data, ds.slice_name, "command")
+                    updated = update_context_mcp_tools(paths, slice_data, ds.slice_name)
                     existing = mcp_tools_path.read_text() if mcp_tools_path.exists() else ""
                     if updated != existing:
                         write_file(mcp_tools_path, updated, is_update=bool(existing))
