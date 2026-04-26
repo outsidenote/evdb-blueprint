@@ -7,18 +7,23 @@ describe("Projection: AccountView", () => {
     assert.strictEqual(accountViewSlice.projectionName, "AccountView");
   });
 
-  it("Accountcreated handler returns SQL statements", () => {
+  it("AccountCreated handler returns SQL statements", () => {
     const payload = {
       accountId: "test-accountId-001",
       currency: "test-currency",
       name: "test-name",
     };
     const meta = { outboxId: "test-id", storedAt: new Date(), projectionName: "AccountView" };
-    const result = accountViewSlice.handlers.Accountcreated!(payload, meta)!;
+    const result = accountViewSlice.handlers.AccountCreated!(payload, meta)!;
 
     assert.ok(result.length > 0, 'should have at least one SQL statement');
     assert.ok(result[0].sql.length > 0, 'SQL should not be empty');
-    assert.ok(result[0].params.length > 0, 'params should not be empty');
+    // params: [projectionName, key(=accountId), accountId, currency, name]
+    assert.strictEqual(result[0].params[0], "AccountView", "param $1 should be projectionName");
+    assert.strictEqual(result[0].params[1], "test-accountId-001", "param $2 should be key (accountId)");
+    assert.strictEqual(result[0].params[2], "test-accountId-001", "param $3 should be accountId");
+    assert.strictEqual(result[0].params[3], "test-currency", "param $4 should be currency");
+    assert.strictEqual(result[0].params[4], "test-name", "param $5 should be name");
   });
 
 });
