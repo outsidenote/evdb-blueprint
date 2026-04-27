@@ -52,6 +52,24 @@ OPENAPI_TYPE_MAP = {
 }
 
 
+# Postgres cast tokens for use INSIDE jsonb_build_object().
+# Bare INSERT/SELECT against varchar columns should NOT use casts — the column
+# type is inferred. These casts are only needed inside jsonb_build_object,
+# where Postgres cannot infer parameter types.
+PG_CAST_MAP = {
+    "UUID":     "::text",
+    "String":   "::text",
+    "Double":   "::numeric",
+    "Decimal":  "::numeric",
+    "Integer":  "::int",
+    "Int":      "::int",
+    "Long":     "::bigint",
+    "Boolean":  "::boolean",
+    "DateTime": "::timestamptz",
+    "Date":     "::date",
+}
+
+
 def openapi_type(field_type: str) -> dict:
     """Convert event model type to OpenAPI schema type."""
     t, fmt = OPENAPI_TYPE_MAP.get(field_type, ("string", None))
@@ -63,6 +81,15 @@ def openapi_type(field_type: str) -> dict:
 
 def ts_type(field_type: str) -> str:
     return TYPE_MAP.get(field_type, "string")
+
+
+def pg_cast(field_type: str) -> str:
+    """Postgres cast token for a slice.json field type.
+
+    Use ONLY inside jsonb_build_object() — never on the projections table's
+    name/key columns (those are varchar and Postgres infers the type).
+    """
+    return PG_CAST_MAP.get(field_type, "::text")
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -3546,29 +3573,92 @@ def _gen_todo_context(paths: SlicePaths, ds: DerivedSlice,
 
         lines.append("## Patterns (projection SQL)")
         lines.append("")
+        lines.append("Pre-built example using THIS slice's actual fields. The casts below are correct;")
+        lines.append("you only need to fill in the accumulation formulas (sum, average, weighted, etc.).")
+        lines.append("")
         lines.append("```typescript")
         lines.append("// UPSERT with accumulation using jsonb_build_object")
-        lines.append("// IMPORTANT: every $N parameter inside jsonb_build_object MUST have an explicit cast")
-        lines.append("// PostgreSQL cannot infer types in jsonb context — uncast params cause runtime errors")
+        lines.append("// CRITICAL RULES:")
+        lines.append("//   1. $1 = projectionName, $2 = key — NEVER cast these (varchar columns)")
+        lines.append("//   2. NEVER reuse $1 or $2 inside jsonb_build_object — pass payload fields as $3+")
+        lines.append("//   3. Every $N inside jsonb_build_object MUST have a cast (Postgres cannot infer in jsonb)")
+        lines.append("//   4. Use the EXACT casts shown below — they match the field types in this slice")
         lines.append("handlers: {")
         lines.append('  EventName: (payload, { projectionName }) => {')
         lines.append("    const p = payload as PayloadType;")
-        lines.append("    const key = `${p.currency}:${p.reportDate}`;  // composite key")
+
+        # Build the actual key expression and field list for this slice
+        if key_match:
+            example_key = "`" + ":".join(f"${{p.{k}}}" for k in key_match) + "`"
+        else:
+            fallback_key_field = "id"
+            for f in rm_fields:
+                if f.get("idAttribute"):
+                    fallback_key_field = field_name(f["name"])
+                    break
+                if f.get("type") == "UUID":
+                    fallback_key_field = field_name(f["name"])
+                    break
+            example_key = f"p.{fallback_key_field}"
+
+        lines.append(f"    const key = {example_key};")
+
+        # Build VALUES (...) jsonb_build_object using $3, $4, ... with the right casts
+        # Skip the key field(s) — those are $2, not stored inside payload
+        if key_match:
+            key_fields_set = set(key_match)
+        else:
+            # Fallback: idAttribute fields are the key
+            key_fields_set = {
+                field_name(f["name"])
+                for f in rm_fields
+                if f.get("idAttribute")
+            }
+        param_idx = 3
+        param_lines: list[str] = []  # the params: [...] array entries
+        insert_kv: list[str] = []
+        update_kv: list[str] = []
+        for f in rm_fields:
+            fn = field_name(f["name"])
+            if fn in key_fields_set:
+                continue  # skip key components — they're already $2
+            ft = f.get("type", "String")
+            cast = pg_cast(ft)
+            ph = f"${param_idx}{cast}"
+            insert_kv.append(f"          '{fn}', {ph},")
+            # For numeric types, default to accumulation; for others, overwrite
+            if cast in ("::numeric", "::int", "::bigint"):
+                update_kv.append(
+                    f"            '{fn}', (projections.payload->>'{fn}'){cast} + {ph},  // TODO: accumulate or use new value?"
+                )
+            else:
+                update_kv.append(f"            '{fn}', {ph},")
+            param_lines.append(f"      p.{fn},")
+            param_idx += 1
+
         lines.append("    return [{")
         lines.append("      sql: `")
         lines.append("        INSERT INTO projections (name, key, payload)")
         lines.append("        VALUES ($1, $2, jsonb_build_object(")
-        lines.append("          'account', $3::text,")
-        lines.append("          'totalAmount', $4::numeric,")
-        lines.append("          'count', 1")
+        for kv in insert_kv:
+            lines.append(kv)
+        # remove trailing comma on last line if needed
+        if lines[-1].endswith(","):
+            lines[-1] = lines[-1][:-1]
         lines.append("        ))")
         lines.append("        ON CONFLICT (name, key) DO UPDATE")
         lines.append("          SET payload = jsonb_build_object(")
-        lines.append("            'account', $3::text,")
-        lines.append("            'totalAmount', (projections.payload->>'totalAmount')::numeric + $4::numeric,")
-        lines.append("            'count', (projections.payload->>'count')::int + 1")
+        for kv in update_kv:
+            lines.append(kv)
+        if lines[-1].endswith(","):
+            lines[-1] = lines[-1][:-1]
         lines.append("          )`,")
-        lines.append("      params: [projectionName, key, p.account, p.amount],")
+        lines.append("      params: [")
+        lines.append("        projectionName,")
+        lines.append("        key,")
+        for pl in param_lines:
+            lines.append(pl)
+        lines.append("      ],")
         lines.append("    }];")
         lines.append("  },")
         lines.append("}")
@@ -3576,11 +3666,13 @@ def _gen_todo_context(paths: SlicePaths, ds: DerivedSlice,
         lines.append("")
         lines.append("### Key rules")
         lines.append("- Use `projectionName` param (from meta), never hardcode the projection name")
-        lines.append("- **Every parameter inside jsonb_build_object() MUST have a type cast** ($3::text, $4::numeric) — PostgreSQL cannot infer types in jsonb context")
-        lines.append("- **Date/DateTime fields: convert to ISO string before passing as SQL param** — use `p.myDate instanceof Date ? p.myDate.toISOString() : p.myDate` in the params array. The pg driver serializes Date objects with timezone offset, but jsonb should store UTC ISO strings.")
-        lines.append("- Pass individual fields as params, not JSON.stringify(p) — this enables field-level accumulation")
+        lines.append("- **$1 (projectionName) and $2 (key) are varchar — NEVER cast them as ::text**")
+        lines.append("- **Never reuse $1 or $2 inside jsonb_build_object** — that causes Postgres error 42P08 (inconsistent types)")
+        lines.append("- **Every parameter inside jsonb_build_object() MUST have a type cast** — PostgreSQL cannot infer types in jsonb context")
+        lines.append("- The example above already has the correct casts for THIS slice's field types — keep them as-is")
+        lines.append("- **Date/DateTime fields: convert to ISO string before passing as SQL param** — use `p.myDate instanceof Date ? p.myDate.toISOString() : p.myDate` in the params array")
         lines.append("- For accumulation fields (totals, counts): read existing value with `(projections.payload->>'field')::numeric` and add the new param")
-        lines.append("- For overwrite fields (status, name): just use the param directly ($N::text)")
+        lines.append("- For overwrite fields (status, name): just use the param directly with the matching cast")
         lines.append("- Composite keys: build as template literal from payload fields")
         lines.append("")
     else:
