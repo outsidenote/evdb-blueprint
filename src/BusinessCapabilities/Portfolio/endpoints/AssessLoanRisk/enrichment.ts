@@ -21,19 +21,120 @@ export interface AssessLoanRiskEnrichmentOutput extends AssessLoanRiskEnrichment
   readonly riskNarrative: string;
 }
 
+// Step 1: Probability of Default (PD) by credit rating
+const PD_MAP: Record<string, number> = {
+  AAA: 0.0001, // 0.01%
+  AA:  0.0002, // 0.02%
+  A:   0.0005, // 0.05%
+  BBB: 0.0020, // 0.20%
+  BB:  0.0100, // 1.00%
+  B:   0.0300, // 3.00%
+  CCC: 0.1000, // 10.00%
+};
+
+// Step 2: Basel III standardized risk weights
+const RISK_WEIGHT_MAP: Record<string, number> = {
+  AAA: 0.20,
+  AA:  0.25,
+  A:   0.35,
+  BBB: 0.50,
+  BB:  0.75,
+  B:   1.00,
+  CCC: 1.50,
+};
+
+// Step 6: Recovery rates by credit rating
+const RECOVERY_RATE_MAP: Record<string, number> = {
+  AAA: 0.70,
+  AA:  0.70,
+  A:   0.70,
+  BBB: 0.55,
+  BB:  0.40,
+  B:   0.30,
+  CCC: 0.20,
+};
+
+// Step 5: Derive risk band from adjusted risk weight
+function deriveRiskBand(adjustedRiskWeight: number): string {
+  if (adjustedRiskWeight <= 0.30) return "Investment Grade - Low";
+  if (adjustedRiskWeight <= 0.55) return "Investment Grade - Medium";
+  if (adjustedRiskWeight <= 1.00) return "Speculative - High";
+  return "Speculative - Critical";
+}
+
+const MONTE_CARLO_ITERATIONS = 1000;
+
 export async function enrich(input: AssessLoanRiskEnrichmentInput): Promise<AssessLoanRiskEnrichmentOutput> {
-  // TODO: implement enrichment logic — see TODO_CONTEXT.md for backendPrompts instructions
+  const { creditRating, loanAmount, maturityDate } = input;
+
+  // Step 1: Map credit rating to probability of default
+  const probabilityOfDefault = PD_MAP[creditRating] ?? 0;
+
+  // Step 2: Calculate risk weight with Basel III maturity adjustment
+  const baseRiskWeight = RISK_WEIGHT_MAP[creditRating] ?? 0;
+  const now = new Date();
+  const fiveYearsFromNow = new Date(now.getFullYear() + 5, now.getMonth(), now.getDate());
+  const adjustedRiskWeight = maturityDate > fiveYearsFromNow ? baseRiskWeight * 1.15 : baseRiskWeight;
+
+  // Step 3: capitalRequirement = loanAmount × adjustedRiskWeight × 0.08
+  const capitalRequirement = loanAmount * adjustedRiskWeight * 0.08;
+
+  // Step 4: expectedLoss = loanAmount × PD × LGD (LGD assumption = 0.45)
+  const expectedLoss = loanAmount * probabilityOfDefault * 0.45;
+
+  // Step 5: Derive risk band from adjusted risk weight
+  const riskBand = deriveRiskBand(adjustedRiskWeight);
+
+  // Steps 6 & 7: Monte Carlo simulation (1000 iterations)
+  const recoveryRate = RECOVERY_RATE_MAP[creditRating] ?? 0;
+  let defaults = 0;
+  const losses: number[] = [];
+
+  for (let i = 0; i < MONTE_CARLO_ITERATIONS; i++) {
+    const random = Math.random();
+    if (random < probabilityOfDefault) {
+      defaults++;
+      losses.push(loanAmount * (1 - recoveryRate));
+    } else {
+      losses.push(0);
+    }
+  }
+
+  const simulatedDefaultRate = defaults / MONTE_CARLO_ITERATIONS;
+  const totalLoss = losses.reduce((sum, loss) => sum + loss, 0);
+  const expectedPortfolioLoss = totalLoss / MONTE_CARLO_ITERATIONS;
+
+  // Sort ascending for 95th percentile calculations (VaR / CVaR)
+  const sortedLosses = [...losses].sort((a, b) => a - b);
+  const idx95 = Math.floor(MONTE_CARLO_ITERATIONS * 0.95);
+  const worstCaseLoss = sortedLosses[idx95] ?? 0;
+
+  // CVaR / Expected Shortfall: average of the worst 5% scenarios
+  const tailScenarios = sortedLosses.slice(idx95);
+  const tailRiskLoss =
+    tailScenarios.length > 0
+      ? tailScenarios.reduce((sum, loss) => sum + loss, 0) / tailScenarios.length
+      : 0;
+
+  // Step 8: Build risk narrative
+  const riskNarrative =
+    `${creditRating} loan ($${loanAmount}): ${riskBand}. ` +
+    `Simulated default rate: ${(simulatedDefaultRate * 100).toFixed(4)}%. ` +
+    `Expected loss: $${expectedPortfolioLoss.toFixed(2)}. ` +
+    `VaR(95%): $${worstCaseLoss.toFixed(2)}. ` +
+    `Tail risk: $${tailRiskLoss.toFixed(2)}`;
+
   return {
     ...input,
-    acquisitionDate: new Date(), // TODO: compute enriched field
-    capitalRequirement: 0, // TODO: compute enriched field
-    expectedLoss: 0, // TODO: compute enriched field
-    probabilityOfDefault: 0, // TODO: compute enriched field
-    riskBand: "", // TODO: compute enriched field
-    simulatedDefaultRate: 0, // TODO: compute enriched field
-    expectedPortfolioLoss: 0, // TODO: compute enriched field
-    worstCaseLoss: 0, // TODO: compute enriched field
-    tailRiskLoss: 0, // TODO: compute enriched field
-    riskNarrative: "", // TODO: compute enriched field
+    acquisitionDate: new Date(),
+    capitalRequirement,
+    expectedLoss,
+    probabilityOfDefault,
+    riskBand,
+    simulatedDefaultRate,
+    expectedPortfolioLoss,
+    worstCaseLoss,
+    tailRiskLoss,
+    riskNarrative,
   };
 }
