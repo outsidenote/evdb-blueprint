@@ -82,6 +82,33 @@ async function main() {
   const app = express();
   app.use(express.json());
 
+  // Request/response logger — logs method, path, status, and duration for every call.
+  app.use((req, res, next) => {
+    const start = Date.now();
+    const reqBody = req.method !== "GET" && Object.keys(req.body ?? {}).length > 0
+      ? ` body=${JSON.stringify(req.body)}`
+      : "";
+    console.log(`[HTTP] → ${req.method} ${req.originalUrl}${reqBody}`);
+
+    // Capture response body (intercept res.json)
+    const originalJson = res.json.bind(res);
+    let responseBody: unknown;
+    res.json = (body: unknown) => {
+      responseBody = body;
+      return originalJson(body);
+    };
+
+    res.on("finish", () => {
+      const duration = Date.now() - start;
+      const bodyStr = responseBody !== undefined
+        ? ` body=${JSON.stringify(responseBody).slice(0, 500)}`
+        : "";
+      console.log(`[HTTP] ← ${req.method} ${req.originalUrl} ${res.statusCode} ${duration}ms${bodyStr}`);
+    });
+
+    next();
+  });
+
   app.get("/health", (_req, res) => {
     res.status(200).json({ status: "ok" });
   });

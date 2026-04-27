@@ -2446,7 +2446,8 @@ def gen_mcp_command_descriptor(ds: DerivedSlice) -> str:
     context = ds.context
     context_lower = context.lower()
     tool_snake = _snake(sn)
-    tool_name = f"{context_lower}.{tool_snake}"
+    # MCP tool names must match ^[a-zA-Z0-9_-]{1,64}$ — no dots allowed
+    tool_name = f"{context_lower}_{tool_snake}"
     base_path = f"/api/{kebab_case(context)}"
     route_path = f"/{kebab_case(sn)}"
     # Prefer the command's own title (e.g. "Approve Withdrawal" from config.json);
@@ -2505,7 +2506,8 @@ def gen_mcp_query_descriptor(ds: DerivedSlice) -> str:
     context = ds.context
     context_lower = context.lower()
     tool_snake = _snake(sn)
-    tool_name = f"{context_lower}.query_{tool_snake}"
+    # MCP tool names must match ^[a-zA-Z0-9_-]{1,64}$ — no dots allowed
+    tool_name = f"{context_lower}_query_{tool_snake}"
     slice_title = _clean_slice_title(ds.raw, sn).replace('"', '\\"')
     tool_title = f"Query {slice_title}"
 
