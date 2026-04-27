@@ -1,0 +1,2348 @@
+{
+  "slices": [
+    {
+      "id": "3458764667420113487",
+      "status": "Created",
+      "index": 1,
+      "title": "slice: Add Loan To Portfolio",
+      "context": "Portfolio",
+      "sliceType": "STATE_CHANGE",
+      "commands": [
+        {
+          "id": "3458764667419948450",
+          "tags": [],
+          "elementContext": "INTERNAL",
+          "modelContext": "Portfolio",
+          "context": "INTERNAL",
+          "slice": "slice: Add Loan To Portfolio",
+          "title": "Add Loan to Portfolio",
+          "fields": [
+            {
+              "name": "portfolioId",
+              "type": "UUID",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": true
+            },
+            {
+              "name": "acquisitionDate",
+              "type": "DateTime",
+              "generated": true,
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "borrowerName",
+              "type": "String",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "creditRating",
+              "type": "String",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "interestRate",
+              "type": "Double",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "loanAmount",
+              "type": "Double",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "loanId",
+              "type": "UUID",
+              "generated": true,
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "maturityDate",
+              "type": "Date",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            }
+          ],
+          "type": "COMMAND",
+          "description": "",
+          "aggregate": "default",
+          "aggregateDependencies": [],
+          "dependencies": [
+            {
+              "id": "3458764667420901109",
+              "type": "OUTBOUND",
+              "title": "LoanRejectedFromPortfolio",
+              "elementType": "EVENT"
+            },
+            {
+              "id": "3458764667420674218",
+              "type": "OUTBOUND",
+              "title": "LoanAddedToPortfolio",
+              "elementType": "EVENT"
+            },
+            {
+              "id": "3458764669433527633",
+              "type": "INBOUND",
+              "title": "screen",
+              "elementType": "SCREEN"
+            }
+          ],
+          "createsAggregate": false,
+          "triggers": [],
+          "sketched": false,
+          "prototype": {
+            "activeByDefault": false
+          }
+        }
+      ],
+      "events": [
+        {
+          "id": "3458764667420901109",
+          "tags": [],
+          "elementContext": "INTERNAL",
+          "modelContext": "Portfolio",
+          "context": "INTERNAL",
+          "slice": "slice: Add Loan To Portfolio",
+          "title": "LoanRejectedFromPortfolio",
+          "fields": [
+            {
+              "name": "portfolioId",
+              "type": "UUID",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": true
+            },
+            {
+              "name": "acquisitionDate",
+              "type": "DateTime",
+              "generated": true,
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "borrowerName",
+              "type": "String",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "creditRating",
+              "type": "String",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "interestRate",
+              "type": "Double",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "loanAmount",
+              "type": "Double",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "loanId",
+              "type": "UUID",
+              "generated": true,
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "maturityDate",
+              "type": "Date",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "errorMessage",
+              "type": "String",
+              "generated": true,
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            }
+          ],
+          "type": "EVENT",
+          "description": "",
+          "aggregate": "default",
+          "aggregateDependencies": [],
+          "dependencies": [
+            {
+              "id": "3458764667419948450",
+              "type": "INBOUND",
+              "title": "Add Loan to Portfolio",
+              "elementType": "COMMAND"
+            }
+          ],
+          "createsAggregate": false,
+          "triggers": [],
+          "sketched": false,
+          "prototype": {
+            "activeByDefault": false
+          }
+        },
+        {
+          "id": "3458764667420674218",
+          "tags": [],
+          "elementContext": "INTERNAL",
+          "modelContext": "Portfolio",
+          "context": "INTERNAL",
+          "slice": "slice: Add Loan To Portfolio",
+          "title": "LoanAddedToPortfolio",
+          "fields": [
+            {
+              "name": "portfolioId",
+              "type": "UUID",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": true
+            },
+            {
+              "name": "acquisitionDate",
+              "type": "DateTime",
+              "generated": true,
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "borrowerName",
+              "type": "String",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "creditRating",
+              "type": "String",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "interestRate",
+              "type": "Double",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "loanAmount",
+              "type": "Double",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "loanId",
+              "type": "UUID",
+              "generated": true,
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "maturityDate",
+              "type": "Date",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            }
+          ],
+          "type": "EVENT",
+          "description": "",
+          "aggregate": "default",
+          "aggregateDependencies": [],
+          "dependencies": [
+            {
+              "id": "3458764667425307762",
+              "type": "OUTBOUND",
+              "title": "Loans Pending Risk Assess",
+              "elementType": "READMODEL"
+            },
+            {
+              "id": "3458764667419948450",
+              "type": "INBOUND",
+              "title": "Add Loan to Portfolio",
+              "elementType": "COMMAND"
+            }
+          ],
+          "createsAggregate": false,
+          "triggers": [],
+          "sketched": false,
+          "prototype": {
+            "activeByDefault": false
+          }
+        }
+      ],
+      "readmodels": [],
+      "screens": [
+        {
+          "id": "3458764669433527633",
+          "tags": [],
+          "groupId": "3458764669433527646",
+          "elementContext": "INTERNAL",
+          "modelContext": "Portfolio",
+          "context": "INTERNAL",
+          "slice": "slice: Add Loan To Portfolio",
+          "title": "screen",
+          "fields": [
+            {
+              "name": "portfolioId",
+              "type": "UUID",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": true
+            },
+            {
+              "name": "acquisitionDate",
+              "type": "DateTime",
+              "generated": true,
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "borrowerName",
+              "type": "String",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "creditRating",
+              "type": "String",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "interestRate",
+              "type": "Double",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "loanAmount",
+              "type": "Double",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "loanId",
+              "type": "UUID",
+              "generated": true,
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "maturityDate",
+              "type": "Date",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            }
+          ],
+          "type": "SCREEN",
+          "description": "",
+          "aggregate": "default",
+          "aggregateDependencies": [],
+          "dependencies": [
+            {
+              "id": "3458764667419948450",
+              "type": "OUTBOUND",
+              "title": "Add Loan to Portfolio",
+              "elementType": "COMMAND"
+            },
+            {
+              "id": "3458764669468160706",
+              "type": "OUTBOUND",
+              "title": "screen",
+              "elementType": "SCREEN"
+            }
+          ],
+          "createsAggregate": false,
+          "triggers": [],
+          "sketched": true,
+          "prototype": {
+            "activeByDefault": false
+          }
+        }
+      ],
+      "screenImages": [],
+      "screenLayouts": [],
+      "processors": [],
+      "tables": [],
+      "specifications": [
+        {
+          "vertical": false,
+          "id": "3458764667462172336",
+          "sliceName": "<p>slice: Add Loan To Portfolio</p>",
+          "title": "spec: amountLessThanZero",
+          "given": [],
+          "when": [
+            {
+              "title": "Add Loan to Portfolio",
+              "tags": [],
+              "examples": [],
+              "id": "3458764667462172338",
+              "index": 0,
+              "specRow": -1,
+              "type": "SPEC_COMMAND",
+              "fields": [
+                {
+                  "name": "portfolioId",
+                  "type": "UUID",
+                  "subfields": [],
+                  "cardinality": "Single",
+                  "idAttribute": true,
+                  "example": ""
+                },
+                {
+                  "name": "acquisitionDate",
+                  "type": "DateTime",
+                  "generated": true,
+                  "subfields": [],
+                  "cardinality": "Single",
+                  "example": ""
+                },
+                {
+                  "name": "borrowerName",
+                  "type": "String",
+                  "subfields": [],
+                  "cardinality": "Single",
+                  "example": ""
+                },
+                {
+                  "name": "creditRating",
+                  "type": "String",
+                  "subfields": [],
+                  "cardinality": "Single",
+                  "example": ""
+                },
+                {
+                  "name": "interestRate",
+                  "type": "Double",
+                  "subfields": [],
+                  "cardinality": "Single",
+                  "example": ""
+                },
+                {
+                  "name": "loanAmount",
+                  "type": "Double",
+                  "subfields": [],
+                  "cardinality": "Single",
+                  "example": "<=0"
+                },
+                {
+                  "name": "loanId",
+                  "type": "UUID",
+                  "generated": true,
+                  "subfields": [],
+                  "cardinality": "Single",
+                  "example": ""
+                },
+                {
+                  "name": "maturityDate",
+                  "type": "Date",
+                  "subfields": [],
+                  "cardinality": "Single",
+                  "example": ""
+                }
+              ],
+              "linkedId": "3458764667419948450"
+            }
+          ],
+          "then": [
+            {
+              "title": "LoanRejectedFromPortfolio",
+              "tags": [],
+              "examples": [],
+              "id": "3458764667462172341",
+              "index": 0,
+              "specRow": -1,
+              "type": "SPEC_EVENT",
+              "fields": [
+                {
+                  "name": "portfolioId",
+                  "type": "UUID",
+                  "subfields": [],
+                  "cardinality": "Single",
+                  "idAttribute": true,
+                  "example": ""
+                },
+                {
+                  "name": "acquisitionDate",
+                  "type": "DateTime",
+                  "generated": true,
+                  "subfields": [],
+                  "cardinality": "Single",
+                  "example": ""
+                },
+                {
+                  "name": "borrowerName",
+                  "type": "String",
+                  "subfields": [],
+                  "cardinality": "Single",
+                  "example": ""
+                },
+                {
+                  "name": "creditRating",
+                  "type": "String",
+                  "subfields": [],
+                  "cardinality": "Single",
+                  "example": ""
+                },
+                {
+                  "name": "interestRate",
+                  "type": "Double",
+                  "subfields": [],
+                  "cardinality": "Single",
+                  "example": ""
+                },
+                {
+                  "name": "loanAmount",
+                  "type": "Double",
+                  "subfields": [],
+                  "cardinality": "Single",
+                  "example": ""
+                },
+                {
+                  "name": "loanId",
+                  "type": "UUID",
+                  "generated": true,
+                  "subfields": [],
+                  "cardinality": "Single",
+                  "example": ""
+                },
+                {
+                  "name": "maturityDate",
+                  "type": "Date",
+                  "subfields": [],
+                  "cardinality": "Single",
+                  "example": ""
+                },
+                {
+                  "name": "errorMessage",
+                  "type": "String",
+                  "generated": true,
+                  "subfields": [],
+                  "cardinality": "Single",
+                  "example": "Amount should be greater than zero"
+                }
+              ],
+              "linkedId": "3458764667420901109"
+            }
+          ],
+          "comments": [],
+          "linkedId": "3458764667420113487"
+        },
+        {
+          "vertical": false,
+          "id": "3458764667424476314",
+          "sliceName": "<p>slice: Add Loan To Portfolio</p>",
+          "title": "spec: portfolioRatingBreached",
+          "given": [
+            {
+              "title": "LoanAddedToPortfolio",
+              "tags": [],
+              "examples": [],
+              "id": "3458764667424476333",
+              "index": 0,
+              "specRow": -1,
+              "type": "SPEC_EVENT",
+              "fields": [
+                {
+                  "name": "portfolioId",
+                  "type": "UUID",
+                  "subfields": [],
+                  "cardinality": "Single",
+                  "idAttribute": true,
+                  "example": "port-001"
+                },
+                {
+                  "name": "acquisitionDate",
+                  "type": "DateTime",
+                  "generated": true,
+                  "subfields": [],
+                  "cardinality": "Single",
+                  "example": ""
+                },
+                {
+                  "name": "borrowerName",
+                  "type": "String",
+                  "subfields": [],
+                  "cardinality": "Single",
+                  "example": ""
+                },
+                {
+                  "name": "creditRating",
+                  "type": "String",
+                  "subfields": [],
+                  "cardinality": "Single",
+                  "example": ""
+                },
+                {
+                  "name": "interestRate",
+                  "type": "Double",
+                  "subfields": [],
+                  "cardinality": "Single",
+                  "example": ""
+                },
+                {
+                  "name": "loanAmount",
+                  "type": "Double",
+                  "subfields": [],
+                  "cardinality": "Single",
+                  "example": ""
+                },
+                {
+                  "name": "loanId",
+                  "type": "UUID",
+                  "generated": true,
+                  "subfields": [],
+                  "cardinality": "Single",
+                  "example": ""
+                },
+                {
+                  "name": "maturityDate",
+                  "type": "Date",
+                  "subfields": [],
+                  "cardinality": "Single",
+                  "example": ""
+                }
+              ],
+              "linkedId": "3458764667420674218"
+            }
+          ],
+          "when": [
+            {
+              "title": "Add Loan to Portfolio",
+              "tags": [],
+              "examples": [],
+              "id": "3458764667424476317",
+              "index": 0,
+              "specRow": -1,
+              "type": "SPEC_COMMAND",
+              "fields": [
+                {
+                  "name": "portfolioId",
+                  "type": "UUID",
+                  "subfields": [],
+                  "cardinality": "Single",
+                  "idAttribute": true,
+                  "example": "port-001"
+                },
+                {
+                  "name": "acquisitionDate",
+                  "type": "DateTime",
+                  "generated": true,
+                  "subfields": [],
+                  "cardinality": "Single",
+                  "example": ""
+                },
+                {
+                  "name": "borrowerName",
+                  "type": "String",
+                  "subfields": [],
+                  "cardinality": "Single",
+                  "example": ""
+                },
+                {
+                  "name": "creditRating",
+                  "type": "String",
+                  "subfields": [],
+                  "cardinality": "Single",
+                  "example": ""
+                },
+                {
+                  "name": "interestRate",
+                  "type": "Double",
+                  "subfields": [],
+                  "cardinality": "Single",
+                  "example": ""
+                },
+                {
+                  "name": "loanAmount",
+                  "type": "Double",
+                  "subfields": [],
+                  "cardinality": "Single",
+                  "example": ""
+                },
+                {
+                  "name": "loanId",
+                  "type": "UUID",
+                  "generated": true,
+                  "subfields": [],
+                  "cardinality": "Single",
+                  "example": ""
+                },
+                {
+                  "name": "maturityDate",
+                  "type": "Date",
+                  "subfields": [],
+                  "cardinality": "Single",
+                  "example": ""
+                }
+              ],
+              "linkedId": "3458764667419948450"
+            }
+          ],
+          "then": [
+            {
+              "title": "LoanRejectedFromPortfolio",
+              "tags": [],
+              "examples": [],
+              "id": "3458764667424476324",
+              "index": 0,
+              "specRow": -1,
+              "type": "SPEC_EVENT",
+              "fields": [
+                {
+                  "name": "portfolioId",
+                  "type": "UUID",
+                  "subfields": [],
+                  "cardinality": "Single",
+                  "idAttribute": true,
+                  "example": "port-001"
+                },
+                {
+                  "name": "acquisitionDate",
+                  "type": "DateTime",
+                  "generated": true,
+                  "subfields": [],
+                  "cardinality": "Single",
+                  "example": ""
+                },
+                {
+                  "name": "borrowerName",
+                  "type": "String",
+                  "subfields": [],
+                  "cardinality": "Single",
+                  "example": "Risky Corp"
+                },
+                {
+                  "name": "creditRating",
+                  "type": "String",
+                  "subfields": [],
+                  "cardinality": "Single",
+                  "example": "CCC"
+                },
+                {
+                  "name": "interestRate",
+                  "type": "Double",
+                  "subfields": [],
+                  "cardinality": "Single",
+                  "example": ""
+                },
+                {
+                  "name": "loanAmount",
+                  "type": "Double",
+                  "subfields": [],
+                  "cardinality": "Single",
+                  "example": "20000000"
+                },
+                {
+                  "name": "loanId",
+                  "type": "UUID",
+                  "generated": true,
+                  "subfields": [],
+                  "cardinality": "Single",
+                  "example": ""
+                },
+                {
+                  "name": "maturityDate",
+                  "type": "Date",
+                  "subfields": [],
+                  "cardinality": "Single",
+                  "example": ""
+                },
+                {
+                  "name": "errorMessage",
+                  "type": "String",
+                  "generated": true,
+                  "subfields": [],
+                  "cardinality": "Single",
+                  "example": ""
+                }
+              ],
+              "linkedId": "3458764667420901109"
+            }
+          ],
+          "comments": [],
+          "linkedId": "3458764667420113487"
+        },
+        {
+          "vertical": false,
+          "id": "3458764667421837768",
+          "sliceName": "<p>slice: Add Loan To Portfolio</p>",
+          "title": "spec: portfolioRatingMaintained",
+          "given": [
+            {
+              "title": "LoanAddedToPortfolio",
+              "tags": [],
+              "examples": [],
+              "id": "3458764667421837798",
+              "index": 0,
+              "specRow": -1,
+              "type": "SPEC_EVENT",
+              "fields": [
+                {
+                  "name": "portfolioId",
+                  "type": "UUID",
+                  "subfields": [],
+                  "cardinality": "Single",
+                  "idAttribute": true,
+                  "example": "port-001"
+                },
+                {
+                  "name": "acquisitionDate",
+                  "type": "DateTime",
+                  "generated": true,
+                  "subfields": [],
+                  "cardinality": "Single",
+                  "example": ""
+                },
+                {
+                  "name": "borrowerName",
+                  "type": "String",
+                  "subfields": [],
+                  "cardinality": "Single",
+                  "example": "Acme Corp"
+                },
+                {
+                  "name": "creditRating",
+                  "type": "String",
+                  "subfields": [],
+                  "cardinality": "Single",
+                  "example": "BBB"
+                },
+                {
+                  "name": "interestRate",
+                  "type": "Double",
+                  "subfields": [],
+                  "cardinality": "Single",
+                  "example": ""
+                },
+                {
+                  "name": "loanAmount",
+                  "type": "Double",
+                  "subfields": [],
+                  "cardinality": "Single",
+                  "example": "10000000"
+                },
+                {
+                  "name": "loanId",
+                  "type": "UUID",
+                  "generated": true,
+                  "subfields": [],
+                  "cardinality": "Single",
+                  "example": ""
+                },
+                {
+                  "name": "maturityDate",
+                  "type": "Date",
+                  "subfields": [],
+                  "cardinality": "Single",
+                  "example": ""
+                }
+              ],
+              "linkedId": "3458764667420674218"
+            }
+          ],
+          "when": [
+            {
+              "title": "Add Loan to Portfolio",
+              "tags": [],
+              "examples": [],
+              "id": "3458764667421837775",
+              "index": 0,
+              "specRow": -1,
+              "type": "SPEC_COMMAND",
+              "fields": [
+                {
+                  "name": "portfolioId",
+                  "type": "UUID",
+                  "subfields": [],
+                  "cardinality": "Single",
+                  "idAttribute": true,
+                  "example": "port-001"
+                },
+                {
+                  "name": "acquisitionDate",
+                  "type": "DateTime",
+                  "generated": true,
+                  "subfields": [],
+                  "cardinality": "Single",
+                  "example": ""
+                },
+                {
+                  "name": "borrowerName",
+                  "type": "String",
+                  "subfields": [],
+                  "cardinality": "Single",
+                  "example": ""
+                },
+                {
+                  "name": "creditRating",
+                  "type": "String",
+                  "subfields": [],
+                  "cardinality": "Single",
+                  "example": ""
+                },
+                {
+                  "name": "interestRate",
+                  "type": "Double",
+                  "subfields": [],
+                  "cardinality": "Single",
+                  "example": ""
+                },
+                {
+                  "name": "loanAmount",
+                  "type": "Double",
+                  "subfields": [],
+                  "cardinality": "Single",
+                  "example": ""
+                },
+                {
+                  "name": "loanId",
+                  "type": "UUID",
+                  "generated": true,
+                  "subfields": [],
+                  "cardinality": "Single",
+                  "example": ""
+                },
+                {
+                  "name": "maturityDate",
+                  "type": "Date",
+                  "subfields": [],
+                  "cardinality": "Single",
+                  "example": ""
+                }
+              ],
+              "linkedId": "3458764667419948450"
+            }
+          ],
+          "then": [
+            {
+              "title": "LoanAddedToPortfolio",
+              "tags": [],
+              "examples": [],
+              "id": "3458764667421837786",
+              "index": 0,
+              "specRow": -1,
+              "type": "SPEC_EVENT",
+              "fields": [
+                {
+                  "name": "portfolioId",
+                  "type": "UUID",
+                  "subfields": [],
+                  "cardinality": "Single",
+                  "idAttribute": true,
+                  "example": "port-001"
+                },
+                {
+                  "name": "acquisitionDate",
+                  "type": "DateTime",
+                  "generated": true,
+                  "subfields": [],
+                  "cardinality": "Single",
+                  "example": ""
+                },
+                {
+                  "name": "borrowerName",
+                  "type": "String",
+                  "subfields": [],
+                  "cardinality": "Single",
+                  "example": ""
+                },
+                {
+                  "name": "creditRating",
+                  "type": "String",
+                  "subfields": [],
+                  "cardinality": "Single",
+                  "example": ""
+                },
+                {
+                  "name": "interestRate",
+                  "type": "Double",
+                  "subfields": [],
+                  "cardinality": "Single",
+                  "example": ""
+                },
+                {
+                  "name": "loanAmount",
+                  "type": "Double",
+                  "subfields": [],
+                  "cardinality": "Single",
+                  "example": ""
+                },
+                {
+                  "name": "loanId",
+                  "type": "UUID",
+                  "generated": true,
+                  "subfields": [],
+                  "cardinality": "Single",
+                  "example": ""
+                },
+                {
+                  "name": "maturityDate",
+                  "type": "Date",
+                  "subfields": [],
+                  "cardinality": "Single",
+                  "example": ""
+                }
+              ],
+              "linkedId": "3458764667420674218"
+            }
+          ],
+          "comments": [],
+          "linkedId": "3458764667420113487"
+        }
+      ],
+      "actors": [],
+      "aggregates": []
+    },
+    {
+      "id": "3458764667425436296",
+      "status": "Created",
+      "index": 3,
+      "title": "slice: Asses Loan TODO List",
+      "context": "Portfolio",
+      "sliceType": "STATE_VIEW",
+      "commands": [],
+      "events": [],
+      "readmodels": [
+        {
+          "id": "3458764667425307762",
+          "tags": [],
+          "elementContext": "INTERNAL",
+          "modelContext": "Portfolio",
+          "context": "INTERNAL",
+          "slice": "slice: Asses Loan TODO List",
+          "title": "Loans Pending Risk Assess",
+          "fields": [
+            {
+              "name": "portfolioId",
+              "type": "UUID",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": true
+            },
+            {
+              "name": "acquisitionDate",
+              "type": "DateTime",
+              "generated": true,
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "borrowerName",
+              "type": "String",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "creditRating",
+              "type": "String",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "interestRate",
+              "type": "Double",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "loanAmount",
+              "type": "Double",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "loanId",
+              "type": "UUID",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "maturityDate",
+              "type": "Date",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            }
+          ],
+          "type": "READMODEL",
+          "description": "",
+          "aggregate": "default",
+          "aggregateDependencies": [],
+          "dependencies": [
+            {
+              "id": "3458764667426101538",
+              "type": "OUTBOUND",
+              "title": "automation",
+              "elementType": "AUTOMATION"
+            },
+            {
+              "id": "3458764667420674218",
+              "type": "INBOUND",
+              "title": "LoanAddedToPortfolio",
+              "elementType": "EVENT"
+            }
+          ],
+          "listElement": true,
+          "todoList": true,
+          "createsAggregate": false,
+          "triggers": [],
+          "sketched": false,
+          "prototype": {
+            "activeByDefault": false
+          }
+        }
+      ],
+      "screens": [],
+      "screenImages": [],
+      "screenLayouts": [],
+      "processors": [],
+      "tables": [],
+      "specifications": [],
+      "actors": [],
+      "aggregates": []
+    },
+    {
+      "id": "3458764667426265263",
+      "status": "Created",
+      "index": 5,
+      "title": "slice: Assess Loan Risk Processor",
+      "context": "Portfolio",
+      "sliceType": "UNDEFINED",
+      "commands": [],
+      "events": [],
+      "readmodels": [],
+      "screens": [],
+      "screenImages": [],
+      "screenLayouts": [],
+      "processors": [
+        {
+          "id": "3458764667426101538",
+          "tags": [],
+          "groupId": "3458764667426101551",
+          "elementContext": "INTERNAL",
+          "modelContext": "Portfolio",
+          "context": "INTERNAL",
+          "slice": "slice: Assess Loan Risk Processor",
+          "title": "automation",
+          "fields": [
+            {
+              "name": "portfolioId",
+              "type": "UUID",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": true
+            },
+            {
+              "name": "acquisitionDate",
+              "type": "DateTime",
+              "generated": true,
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "borrowerName",
+              "type": "String",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "capitalRequirement",
+              "type": "Decimal",
+              "generated": true,
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "creditRating",
+              "type": "String",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "expectedLoss",
+              "type": "Double",
+              "generated": true,
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "interestRate",
+              "type": "Double",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "loanAmount",
+              "type": "Double",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "loanId",
+              "type": "UUID",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "maturityDate",
+              "type": "Date",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "probabilityOfDefault",
+              "type": "Double",
+              "generated": true,
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "riskBand",
+              "type": "String",
+              "generated": true,
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "simulatedDefaultRate",
+              "type": "Double",
+              "generated": true,
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "expectedPortfolioLoss",
+              "type": "Double",
+              "generated": true,
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "worstCaseLoss",
+              "type": "Double",
+              "generated": true,
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "tailRiskLoss",
+              "type": "Double",
+              "generated": true,
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "riskNarrative",
+              "type": "String",
+              "generated": true,
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            }
+          ],
+          "type": "AUTOMATION",
+          "description": "Risk assessment engine for CLO portfolio loans.\n\nStep 1: Map credit rating to probability of default (PD): AAA→0.01%, AA→0.02%, A→0.05%, BBB→0.20%, BB→1.00%, B→3.00%, CCC→10.00%.\n\nStep 2: Calculate risk weight using Basel III standardized approach: AAA→0.20, AA→0.25, A→0.35, BBB→0.50, BB→0.75, B→1.00, CCC→1.50. Adjust for maturity: if maturity > 5 years, multiply risk weight by 1.15.\n\nStep 3: Calculate capitalRequirement = loanAmount × adjustedRiskWeight × 0.08.\n\nStep 4: Calculate expectedLoss = loanAmount × probabilityOfDefault × 0.45 (LGD assumption 45%).\n\nStep 5: Derive riskBand from adjusted risk weight: ≤ 0.30 → \"Investment Grade - Low\", ≤ 0.55 → \"Investment Grade - Medium\", ≤ 1.00 → \"Speculative - High\", > 1.00 → \"Speculative - Critical\".\n\nStep 6: Run Monte Carlo simulation (1000 iterations) for loan default probability:\n\nFor each iteration, generate a random number between 0 and 1\nIf random < probabilityOfDefault, the loan defaults in this scenario\nIf defaulted, apply recovery rate: loss = loanAmount × (1 - recoveryRate). Recovery rate by rating: AAA-A→0.70, BBB→0.55, BB→0.40, B→0.30, CCC→0.20\nTrack: number of defaults, total simulated losses\nStep 7: Compute simulation results:\n\nsimulatedDefaultRate = defaults / 1000 (should approximate the PD)\nexpectedPortfolioLoss = average loss across all iterations\nworstCaseLoss = 95th percentile loss (VaR at 95% confidence)\ntailRiskLoss = average of worst 5% scenarios (CVaR / Expected Shortfall)\nStep 8: Build riskNarrative: \"{creditRating} loan (${loanAmount}): {riskBand}. Simulated default rate: {simulatedDefaultRate}%. Expected loss: ${expectedPortfolioLoss}. VaR(95%): ${worstCaseLoss}. Tail risk: ${tailRiskLoss}",
+          "aggregate": "default",
+          "aggregateDependencies": [],
+          "dependencies": [
+            {
+              "id": "3458764667426465116",
+              "type": "OUTBOUND",
+              "title": "assess loan risk",
+              "elementType": "COMMAND"
+            },
+            {
+              "id": "3458764667425307762",
+              "type": "INBOUND",
+              "title": "Loans Pending Risk Assess",
+              "elementType": "READMODEL"
+            }
+          ],
+          "createsAggregate": false,
+          "triggers": [],
+          "sketched": false,
+          "prototype": {
+            "activeByDefault": false
+          }
+        }
+      ],
+      "tables": [],
+      "specifications": [],
+      "actors": [],
+      "aggregates": []
+    },
+    {
+      "id": "3458764667426529734",
+      "status": "Created",
+      "index": 7,
+      "title": "slice: Assess Loan Risk",
+      "context": "Portfolio",
+      "sliceType": "STATE_CHANGE",
+      "commands": [
+        {
+          "id": "3458764667426465116",
+          "tags": [],
+          "elementContext": "INTERNAL",
+          "modelContext": "Portfolio",
+          "context": "INTERNAL",
+          "slice": "slice: Assess Loan Risk",
+          "title": "assess loan risk",
+          "fields": [
+            {
+              "name": "portfolioId",
+              "type": "UUID",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": true
+            },
+            {
+              "name": "acquisitionDate",
+              "type": "DateTime",
+              "generated": true,
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "borrowerName",
+              "type": "String",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "creditRating",
+              "type": "String",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "expectedLoss",
+              "type": "Double",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "interestRate",
+              "type": "Double",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "loanAmount",
+              "type": "Double",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "loanId",
+              "type": "UUID",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "maturityDate",
+              "type": "Date",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "probabilityOfDefault",
+              "type": "Double",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "capitalRequirement",
+              "type": "Decimal",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "riskBand",
+              "type": "String",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "expectedPortfolioLoss",
+              "type": "Double",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "riskNarrative",
+              "type": "String",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "simulatedDefaultRate",
+              "type": "Double",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "tailRiskLoss",
+              "type": "Double",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "worstCaseLoss",
+              "type": "Double",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            }
+          ],
+          "type": "COMMAND",
+          "description": "",
+          "aggregate": "default",
+          "aggregateDependencies": [],
+          "dependencies": [
+            {
+              "id": "3458764667426465845",
+              "type": "OUTBOUND",
+              "title": "LoanRiskAssessed",
+              "elementType": "EVENT"
+            },
+            {
+              "id": "3458764667426101538",
+              "type": "INBOUND",
+              "title": "automation",
+              "elementType": "AUTOMATION"
+            }
+          ],
+          "createsAggregate": false,
+          "triggers": [],
+          "sketched": false,
+          "prototype": {
+            "activeByDefault": false
+          }
+        }
+      ],
+      "events": [
+        {
+          "id": "3458764667426465845",
+          "tags": [],
+          "elementContext": "INTERNAL",
+          "modelContext": "Portfolio",
+          "context": "INTERNAL",
+          "slice": "slice: Assess Loan Risk",
+          "title": "LoanRiskAssessed",
+          "fields": [
+            {
+              "name": "portfolioId",
+              "type": "UUID",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": true
+            },
+            {
+              "name": "acquisitionDate",
+              "type": "DateTime",
+              "generated": true,
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "borrowerName",
+              "type": "String",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "capitalRequirement",
+              "type": "Decimal",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "creditRating",
+              "type": "String",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "expectedLoss",
+              "type": "Double",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "interestRate",
+              "type": "Double",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "loanAmount",
+              "type": "Double",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "loanId",
+              "type": "UUID",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "maturityDate",
+              "type": "Date",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "probabilityOfDefault",
+              "type": "Double",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "riskBand",
+              "type": "String",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "expectedPortfolioLoss",
+              "type": "Double",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "riskNarrative",
+              "type": "String",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "simulatedDefaultRate",
+              "type": "Double",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "tailRiskLoss",
+              "type": "Double",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "worstCaseLoss",
+              "type": "Double",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            }
+          ],
+          "type": "EVENT",
+          "description": "",
+          "aggregate": "default",
+          "aggregateDependencies": [],
+          "dependencies": [
+            {
+              "id": "3458764667457631292",
+              "type": "OUTBOUND",
+              "title": "Portfolio Loan Details",
+              "elementType": "READMODEL"
+            },
+            {
+              "id": "3458764667426662480",
+              "type": "OUTBOUND",
+              "title": "Portfolio Summary",
+              "elementType": "READMODEL"
+            },
+            {
+              "id": "3458764667426465116",
+              "type": "INBOUND",
+              "title": "assess loan risk",
+              "elementType": "COMMAND"
+            }
+          ],
+          "createsAggregate": false,
+          "triggers": [],
+          "sketched": false,
+          "prototype": {
+            "activeByDefault": false
+          }
+        }
+      ],
+      "readmodels": [],
+      "screens": [],
+      "screenImages": [],
+      "screenLayouts": [],
+      "processors": [
+        {
+          "id": "3458764667426101538",
+          "tags": [],
+          "groupId": "3458764667426101551",
+          "elementContext": "INTERNAL",
+          "modelContext": "Portfolio",
+          "context": "INTERNAL",
+          "slice": "slice: Assess Loan Risk",
+          "title": "automation",
+          "fields": [
+            {
+              "name": "portfolioId",
+              "type": "UUID",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": true
+            },
+            {
+              "name": "acquisitionDate",
+              "type": "DateTime",
+              "generated": true,
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "borrowerName",
+              "type": "String",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "capitalRequirement",
+              "type": "Decimal",
+              "generated": true,
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "creditRating",
+              "type": "String",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "expectedLoss",
+              "type": "Double",
+              "generated": true,
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "interestRate",
+              "type": "Double",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "loanAmount",
+              "type": "Double",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "loanId",
+              "type": "UUID",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "maturityDate",
+              "type": "Date",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "probabilityOfDefault",
+              "type": "Double",
+              "generated": true,
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "riskBand",
+              "type": "String",
+              "generated": true,
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "simulatedDefaultRate",
+              "type": "Double",
+              "generated": true,
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "expectedPortfolioLoss",
+              "type": "Double",
+              "generated": true,
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "worstCaseLoss",
+              "type": "Double",
+              "generated": true,
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "tailRiskLoss",
+              "type": "Double",
+              "generated": true,
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "riskNarrative",
+              "type": "String",
+              "generated": true,
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            }
+          ],
+          "type": "AUTOMATION",
+          "description": "Risk assessment engine for CLO portfolio loans.\n\nStep 1: Map credit rating to probability of default (PD): AAA→0.01%, AA→0.02%, A→0.05%, BBB→0.20%, BB→1.00%, B→3.00%, CCC→10.00%.\n\nStep 2: Calculate risk weight using Basel III standardized approach: AAA→0.20, AA→0.25, A→0.35, BBB→0.50, BB→0.75, B→1.00, CCC→1.50. Adjust for maturity: if maturity > 5 years, multiply risk weight by 1.15.\n\nStep 3: Calculate capitalRequirement = loanAmount × adjustedRiskWeight × 0.08.\n\nStep 4: Calculate expectedLoss = loanAmount × probabilityOfDefault × 0.45 (LGD assumption 45%).\n\nStep 5: Derive riskBand from adjusted risk weight: ≤ 0.30 → \"Investment Grade - Low\", ≤ 0.55 → \"Investment Grade - Medium\", ≤ 1.00 → \"Speculative - High\", > 1.00 → \"Speculative - Critical\".\n\nStep 6: Run Monte Carlo simulation (1000 iterations) for loan default probability:\n\nFor each iteration, generate a random number between 0 and 1\nIf random < probabilityOfDefault, the loan defaults in this scenario\nIf defaulted, apply recovery rate: loss = loanAmount × (1 - recoveryRate). Recovery rate by rating: AAA-A→0.70, BBB→0.55, BB→0.40, B→0.30, CCC→0.20\nTrack: number of defaults, total simulated losses\nStep 7: Compute simulation results:\n\nsimulatedDefaultRate = defaults / 1000 (should approximate the PD)\nexpectedPortfolioLoss = average loss across all iterations\nworstCaseLoss = 95th percentile loss (VaR at 95% confidence)\ntailRiskLoss = average of worst 5% scenarios (CVaR / Expected Shortfall)\nStep 8: Build riskNarrative: \"{creditRating} loan (${loanAmount}): {riskBand}. Simulated default rate: {simulatedDefaultRate}%. Expected loss: ${expectedPortfolioLoss}. VaR(95%): ${worstCaseLoss}. Tail risk: ${tailRiskLoss}",
+          "aggregate": "default",
+          "aggregateDependencies": [],
+          "dependencies": [
+            {
+              "id": "3458764667426465116",
+              "type": "OUTBOUND",
+              "title": "assess loan risk",
+              "elementType": "COMMAND"
+            },
+            {
+              "id": "3458764667425307762",
+              "type": "INBOUND",
+              "title": "Loans Pending Risk Assess",
+              "elementType": "READMODEL"
+            }
+          ],
+          "createsAggregate": false,
+          "triggers": [],
+          "sketched": false,
+          "prototype": {
+            "activeByDefault": false
+          }
+        }
+      ],
+      "tables": [],
+      "specifications": [],
+      "actors": [],
+      "aggregates": []
+    },
+    {
+      "id": "3458764667426733982",
+      "status": "Created",
+      "index": 9,
+      "title": "slice: Portfolio Summary",
+      "context": "Portfolio",
+      "sliceType": "STATE_VIEW",
+      "commands": [],
+      "events": [],
+      "readmodels": [
+        {
+          "id": "3458764667426662480",
+          "tags": [],
+          "elementContext": "INTERNAL",
+          "modelContext": "Portfolio",
+          "context": "INTERNAL",
+          "slice": "slice: Portfolio Summary",
+          "title": "Portfolio Summary",
+          "fields": [
+            {
+              "name": "portfolioId",
+              "type": "UUID",
+              "example": "PORT-01",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": true
+            },
+            {
+              "name": "averageProbabilityOfDefault",
+              "type": "Double",
+              "example": "5",
+              "generated": true,
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "averageRating",
+              "type": "String",
+              "example": "A",
+              "generated": true,
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "averageRiskWeight",
+              "type": "Decimal",
+              "example": "10",
+              "generated": true,
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "riskBand",
+              "type": "String",
+              "example": "A",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "totalCapitalRequirement",
+              "type": "Decimal",
+              "example": "1000",
+              "generated": true,
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "totalExpectedLoss",
+              "type": "Double",
+              "example": "12",
+              "generated": true,
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "totalExposure",
+              "type": "Decimal",
+              "example": "10000",
+              "generated": true,
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "totalLoans",
+              "type": "Int",
+              "example": "2",
+              "generated": true,
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "worstRating",
+              "type": "String",
+              "example": "CC",
+              "generated": true,
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            }
+          ],
+          "type": "READMODEL",
+          "description": "Aggregates per portfolio. Each LoanRiskAssessed increments totalLoans by 1, adds loanAmount to totalExposure, adds capitalRequirement to totalCapitalRequirement, adds expectedLoss to totalExpectedLoss. averageRiskWeight = weighted average of riskWeight by loanAmount. averageProbabilityOfDefault = weighted average of probabilityOfDefault by loanAmount. averageRating derived from averageRiskWeight: ≤0.25→AA, ≤0.35→A, ≤0.50→BBB, ≤0.75→BB, >0.75→B. riskBand: averageRiskWeight ≤0.55→\"Investment Grade\", >\"Speculative\". Track worstRating: the lowest credit rating in the portfolio (highest risk weight). Compare each incoming riskWeight — if higher than stored worst, update worstRating.\n",
+          "aggregate": "default",
+          "aggregateDependencies": [],
+          "dependencies": [
+            {
+              "id": "3458764669468160706",
+              "type": "OUTBOUND",
+              "title": "screen",
+              "elementType": "SCREEN"
+            },
+            {
+              "id": "3458764667426465845",
+              "type": "INBOUND",
+              "title": "LoanRiskAssessed",
+              "elementType": "EVENT"
+            }
+          ],
+          "createsAggregate": false,
+          "triggers": [],
+          "sketched": false,
+          "prototype": {
+            "activeByDefault": false
+          }
+        }
+      ],
+      "screens": [
+        {
+          "id": "3458764669468160706",
+          "tags": [],
+          "groupId": "3458764669468160716",
+          "modelContext": "Portfolio",
+          "slice": "slice: Portfolio Summary",
+          "title": "screen",
+          "fields": [],
+          "type": "SCREEN",
+          "description": "",
+          "aggregate": "default",
+          "aggregateDependencies": [],
+          "dependencies": [
+            {
+              "id": "3458764667426662480",
+              "type": "INBOUND",
+              "title": "Portfolio Summary",
+              "elementType": "READMODEL"
+            },
+            {
+              "id": "3458764669433527633",
+              "type": "INBOUND",
+              "title": "screen",
+              "elementType": "SCREEN"
+            }
+          ],
+          "createsAggregate": false,
+          "triggers": [],
+          "sketched": true,
+          "prototype": {
+            "activeByDefault": false
+          }
+        }
+      ],
+      "screenImages": [],
+      "screenLayouts": [],
+      "processors": [],
+      "tables": [],
+      "specifications": [],
+      "actors": [],
+      "aggregates": []
+    },
+    {
+      "id": "3458764667457631646",
+      "status": "Created",
+      "index": 11,
+      "title": "slice: Portfolio Loan Details",
+      "context": "Portfolio",
+      "sliceType": "STATE_VIEW",
+      "commands": [],
+      "events": [],
+      "readmodels": [
+        {
+          "id": "3458764667457631292",
+          "tags": [],
+          "elementContext": "INTERNAL",
+          "modelContext": "Portfolio",
+          "context": "INTERNAL",
+          "slice": "slice: Portfolio Loan Details",
+          "title": "Portfolio Loan Details",
+          "fields": [
+            {
+              "name": "portfolioId",
+              "type": "UUID",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": true
+            },
+            {
+              "name": "loanId",
+              "type": "UUID",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": true
+            },
+            {
+              "name": "acquisitionDate",
+              "type": "DateTime",
+              "generated": true,
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "borrowerName",
+              "type": "String",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "capitalRequirement",
+              "type": "Decimal",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "creditRating",
+              "type": "String",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "expectedLoss",
+              "type": "Double",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "interestRate",
+              "type": "Double",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "loanAmount",
+              "type": "Double",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "maturityDate",
+              "type": "Date",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "probabilityOfDefault",
+              "type": "Double",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "riskBand",
+              "type": "String",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "expectedPortfolioLoss",
+              "type": "Double",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "riskNarrative",
+              "type": "String",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "simulatedDefaultRate",
+              "type": "Double",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "tailRiskLoss",
+              "type": "Double",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "worstCaseLoss",
+              "type": "Double",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            }
+          ],
+          "type": "READMODEL",
+          "description": "",
+          "aggregate": "default",
+          "aggregateDependencies": [],
+          "dependencies": [
+            {
+              "id": "3458764668913120345",
+              "type": "OUTBOUND",
+              "title": "Portfolio Loan Details",
+              "elementType": "SCREEN"
+            },
+            {
+              "id": "3458764667426465845",
+              "type": "INBOUND",
+              "title": "LoanRiskAssessed",
+              "elementType": "EVENT"
+            }
+          ],
+          "createsAggregate": false,
+          "triggers": [],
+          "sketched": false,
+          "prototype": {
+            "activeByDefault": false
+          }
+        }
+      ],
+      "screens": [
+        {
+          "id": "3458764668913120345",
+          "tags": [],
+          "elementContext": "INTERNAL",
+          "modelContext": "Portfolio",
+          "context": "INTERNAL",
+          "slice": "slice: Portfolio Loan Details",
+          "title": "Portfolio Loan Details",
+          "fields": [
+            {
+              "name": "loanId",
+              "type": "UUID",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": true
+            },
+            {
+              "name": "portfolioId",
+              "type": "UUID",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": true
+            },
+            {
+              "name": "acquisitionDate",
+              "type": "DateTime",
+              "generated": true,
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "borrowerName",
+              "type": "String",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "capitalRequirement",
+              "type": "Decimal",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "creditRating",
+              "type": "String",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "expectedLoss",
+              "type": "Double",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "expectedPortfolioLoss",
+              "type": "Double",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "interestRate",
+              "type": "Double",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "loanAmount",
+              "type": "Double",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "maturityDate",
+              "type": "Date",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "probabilityOfDefault",
+              "type": "Double",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "riskBand",
+              "type": "String",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "riskNarrative",
+              "type": "String",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "simulatedDefaultRate",
+              "type": "Double",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "tailRiskLoss",
+              "type": "Double",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            },
+            {
+              "name": "worstCaseLoss",
+              "type": "Double",
+              "subfields": [],
+              "cardinality": "Single",
+              "idAttribute": false
+            }
+          ],
+          "type": "SCREEN",
+          "description": "ou are filling in a screen for the lqc-fe-ai-dev pipeline. Generate the React component file src/features/Portfolio/PortfolioLoanDetails/PortfolioLoanDetails.tsx. The same component renders in two targets without code changes:\n\nBrowser SPA — mounted at /portfolio/portfolio-loan-details inside AppShell.tsx (which provides nav, auth, theming).\nMCP widget — mounted inside a Claude.ai iframe via mcp-entry.generated.tsx with AppShell.mcp.tsx (no chrome). The build pipeline swaps AppShell and endpoint.generated.ts automatically; the screen file is target-agnostic.\nInputs you may read (zero-scan rule — nothing else):\n\nTODO_CONTEXT.generated.md in this folder\n.claude/skills/fe-dev/design-system-catalog.yaml\n.claude/skills/fe-dev/widget-catalog.yaml\n.claude/skills/fe-dev/slice-hints.yaml\nSibling generated files in this folder: types.generated.ts, fields.generated.tsx (detailRows), endpoint.generated.ts (usePortfolioLoanDetails() hook), route.generated.ts, i18n.generated.ts\nComponent contract:\n\nDefault export PortfolioLoanDetailsScreen — a function component, no props.\nCall the generated hook to fetch the readmodel; render Loading / ErrorState / EmptyState from @lqc/ui-kit for non-success states.\nOn success, render the page header (title + subtitle + Refresh/Edit actions) followed by sectioned DataRows cards composed via #lib/widgets (SectionedDetailRows) — no hand-rolled atom loops.\nSections (use SectionedDetailRows):\n\nIdentity — portfolioid · loanid · borrowername · acquisitiondate · maturitydate\nFinancial terms — loanamount · interestrate · capitalrequirement · expectedloss\nRisk profile — creditrating (pill) · riskband (pill) · probabilityofdefault (with inline progress) · simulateddefaultrate\nStress scenarios — expectedportfolioloss · tailriskloss · worstcaseloss (tint last row with error variant)\nRisk narrative — full-width card with the risknarrative field as a paragraph block\nLayout:\n\nSections 1–4 in a 2-column grid at ≥900px viewport, collapse to 1-column below 900px (MCP widgets render at ~600–800px). Use @lqc/ui-kit's Grid or Tailwind grid-cols-1 md:grid-cols-2 — no custom breakpoints.\nSection 5 spans full width.\nFormatting: use formatCurrency / formatPercent / formatDate from #lib/widgets. Don't hand-roll formatters. For credit rating + risk band pills use the kit's Badge / Tag family per the design-system catalog.\n\ni18n: all visible strings (page title, section headers, button labels, error/empty copy) go through t(...) using the generated PortfolioLoanDetailsI18nKeys. No hardcoded English.\n\n",
+          "aggregate": "default",
+          "aggregateDependencies": [],
+          "dependencies": [
+            {
+              "id": "3458764667457631292",
+              "type": "INBOUND",
+              "title": "Portfolio Loan Details",
+              "elementType": "READMODEL"
+            }
+          ],
+          "createsAggregate": false,
+          "triggers": [],
+          "sketched": false,
+          "prototype": {
+            "activeByDefault": false
+          }
+        }
+      ],
+      "screenImages": [],
+      "screenLayouts": [],
+      "processors": [],
+      "tables": [],
+      "specifications": [],
+      "actors": [],
+      "aggregates": []
+    }
+  ],
+  "flows": [],
+  "aggregates": [],
+  "actors": [],
+  "context": "Portfolio",
+  "codeGen": {
+    "application": "Context"
+  },
+  "boardId": "uXjVG8ZO-4k=",
+  "sliceGroups": [],
+  "sliceImages": [],
+  "sliceLayouts": []
+}
