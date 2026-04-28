@@ -263,7 +263,20 @@ def main():
         }
 
     slices = [s.strip() for s in args.slices.split(",") if s.strip()]
-    test_passed = args.test_passed.lower() in ("true", "1", "yes")
+    test_passed_global = args.test_passed.lower() in ("true", "1", "yes")
+
+    # Load per-slice test results so each slice gets scored against its own tests,
+    # not penalized for another slice's failure.
+    from lib.contracts import TEST_RESULTS
+    test_results = load_json(TEST_RESULTS) or {}
+    per_slice_test_passed: dict[str, bool] = {}
+    for entry in test_results.get("results", []):
+        slice_name = entry.get("slice", "")
+        if not slice_name:
+            continue
+        # A slice passes only if ALL its test files passed
+        prev = per_slice_test_passed.get(slice_name, True)
+        per_slice_test_passed[slice_name] = prev and bool(entry.get("passed", False))
 
     verify_data = load_json(Path(args.verify)) if args.verify else []
     if isinstance(verify_data, dict):
@@ -284,6 +297,16 @@ def main():
         # Use per-slice stats if available, fall back to aggregate
         per_slice = load_json(slice_stats_path(name))
         claude_stats = per_slice if per_slice else aggregate_stats
+
+        # Per-slice test pass: prefer the per-slice lookup, fall back to global flag
+        # if the slice has no test files (per_slice_test_passed missing the key).
+        # Match case-insensitively because slice names in test-results use the
+        # actual filesystem casing while score_confidence receives lowercase folder names.
+        test_passed = test_passed_global
+        for slice_key, passed in per_slice_test_passed.items():
+            if slice_key.lower() == name.lower():
+                test_passed = passed
+                break
 
         cs = score_slice(name, v_sig, test_passed, c_sig, r_sig, claude_stats, config)
         scores.append(cs)

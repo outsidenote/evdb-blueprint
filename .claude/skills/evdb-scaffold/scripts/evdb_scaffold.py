@@ -56,6 +56,12 @@ OPENAPI_TYPE_MAP = {
 # Bare INSERT/SELECT against varchar columns should NOT use casts — the column
 # type is inferred. These casts are only needed inside jsonb_build_object,
 # where Postgres cannot infer parameter types.
+#
+# DateTime / Date are intentionally stored as ::text (not ::timestamptz / ::date)
+# because Postgres's serialized timestamp format ("2024-01-15 10:30:00+00:00")
+# does not match JavaScript's Date.toISOString() format ("2024-01-15T10:30:00.000Z"),
+# causing deepStrictEqual mismatches in tests. Pass dates as .toISOString() strings
+# in the params and they round-trip as identical strings.
 PG_CAST_MAP = {
     "UUID":     "::text",
     "String":   "::text",
@@ -65,8 +71,8 @@ PG_CAST_MAP = {
     "Int":      "::int",
     "Long":     "::bigint",
     "Boolean":  "::boolean",
-    "DateTime": "::timestamptz",
-    "Date":     "::date",
+    "DateTime": "::text",  # See note above — pass .toISOString() string
+    "Date":     "::text",  # See note above
 }
 
 
@@ -2295,6 +2301,18 @@ def gen_projection_integration_test(ds: DerivedSlice) -> str:
         'import { ProjectionSliceTester } from "#abstractions/slices/ProjectionSliceTester.js";',
         f'import {{ {ds.slice_name_camel}Slice }} from "./index.js";',
         "",
+        "// ── How values round-trip through jsonb (READ THIS BEFORE WRITING ASSERTIONS) ──",
+        "// The projection's UPSERT writes via jsonb_build_object('field', $N::CAST), and the",
+        "// test reads back the payload column. Values come back according to the cast used:",
+        "//",
+        "//   ::numeric / ::int / ::bigint  → JS number      (use 10000, not \"10000\")",
+        "//   ::text / ::uuid               → JS string      (use \"PORT-001\", not new String(...))",
+        "//   ::boolean                     → JS boolean     (true / false)",
+        "//   ::text (for dates)            → JS string      (ISO format, e.g. \"2024-01-15T10:30:00.000Z\")",
+        "//",
+        "// Dates: pass `.toISOString()` strings into payload AND expectedState. Don't use",
+        "// `new Date(...)` in expectedState — node-postgres returns them as strings, not Date objects.",
+        "",
         f"ProjectionSliceTester.run({ds.slice_name_camel}Slice, [",
         "  {",
         f'    description: "{event_name}: first event creates initial state",',
@@ -2312,6 +2330,8 @@ def gen_projection_integration_test(ds: DerivedSlice) -> str:
         "        ],",
         "        then: [{ key, expectedState: {",
         "          // TODO: expected stored state after first event",
+        "          // Numbers as JS numbers (10000, not \"10000\")",
+        "          // Dates as ISO strings (\"2024-01-15T10:30:00.000Z\", not new Date(...))",
         "        } }],",
         "      };",
         "    },",
@@ -3672,7 +3692,8 @@ def _gen_todo_context(paths: SlicePaths, ds: DerivedSlice,
         lines.append("- **Never reuse $1 or $2 inside jsonb_build_object** — that causes Postgres error 42P08 (inconsistent types)")
         lines.append("- **Every parameter inside jsonb_build_object() MUST have a type cast** — PostgreSQL cannot infer types in jsonb context")
         lines.append("- The example above already has the correct casts for THIS slice's field types — keep them as-is")
-        lines.append("- **Date/DateTime fields: convert to ISO string before passing as SQL param** — use `p.myDate instanceof Date ? p.myDate.toISOString() : p.myDate` in the params array")
+        lines.append("- **Date/DateTime fields are stored as ::text** — postgres `::timestamptz` produces `2024-01-15 10:30:00+00:00` but JS `.toISOString()` produces `2024-01-15T10:30:00.000Z`; these don't match in `deepStrictEqual`. Always pass `.toISOString()` strings: `p.myDate instanceof Date ? p.myDate.toISOString() : p.myDate` in the params array.")
+        lines.append("- **Numeric fields stored as ::numeric come back as JS numbers** in jsonb. Test assertions should use `loanAmount: 10000` (number), not `loanAmount: \"10000\"` (string).")
         lines.append("- For accumulation fields (totals, counts): read existing value with `(projections.payload->>'field')::numeric` and add the new param")
         lines.append("- For overwrite fields (status, name): just use the param directly with the matching cast")
         lines.append("- Composite keys: build as template literal from payload fields")
