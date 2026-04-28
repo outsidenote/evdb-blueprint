@@ -4,7 +4,7 @@ import { defineProjectionMcpTool } from "#abstractions/mcp/defineMcpTool.js";
 export const portfolioSummaryMcpTool = defineProjectionMcpTool({
   name: "portfolio_query_portfolio_summary",
   title: "Query Portfolio Summary",
-  description: "@DESCRIPTION_TODO",
+  description: "Retrieves an aggregated risk summary for a given portfolio, including total exposure, capital requirements, expected losses, and weighted-average risk metrics derived from all assessed loans. Call this tool when an agent needs to evaluate a portfolio's overall credit risk profile, average rating, risk band, or worst-case rating across its constituent loans.",
   context: "Portfolio",
   slice: "Portfolio Summary",
   projectionName: "PortfolioSummary",

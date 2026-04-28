@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import { ProjectionSliceTester } from "#abstractions/slices/ProjectionSliceTester.js";
 import { portfolioExposureSlice } from "./index.js";
 
@@ -6,44 +5,101 @@ ProjectionSliceTester.run(portfolioExposureSlice, [
   {
     description: "LoanRiskAssessed: first event creates initial state",
     run: () => {
-      // TODO: create test data and fill expected state
-      // The payload should contain the fields from the LoanRiskAssessed event,
-      // NOT the readmodel fields. Check the event schema in TODO_CONTEXT.md.
-      // Key should match how the projection handler builds it.
-      const key = randomUUID();
+      const portfolioId = "PORT-01";
+      const creditRating = "AAA";
+      const loanAmount = 1000000;
+      const probabilityOfDefault = 0.03;
+      const key = `${portfolioId}:${creditRating}`;
       return {
         given: [
-          { messageType: "LoanRiskAssessed", payload: {
-            // TODO: fill with LoanRiskAssessed event fields
-          } },
+          {
+            messageType: "LoanRiskAssessed",
+            payload: {
+              portfolioId,
+              creditRating,
+              loanAmount,
+              probabilityOfDefault,
+            },
+          },
         ],
-        then: [{ key, expectedState: {
-          // TODO: expected stored state after first event
-        } }],
+        then: [
+          {
+            key,
+            expectedState: {
+              portfolioId,
+              creditRating,
+              // avgPD = probabilityOfDefault (first event: no prior state)
+              avgPD: 0.03,
+              // exposure = loanAmount (first event)
+              exposure: 1000000,
+              // loanCount = 1 (first event)
+              loanCount: 1,
+            },
+          },
+        ],
       };
     },
   },
   {
     description: "two LoanRiskAssessed events: fields accumulate correctly",
     run: () => {
-      // Spec: Aggregates loan exposure by credit rating within each portfolio. Key: {portfolioId}:{creditRating}.
+      const portfolioId = "PORT-01";
+      const creditRating = "AAA";
+      const key = `${portfolioId}:${creditRating}`;
 
-Each LoanRiskAssess...
-      // TODO: send two events with DIFFERENT numeric values,
-      // then assert the accumulated/averaged result.
-      const key = randomUUID();
+      // Event 1
+      const loanAmount1 = 1000000;
+      const probabilityOfDefault1 = 0.02;
+
+      // Event 2
+      const loanAmount2 = 500000;
+      const probabilityOfDefault2 = 0.08;
+
+      // Accumulated state after 2 events:
+      // exposure = 1000000 + 500000 = 1500000
+      // loanCount = 1 + 1 = 2
+      // avgPD = (prev_avgPD * prev_exposure + probabilityOfDefault2 * loanAmount2) / (prev_exposure + loanAmount2)
+      //       = (0.02 * 1000000 + 0.08 * 500000) / (1000000 + 500000)
+      //       = (20000 + 40000) / 1500000
+      //       = 60000 / 1500000
+      //       = 0.04
+
       return {
         given: [
-          { messageType: "LoanRiskAssessed", payload: {
-            // TODO: first event payload
-          } },
-          { messageType: "LoanRiskAssessed", payload: {
-            // TODO: second event payload (different numbers)
-          } },
+          {
+            messageType: "LoanRiskAssessed",
+            payload: {
+              portfolioId,
+              creditRating,
+              loanAmount: loanAmount1,
+              probabilityOfDefault: probabilityOfDefault1,
+            },
+          },
+          {
+            messageType: "LoanRiskAssessed",
+            payload: {
+              portfolioId,
+              creditRating,
+              loanAmount: loanAmount2,
+              probabilityOfDefault: probabilityOfDefault2,
+            },
+          },
         ],
-        then: [{ key, expectedState: {
-          // TODO: expected accumulated state after two events
-        } }],
+        then: [
+          {
+            key,
+            expectedState: {
+              portfolioId,
+              creditRating,
+              // avgPD = (0.02 * 1000000 + 0.08 * 500000) / (1000000 + 500000) = 0.04
+              avgPD: 0.04,
+              // exposure = 1000000 + 500000 = 1500000
+              exposure: 1500000,
+              // loanCount = 2
+              loanCount: 2,
+            },
+          },
+        ],
       };
     },
   },
