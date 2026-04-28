@@ -294,9 +294,12 @@ def main():
         c_sig = extract_classification_signals(class_data, name)
         r_sig = extract_repair_signals(repair_data, name)
 
-        # Use per-slice stats if available, fall back to aggregate
+        # Use per-slice stats if available. If the slice's AI was skipped (no per-slice
+        # stats file), use an empty dict — never fall back to aggregate stats, because
+        # aggregate is the sum of ALL slices and would wrongly attribute the whole run's
+        # token/turn count to a single slice that didn't even invoke the AI.
         per_slice = load_json(slice_stats_path(name))
-        claude_stats = per_slice if per_slice else aggregate_stats
+        claude_stats = per_slice if per_slice else {}
 
         # Per-slice test pass: prefer the per-slice lookup, fall back to global flag
         # if the slice has no test files (per_slice_test_passed missing the key).
