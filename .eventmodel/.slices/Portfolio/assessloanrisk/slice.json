@@ -316,6 +316,12 @@
           "elementType": "READMODEL"
         },
         {
+          "id": "3458764667425307762",
+          "type": "OUTBOUND",
+          "title": "Loans Pending Risk Assess",
+          "elementType": "READMODEL"
+        },
+        {
           "id": "3458764667426465116",
           "type": "INBOUND",
           "title": "assess loan risk",

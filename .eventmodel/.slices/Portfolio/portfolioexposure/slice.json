@@ -66,7 +66,7 @@
       "aggregateDependencies": [],
       "dependencies": [
         {
-          "id": "3458764669631699388",
+          "id": "3458764669633248070",
           "type": "OUTBOUND",
           "title": "screen",
           "elementType": "SCREEN"
@@ -88,9 +88,9 @@
   ],
   "screens": [
     {
-      "id": "3458764669631699388",
+      "id": "3458764669633248070",
       "tags": [],
-      "groupId": "3458764669631699390",
+      "groupId": "3458764669633248082",
       "elementContext": "INTERNAL",
       "modelContext": "Portfolio",
       "context": "INTERNAL",
@@ -102,14 +102,16 @@
           "type": "String",
           "subfields": [],
           "cardinality": "Single",
-          "idAttribute": true
+          "idAttribute": true,
+          "example": "AAA"
         },
         {
           "name": "portfolioId",
           "type": "UUID",
           "subfields": [],
           "cardinality": "Single",
-          "idAttribute": true
+          "idAttribute": true,
+          "example": "PORT-01"
         },
         {
           "name": "avgPD",
@@ -117,6 +119,7 @@
           "type": "Decimal",
           "cardinality": "Single",
           "subfields": [],
+          "example": "0.5",
           "idAttribute": false
         },
         {
@@ -125,6 +128,7 @@
           "type": "Double",
           "cardinality": "Single",
           "subfields": [],
+          "example": "1000000",
           "idAttribute": false
         },
         {
@@ -133,6 +137,7 @@
           "type": "Int",
           "cardinality": "Single",
           "subfields": [],
+          "example": "2",
           "idAttribute": false
         }
       ],

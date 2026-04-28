@@ -90,6 +90,12 @@
           "type": "INBOUND",
           "title": "LoanAddedToPortfolio",
           "elementType": "EVENT"
+        },
+        {
+          "id": "3458764667426465845",
+          "type": "INBOUND",
+          "title": "LoanRiskAssessed",
+          "elementType": "EVENT"
         }
       ],
       "listElement": true,

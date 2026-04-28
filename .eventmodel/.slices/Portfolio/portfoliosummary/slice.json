@@ -111,7 +111,7 @@
       "aggregateDependencies": [],
       "dependencies": [
         {
-          "id": "3458764669631400938",
+          "id": "3458764669633152520",
           "type": "OUTBOUND",
           "title": "screen",
           "elementType": "SCREEN"
@@ -133,9 +133,9 @@
   ],
   "screens": [
     {
-      "id": "3458764669631400938",
+      "id": "3458764669633152520",
       "tags": [],
-      "groupId": "3458764669631400940",
+      "groupId": "3458764669633152524",
       "elementContext": "INTERNAL",
       "modelContext": "Portfolio",
       "context": "INTERNAL",
@@ -243,10 +243,6 @@
           "elementType": "READMODEL"
         }
       ],
-      "listElement": false,
-      "todoList": false,
-      "apiEndpoint": null,
-      "service": null,
       "createsAggregate": false,
       "triggers": [],
       "sketched": true,
