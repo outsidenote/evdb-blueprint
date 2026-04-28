@@ -1,0 +1,166 @@
+{
+  "id": "3458764669630773584",
+  "status": "Created",
+  "title": "slice: portfolioExposure",
+  "context": "Portfolio",
+  "sliceType": "STATE_VIEW",
+  "commands": [],
+  "events": [],
+  "readmodels": [
+    {
+      "id": "3458764669630326683",
+      "tags": [],
+      "elementContext": "INTERNAL",
+      "modelContext": "Portfolio",
+      "context": "INTERNAL",
+      "slice": "slice: portfolioExposure",
+      "title": "portfolioExposure",
+      "fields": [
+        {
+          "name": "creditRating",
+          "type": "String",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": true,
+          "example": "AAA"
+        },
+        {
+          "name": "portfolioId",
+          "type": "UUID",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": true,
+          "example": "PORT-01"
+        },
+        {
+          "name": "avgPD",
+          "generated": true,
+          "type": "Decimal",
+          "cardinality": "Single",
+          "subfields": [],
+          "example": "0.5",
+          "idAttribute": false
+        },
+        {
+          "name": "exposure",
+          "generated": true,
+          "type": "Double",
+          "cardinality": "Single",
+          "subfields": [],
+          "example": "1000000",
+          "idAttribute": false
+        },
+        {
+          "name": "loanCount",
+          "generated": true,
+          "type": "Int",
+          "cardinality": "Single",
+          "subfields": [],
+          "example": "2",
+          "idAttribute": false
+        }
+      ],
+      "type": "READMODEL",
+      "description": "Aggregates loan exposure by credit rating within each portfolio. Key: {portfolioId}:{creditRating}.\n\nEach LoanRiskAssessed event:\n\nincrements loanCount by 1\nadds loanAmount to exposure\nupdates avgPD as weighted average: (prev_avgPD * prev_exposure + probabilityOfDefault * loanAmount) / (prev_exposure + loanAmount)",
+      "aggregate": "default",
+      "aggregateDependencies": [],
+      "dependencies": [
+        {
+          "id": "3458764669631699388",
+          "type": "OUTBOUND",
+          "title": "screen",
+          "elementType": "SCREEN"
+        },
+        {
+          "id": "3458764667426465845",
+          "type": "INBOUND",
+          "title": "LoanRiskAssessed",
+          "elementType": "EVENT"
+        }
+      ],
+      "createsAggregate": false,
+      "triggers": [],
+      "sketched": false,
+      "prototype": {
+        "activeByDefault": false
+      }
+    }
+  ],
+  "screens": [
+    {
+      "id": "3458764669631699388",
+      "tags": [],
+      "groupId": "3458764669631699390",
+      "elementContext": "INTERNAL",
+      "modelContext": "Portfolio",
+      "context": "INTERNAL",
+      "slice": "slice: portfolioExposure",
+      "title": "screen",
+      "fields": [
+        {
+          "name": "creditRating",
+          "type": "String",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": true
+        },
+        {
+          "name": "portfolioId",
+          "type": "UUID",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": true
+        },
+        {
+          "name": "avgPD",
+          "generated": true,
+          "type": "Decimal",
+          "cardinality": "Single",
+          "subfields": [],
+          "idAttribute": false
+        },
+        {
+          "name": "exposure",
+          "generated": true,
+          "type": "Double",
+          "cardinality": "Single",
+          "subfields": [],
+          "idAttribute": false
+        },
+        {
+          "name": "loanCount",
+          "generated": true,
+          "type": "Int",
+          "cardinality": "Single",
+          "subfields": [],
+          "idAttribute": false
+        }
+      ],
+      "type": "SCREEN",
+      "description": "",
+      "aggregate": "default",
+      "aggregateDependencies": [],
+      "dependencies": [
+        {
+          "id": "3458764669630326683",
+          "type": "INBOUND",
+          "title": "portfolioExposure",
+          "elementType": "READMODEL"
+        }
+      ],
+      "createsAggregate": false,
+      "triggers": [],
+      "sketched": true,
+      "prototype": {
+        "activeByDefault": false
+      }
+    }
+  ],
+  "screenImages": [],
+  "screenLayouts": [],
+  "processors": [],
+  "tables": [],
+  "specifications": [],
+  "actors": [],
+  "aggregates": []
+}
