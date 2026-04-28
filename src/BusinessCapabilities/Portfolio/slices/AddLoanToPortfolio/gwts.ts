@@ -6,14 +6,19 @@ import type { SliceStateAddLoanToPortfolioViewState } from "#BusinessCapabilitie
  * Each function maps 1:1 to a named spec in the event model diagram.
  */
 
+// Lower rank = better credit quality; higher rank = worse credit quality
+const creditRatingOrder: Record<string, number> = {
+  AAA: 1, AA: 2, A: 3, BBB: 4, BB: 5, B: 6, CCC: 7, CC: 8, C: 9, D: 10,
+};
+
 /**
  * spec: amountLessThanZero
  * GIVEN state fields: none
  * WHEN command fields: portfolioId, acquisitionDate, borrowerName, creditRating, interestRate, loanAmount, loanId, maturityDate
  * THEN: LoanRejectedFromPortfolio
  */
-export const amountLessThanZero = (state: SliceStateAddLoanToPortfolioViewState, command: AddLoanToPortfolio): boolean =>
-  false; // TODO: return boolean comparing state.field vs command.portfolioId
+export const amountLessThanZero = (_state: SliceStateAddLoanToPortfolioViewState, command: AddLoanToPortfolio): boolean =>
+  command.loanAmount <= 0;
 
 /**
  * spec: portfolioRatingBreached
@@ -21,8 +26,12 @@ export const amountLessThanZero = (state: SliceStateAddLoanToPortfolioViewState,
  * WHEN command fields: portfolioId, acquisitionDate, borrowerName, creditRating, interestRate, loanAmount, loanId, maturityDate
  * THEN: LoanRejectedFromPortfolio
  */
-export const portfolioRatingBreached = (state: SliceStateAddLoanToPortfolioViewState, command: AddLoanToPortfolio): boolean =>
-  false; // TODO: return boolean comparing state.portfolioId vs command.portfolioId
+export const portfolioRatingBreached = (state: SliceStateAddLoanToPortfolioViewState, command: AddLoanToPortfolio): boolean => {
+  if (!state.portfolioId) return false;
+  const existingRank = creditRatingOrder[state.creditRating] ?? 0;
+  const newRank = creditRatingOrder[command.creditRating] ?? 0;
+  return newRank > existingRank;
+};
 
 /**
  * spec: portfolioRatingMaintained
@@ -30,5 +39,9 @@ export const portfolioRatingBreached = (state: SliceStateAddLoanToPortfolioViewS
  * WHEN command fields: portfolioId, acquisitionDate, borrowerName, creditRating, interestRate, loanAmount, loanId, maturityDate
  * THEN: LoanAddedToPortfolio
  */
-export const portfolioRatingMaintained = (state: SliceStateAddLoanToPortfolioViewState, command: AddLoanToPortfolio): boolean =>
-  false; // TODO: return boolean comparing state.portfolioId vs command.portfolioId
+export const portfolioRatingMaintained = (state: SliceStateAddLoanToPortfolioViewState, command: AddLoanToPortfolio): boolean => {
+  if (!state.portfolioId) return true;
+  const existingRank = creditRatingOrder[state.creditRating] ?? 0;
+  const newRank = creditRatingOrder[command.creditRating] ?? 0;
+  return newRank <= existingRank;
+};

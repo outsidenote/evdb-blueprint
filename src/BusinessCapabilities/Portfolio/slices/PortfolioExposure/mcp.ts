@@ -4,7 +4,7 @@ import { defineProjectionMcpTool } from "#abstractions/mcp/defineMcpTool.js";
 export const portfolioExposureMcpTool = defineProjectionMcpTool({
   name: "portfolio_query_portfolio_exposure",
   title: "Query portfolioExposure",
-  description: "@DESCRIPTION_TODO",
+  description: "Queries aggregated loan exposure by credit rating within a portfolio. Returns total exposure amount, loan count, and weighted-average probability of default (avgPD) grouped by credit rating bucket. Call this tool when an agent needs a summary of risk concentration or exposure distribution for a given portfolio.",
   context: "Portfolio",
   slice: "portfolioExposure",
   projectionName: "PortfolioExposure",

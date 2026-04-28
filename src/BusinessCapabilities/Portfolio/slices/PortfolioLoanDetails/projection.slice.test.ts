@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import { ProjectionSliceTester } from "#abstractions/slices/ProjectionSliceTester.js";
 import { portfolioLoanDetailsSlice } from "./index.js";
 
@@ -18,22 +17,65 @@ ProjectionSliceTester.run(portfolioLoanDetailsSlice, [
   {
     description: "LoanRiskAssessed: first event creates initial state",
     run: () => {
-      // TODO: create test data and fill expected state
-      // The payload should contain the fields from the LoanRiskAssessed event,
-      // NOT the readmodel fields. Check the event schema in TODO_CONTEXT.md.
-      // Key should match how the projection handler builds it.
-      const key = randomUUID();
+      const portfolioId = "PORT-001";
+      const loanId = "LOAN-001";
+      // Dates passed as ISO strings — handler's `instanceof Date` guard passes them through
+      const acquisitionDate = "2024-01-15T10:30:00.000Z";
+      const maturityDate = "2030-06-30T00:00:00.000Z";
+
       return {
         given: [
-          { messageType: "LoanRiskAssessed", payload: {
-            // TODO: fill with LoanRiskAssessed event fields
-          } },
+          {
+            messageType: "LoanRiskAssessed",
+            payload: {
+              portfolioId,
+              loanId,
+              acquisitionDate,
+              borrowerName: "Acme Corp",
+              capitalRequirement: 5000,
+              creditRating: "BBB",
+              expectedLoss: 250,
+              interestRate: 0.05,
+              loanAmount: 100000,
+              maturityDate,
+              probabilityOfDefault: 0.02,
+              riskBand: "Medium",
+              expectedPortfolioLoss: 2500,
+              riskNarrative: "Moderate credit risk with stable outlook",
+              simulatedDefaultRate: 0.015,
+              tailRiskLoss: 10000,
+              worstCaseLoss: 15000,
+            },
+          },
         ],
-        then: [{ key, expectedState: {
-          // TODO: expected stored state after first event
-          // Numbers as JS numbers (10000, not "10000")
-          // Dates as ISO strings ("2024-01-15T10:30:00.000Z", not new Date(...))
-        } }],
+        then: [
+          {
+            // Key matches the composite key built by the handler: `${portfolioId}:${loanId}`
+            key: `${portfolioId}:${loanId}`,
+            expectedState: {
+              portfolioId: "PORT-001",
+              loanId: "LOAN-001",
+              // ::text → JS string
+              acquisitionDate: "2024-01-15T10:30:00.000Z",
+              borrowerName: "Acme Corp",
+              // ::numeric → JS number
+              capitalRequirement: 5000,
+              creditRating: "BBB",
+              expectedLoss: 250,
+              interestRate: 0.05,
+              loanAmount: 100000,
+              // ::text → JS string
+              maturityDate: "2030-06-30T00:00:00.000Z",
+              probabilityOfDefault: 0.02,
+              riskBand: "Medium",
+              expectedPortfolioLoss: 2500,
+              riskNarrative: "Moderate credit risk with stable outlook",
+              simulatedDefaultRate: 0.015,
+              tailRiskLoss: 10000,
+              worstCaseLoss: 15000,
+            },
+          },
+        ],
       };
     },
   },

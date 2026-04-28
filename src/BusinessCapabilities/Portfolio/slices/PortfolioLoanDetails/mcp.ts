@@ -4,7 +4,7 @@ import { defineProjectionMcpTool } from "#abstractions/mcp/defineMcpTool.js";
 export const portfolioLoanDetailsMcpTool = defineProjectionMcpTool({
   name: "portfolio_query_portfolio_loan_details",
   title: "Query Portfolio Loan Details",
-  description: "@DESCRIPTION_TODO",
+  description: "Queries the stored risk assessment details for a specific loan within a portfolio, returning fields such as credit rating, probability of default, expected loss, risk band, and related loss metrics. Use this tool when an agent needs to inspect or report on the current risk profile of an individual loan in the context of a portfolio.",
   context: "Portfolio",
   slice: "Portfolio Loan Details",
   projectionName: "PortfolioLoanDetails",

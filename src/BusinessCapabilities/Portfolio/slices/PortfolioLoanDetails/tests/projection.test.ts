@@ -33,6 +33,29 @@ describe("Projection: PortfolioLoanDetails", () => {
     assert.ok(result.length > 0, 'should have at least one SQL statement');
     assert.ok(result[0].sql.length > 0, 'SQL should not be empty');
     assert.ok(result[0].params.length > 0, 'params should not be empty');
+
+    // $1 = projectionName, $2 = composite key (never cast)
+    assert.strictEqual(result[0].params[0], "PortfolioLoanDetails");
+    assert.strictEqual(result[0].params[1], "test-portfolioId-001:test-loanId-001");
+
+    // $3–$19 = payload fields inside jsonb_build_object
+    assert.strictEqual(result[0].params[2], "test-portfolioId-001");        // portfolioId
+    assert.strictEqual(result[0].params[3], "test-loanId-001");             // loanId
+    assert.strictEqual(result[0].params[4], "2025-01-01T11:00:00.000Z");    // acquisitionDate ISO string
+    assert.strictEqual(result[0].params[5], "test-borrowerName");           // borrowerName
+    assert.strictEqual(result[0].params[6], "test-capitalRequirement");     // capitalRequirement
+    assert.strictEqual(result[0].params[7], "test-creditRating");           // creditRating
+    assert.strictEqual(result[0].params[8], 0);                             // expectedLoss
+    assert.strictEqual(result[0].params[9], 0);                             // interestRate
+    assert.strictEqual(result[0].params[10], 0);                            // loanAmount
+    assert.strictEqual(result[0].params[11], "2025-01-01T11:00:00.000Z");   // maturityDate ISO string
+    assert.strictEqual(result[0].params[12], 0);                            // probabilityOfDefault
+    assert.strictEqual(result[0].params[13], "test-riskBand");              // riskBand
+    assert.strictEqual(result[0].params[14], 0);                            // expectedPortfolioLoss
+    assert.strictEqual(result[0].params[15], "test-riskNarrative");         // riskNarrative
+    assert.strictEqual(result[0].params[16], 0);                            // simulatedDefaultRate
+    assert.strictEqual(result[0].params[17], 0);                            // tailRiskLoss
+    assert.strictEqual(result[0].params[18], 0);                            // worstCaseLoss
   });
 
 });
