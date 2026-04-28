@@ -4,7 +4,7 @@ import { defineProjectionMcpTool } from "#abstractions/mcp/defineMcpTool.js";
 export const loanSubmissionStatusMcpTool = defineProjectionMcpTool({
   name: "portfolio_query_loan_submission_status",
   title: "Query Loan submission status",
-  description: "@DESCRIPTION_TODO",
+  description: "Queries the current submission status of a loan in a portfolio, returning whether the loan was accepted or rejected along with its details and any rejection error message. Use this tool when an agent needs to check the outcome of a loan submission, retrieve loan terms, or inspect the reason a loan was declined.",
   context: "Portfolio",
   slice: "Loan submission status",
   projectionName: "LoanSubmissionStatus",

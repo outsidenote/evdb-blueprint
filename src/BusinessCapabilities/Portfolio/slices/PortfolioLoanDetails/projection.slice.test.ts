@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import { ProjectionSliceTester } from "#abstractions/slices/ProjectionSliceTester.js";
 import { portfolioLoanDetailsSlice } from "./index.js";
 
@@ -18,22 +17,147 @@ ProjectionSliceTester.run(portfolioLoanDetailsSlice, [
   {
     description: "LoanRiskAssessed: first event creates initial state",
     run: () => {
-      // TODO: create test data and fill expected state
-      // The payload should contain the fields from the LoanRiskAssessed event,
-      // NOT the readmodel fields. Check the event schema in TODO_CONTEXT.md.
-      // Key should match how the projection handler builds it.
-      const key = randomUUID();
+      const portfolioId = "PORT-001";
+      const loanId = "LOAN-001";
+      const key = `${portfolioId}:${loanId}`;
+
+      const acquisitionDate = "2024-01-15T10:30:00.000Z";
+      const maturityDate = "2030-06-30T00:00:00.000Z";
+
       return {
         given: [
-          { messageType: "LoanRiskAssessed", payload: {
-            // TODO: fill with LoanRiskAssessed event fields
-          } },
+          {
+            messageType: "LoanRiskAssessed",
+            payload: {
+              portfolioId,
+              loanId,
+              acquisitionDate,
+              borrowerName: "Acme Corp",
+              capitalRequirement: 50000,
+              creditRating: "BBB",
+              expectedLoss: 2500,
+              interestRate: 0.05,
+              loanAmount: 500000,
+              maturityDate,
+              probabilityOfDefault: 0.05,
+              riskBand: "Medium",
+              expectedPortfolioLoss: 12500,
+              riskNarrative: "Moderate risk based on current market conditions",
+              simulatedDefaultRate: 0.04,
+              tailRiskLoss: 75000,
+              worstCaseLoss: 100000,
+            },
+          },
         ],
-        then: [{ key, expectedState: {
-          // TODO: expected stored state after first event
-          // Numbers as JS numbers (10000, not "10000")
-          // Dates as ISO strings ("2024-01-15T10:30:00.000Z", not new Date(...))
-        } }],
+        then: [
+          {
+            key,
+            expectedState: {
+              portfolioId: "PORT-001",
+              loanId: "LOAN-001",
+              // Dates stored as ::text and returned as ISO strings
+              acquisitionDate: "2024-01-15T10:30:00.000Z",
+              borrowerName: "Acme Corp",
+              // Numerics stored as ::numeric and returned as JS numbers
+              capitalRequirement: 50000,
+              creditRating: "BBB",
+              expectedLoss: 2500,
+              interestRate: 0.05,
+              loanAmount: 500000,
+              maturityDate: "2030-06-30T00:00:00.000Z",
+              probabilityOfDefault: 0.05,
+              riskBand: "Medium",
+              expectedPortfolioLoss: 12500,
+              riskNarrative: "Moderate risk based on current market conditions",
+              simulatedDefaultRate: 0.04,
+              tailRiskLoss: 75000,
+              worstCaseLoss: 100000,
+            },
+          },
+        ],
+      };
+    },
+  },
+  {
+    description: "LoanRiskAssessed: second event for same loan overwrites previous state",
+    run: () => {
+      const portfolioId = "PORT-002";
+      const loanId = "LOAN-002";
+      const key = `${portfolioId}:${loanId}`;
+
+      return {
+        given: [
+          {
+            messageType: "LoanRiskAssessed",
+            payload: {
+              portfolioId,
+              loanId,
+              acquisitionDate: "2023-06-01T00:00:00.000Z",
+              borrowerName: "Beta LLC",
+              capitalRequirement: 30000,
+              creditRating: "A",
+              expectedLoss: 900,
+              interestRate: 0.03,
+              loanAmount: 300000,
+              maturityDate: "2028-06-01T00:00:00.000Z",
+              probabilityOfDefault: 0.03,
+              riskBand: "Low",
+              expectedPortfolioLoss: 4500,
+              riskNarrative: "Low risk borrower with strong financials",
+              simulatedDefaultRate: 0.02,
+              tailRiskLoss: 30000,
+              worstCaseLoss: 45000,
+            },
+          },
+          {
+            messageType: "LoanRiskAssessed",
+            payload: {
+              portfolioId,
+              loanId,
+              acquisitionDate: "2023-06-01T00:00:00.000Z",
+              borrowerName: "Beta LLC",
+              // Updated risk assessment — all values overwritten, not accumulated
+              capitalRequirement: 35000,
+              creditRating: "BBB",
+              expectedLoss: 1750,
+              interestRate: 0.035,
+              loanAmount: 300000,
+              maturityDate: "2028-06-01T00:00:00.000Z",
+              probabilityOfDefault: 0.05,
+              riskBand: "Medium",
+              expectedPortfolioLoss: 8750,
+              riskNarrative: "Risk upgraded due to sector headwinds",
+              simulatedDefaultRate: 0.04,
+              tailRiskLoss: 45000,
+              worstCaseLoss: 60000,
+            },
+          },
+        ],
+        then: [
+          {
+            key,
+            expectedState: {
+              portfolioId: "PORT-002",
+              loanId: "LOAN-002",
+              acquisitionDate: "2023-06-01T00:00:00.000Z",
+              borrowerName: "Beta LLC",
+              // Second event values — overwrite semantics
+              capitalRequirement: 35000,
+              creditRating: "BBB",
+              expectedLoss: 1750,
+              interestRate: 0.035,
+              loanAmount: 300000,
+              maturityDate: "2028-06-01T00:00:00.000Z",
+              probabilityOfDefault: 0.05,
+              riskBand: "Medium",
+              expectedPortfolioLoss: 8750,
+              riskNarrative: "Risk upgraded due to sector headwinds",
+              simulatedDefaultRate: 0.04,
+              tailRiskLoss: 45000,
+              worstCaseLoss: 60000,
+            },
+          },
+        ],
       };
     },
   },

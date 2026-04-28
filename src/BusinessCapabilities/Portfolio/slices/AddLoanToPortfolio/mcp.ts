@@ -4,7 +4,7 @@ import { defineCommandMcpTool } from "#abstractions/mcp/defineMcpTool.js";
 export const addLoanToPortfolioMcpTool = defineCommandMcpTool({
   name: "portfolio_add_loan_to_portfolio",
   title: "Add Loan to Portfolio",
-  description: "@DESCRIPTION_TODO",
+  description: "Adds a loan to a portfolio, emitting LoanAddedToPortfolio on success or LoanRejectedFromPortfolio when the loan amount is invalid or the loan's credit rating would breach the portfolio's investment-grade standards. Call this tool when an agent needs to register a new loan under an existing portfolio.",
   context: "Portfolio",
   slice: "Add Loan To Portfolio",
   basePath: "/api/portfolio",

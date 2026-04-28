@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import { ProjectionSliceTester } from "#abstractions/slices/ProjectionSliceTester.js";
 import { portfolioExposureSlice } from "./index.js";
 
@@ -18,21 +17,26 @@ ProjectionSliceTester.run(portfolioExposureSlice, [
   {
     description: "LoanRiskAssessed: first event creates initial state",
     run: () => {
-      // TODO: create test data and fill expected state
-      // The payload should contain the fields from the LoanRiskAssessed event,
-      // NOT the readmodel fields. Check the event schema in TODO_CONTEXT.md.
-      // Key should match how the projection handler builds it.
-      const key = randomUUID();
+      // key = `${portfolioId}:${creditRating}` as built by the handler
+      const key = "PORT-01:AAA";
       return {
         given: [
           { messageType: "LoanRiskAssessed", payload: {
-            // TODO: fill with LoanRiskAssessed event fields
+            portfolioId: "PORT-01",
+            creditRating: "AAA",
+            probabilityOfDefault: 0.05,
+            loanAmount: 500000,
           } },
         ],
         then: [{ key, expectedState: {
-          // TODO: expected stored state after first event
-          // Numbers as JS numbers (10000, not "10000")
-          // Dates as ISO strings ("2024-01-15T10:30:00.000Z", not new Date(...))
+          // First event: loanCount initialises to 1 (hardcoded in INSERT)
+          // exposure = loanAmount = 500000
+          // avgPD = probabilityOfDefault = 0.05 (no prior exposure, so just the loan's PD)
+          creditRating: "AAA",
+          portfolioId: "PORT-01",
+          avgPD: 0.05,
+          exposure: 500000,
+          loanCount: 1,
         } }],
       };
     },
@@ -40,23 +44,42 @@ ProjectionSliceTester.run(portfolioExposureSlice, [
   {
     description: "two LoanRiskAssessed events: fields accumulate correctly",
     run: () => {
-      // Spec: Aggregates loan exposure by credit rating within each portfolio. Key: {portfolioId}:{creditRating}.
-
-Each LoanRiskAssess...
-      // TODO: send two events with DIFFERENT numeric values,
-      // then assert the accumulated/averaged result.
-      const key = randomUUID();
+      // Event 1: probabilityOfDefault=0.02, loanAmount=300000
+      // Event 2: probabilityOfDefault=0.08, loanAmount=700000
+      //
+      // loanCount: 1 + 1 = 2
+      // exposure: 300000 + 700000 = 1000000
+      // avgPD weighted average:
+      //   = (prev_avgPD * prev_exposure + probabilityOfDefault * loanAmount) / (prev_exposure + loanAmount)
+      //   = (0.02 * 300000 + 0.08 * 700000) / (300000 + 700000)
+      //   = (6000 + 56000) / 1000000
+      //   = 62000 / 1000000
+      //   = 0.062
+      const key = "PORT-01:BBB";
       return {
         given: [
           { messageType: "LoanRiskAssessed", payload: {
-            // TODO: first event payload
+            portfolioId: "PORT-01",
+            creditRating: "BBB",
+            probabilityOfDefault: 0.02,
+            loanAmount: 300000,
           } },
           { messageType: "LoanRiskAssessed", payload: {
-            // TODO: second event payload (different numbers)
+            portfolioId: "PORT-01",
+            creditRating: "BBB",
+            probabilityOfDefault: 0.08,
+            loanAmount: 700000,
           } },
         ],
         then: [{ key, expectedState: {
-          // TODO: expected accumulated state after two events
+          creditRating: "BBB",
+          portfolioId: "PORT-01",
+          // loanCount: 1 + 1 = 2
+          loanCount: 2,
+          // exposure: 300000 + 700000 = 1000000
+          exposure: 1000000,
+          // avgPD: (0.02 * 300000 + 0.08 * 700000) / (300000 + 700000) = 62000 / 1000000 = 0.062
+          avgPD: 0.062,
         } }],
       };
     },

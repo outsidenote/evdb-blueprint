@@ -18,22 +18,45 @@ ProjectionSliceTester.run(loanSubmissionStatusSlice, [
   {
     description: "LoanAddedToPortfolio: first event creates initial state",
     run: () => {
-      // TODO: create test data and fill expected state
-      // The payload should contain the fields from the LoanAddedToPortfolio event,
-      // NOT the readmodel fields. Check the event schema in TODO_CONTEXT.md.
-      // Key should match how the projection handler builds it.
-      const key = randomUUID();
+      const portfolioId = randomUUID();
+      const loanId = randomUUID();
+      // maturityDate stored as ::text — must match exactly in expectedState
+      const maturityDate = "2030-06-15T00:00:00.000Z";
+
       return {
         given: [
-          { messageType: "LoanAddedToPortfolio", payload: {
-            // TODO: fill with LoanAddedToPortfolio event fields
-          } },
+          {
+            messageType: "LoanAddedToPortfolio",
+            payload: {
+              portfolioId,
+              borrowerName: "Jane Smith",
+              creditRating: "AA",
+              interestRate: 4.5,
+              loanAmount: 250000,
+              loanId,
+              maturityDate, // passed as ISO string; handler's instanceof Date guard passes it through
+            },
+          },
         ],
-        then: [{ key, expectedState: {
-          // TODO: expected stored state after first event
-          // Numbers as JS numbers (10000, not "10000")
-          // Dates as ISO strings ("2024-01-15T10:30:00.000Z", not new Date(...))
-        } }],
+        then: [
+          {
+            key: portfolioId,
+            expectedState: {
+              // All string fields come back as JS strings (::text)
+              borrowerName: "Jane Smith",
+              creditRating: "AA",
+              // interestRate: ::numeric → JS number
+              interestRate: 4.5,
+              // loanAmount: ::numeric → JS number
+              loanAmount: 250000,
+              loanId,
+              // maturityDate: ::text → JS string (ISO)
+              maturityDate,
+              // LoanAddedToPortfolio stores empty errorMessage (loan was accepted)
+              errorMessage: "",
+            },
+          },
+        ],
       };
     },
   },
