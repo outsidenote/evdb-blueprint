@@ -66,7 +66,13 @@
       "aggregateDependencies": [],
       "dependencies": [
         {
-          "id": "3458764669633248070",
+          "id": "3458764669662364338",
+          "type": "OUTBOUND",
+          "title": "screen",
+          "elementType": "SCREEN"
+        },
+        {
+          "id": "3458764669665759202",
           "type": "OUTBOUND",
           "title": "screen",
           "elementType": "SCREEN"
@@ -88,9 +94,9 @@
   ],
   "screens": [
     {
-      "id": "3458764669633248070",
+      "id": "3458764669665759202",
       "tags": [],
-      "groupId": "3458764669633248082",
+      "groupId": "3458764669665759206",
       "elementContext": "INTERNAL",
       "modelContext": "Portfolio",
       "context": "INTERNAL",
@@ -100,49 +106,49 @@
         {
           "name": "creditRating",
           "type": "String",
+          "example": "AAA",
           "subfields": [],
           "cardinality": "Single",
-          "idAttribute": true,
-          "example": "AAA"
+          "idAttribute": true
         },
         {
           "name": "portfolioId",
           "type": "UUID",
+          "example": "PORT-01",
           "subfields": [],
           "cardinality": "Single",
-          "idAttribute": true,
-          "example": "PORT-01"
+          "idAttribute": true
         },
         {
           "name": "avgPD",
-          "generated": true,
           "type": "Decimal",
-          "cardinality": "Single",
-          "subfields": [],
           "example": "0.5",
+          "generated": true,
+          "subfields": [],
+          "cardinality": "Single",
           "idAttribute": false
         },
         {
           "name": "exposure",
-          "generated": true,
           "type": "Double",
-          "cardinality": "Single",
-          "subfields": [],
           "example": "1000000",
+          "generated": true,
+          "subfields": [],
+          "cardinality": "Single",
           "idAttribute": false
         },
         {
           "name": "loanCount",
-          "generated": true,
           "type": "Int",
-          "cardinality": "Single",
-          "subfields": [],
           "example": "2",
+          "generated": true,
+          "subfields": [],
+          "cardinality": "Single",
           "idAttribute": false
         }
       ],
       "type": "SCREEN",
-      "description": "",
+      "description": "Exposure breakdown by credit rating for a single portfolio. Shows each rating bucket (AAA, AA, A, BBB, BB, B, C) with its total exposure, average probability of default, and loan count. Use when the user wants only the rating distribution — not the broader portfolio KPIs.\n",
       "aggregate": "default",
       "aggregateDependencies": [],
       "dependencies": [

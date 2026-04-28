@@ -111,7 +111,7 @@
       "aggregateDependencies": [],
       "dependencies": [
         {
-          "id": "3458764669633152520",
+          "id": "3458764669662364338",
           "type": "OUTBOUND",
           "title": "screen",
           "elementType": "SCREEN"
@@ -133,9 +133,9 @@
   ],
   "screens": [
     {
-      "id": "3458764669633152520",
+      "id": "3458764669662364338",
       "tags": [],
-      "groupId": "3458764669633152524",
+      "groupId": "3458764669662364344",
       "elementContext": "INTERNAL",
       "modelContext": "Portfolio",
       "context": "INTERNAL",
@@ -149,6 +149,14 @@
           "subfields": [],
           "cardinality": "Single",
           "idAttribute": true
+        },
+        {
+          "name": "creditRating",
+          "type": "String",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": true,
+          "example": "AAA"
         },
         {
           "name": "averageProbabilityOfDefault",
@@ -229,10 +237,37 @@
           "subfields": [],
           "cardinality": "Single",
           "idAttribute": false
+        },
+        {
+          "name": "avgPD",
+          "generated": true,
+          "type": "Decimal",
+          "cardinality": "Single",
+          "subfields": [],
+          "example": "0.5",
+          "idAttribute": false
+        },
+        {
+          "name": "exposure",
+          "generated": true,
+          "type": "Double",
+          "cardinality": "Single",
+          "subfields": [],
+          "example": "1000000",
+          "idAttribute": false
+        },
+        {
+          "name": "loanCount",
+          "generated": true,
+          "type": "Int",
+          "cardinality": "Single",
+          "subfields": [],
+          "example": "2",
+          "idAttribute": false
         }
       ],
       "type": "SCREEN",
-      "description": "",
+      "description": "Portfolio overview for a single portfolio — combines headline KPIs (total exposure, total loans, expected loss, capital requirement, average rating, risk band) with the rating-bucket exposure breakdown. Use when the user wants the full picture for one portfolio in a single view.",
       "aggregate": "default",
       "aggregateDependencies": [],
       "dependencies": [
@@ -240,6 +275,12 @@
           "id": "3458764667426662480",
           "type": "INBOUND",
           "title": "Portfolio Summary",
+          "elementType": "READMODEL"
+        },
+        {
+          "id": "3458764669630326683",
+          "type": "INBOUND",
+          "title": "portfolioExposure",
           "elementType": "READMODEL"
         }
       ],

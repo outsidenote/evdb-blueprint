@@ -14,7 +14,7 @@
     "clean": "rimraf dist tsconfig.tsbuildinfo",
     "rebuild": "npm run clean && npm run build",
     "start": "node dist/server.js",
-    "dev": "node --import tsx src/server.ts",
+    "dev": "PORT=9909 node --import tsx src/server.ts",
     "test:slices": "node --import tsx --test 'src/BusinessCapabilities/**/*.slice.test.ts'",
     "test:behaviour": "node --import tsx --test 'src/tests/behaviour.test.ts'",
     "test:integration": "node --import tsx --test src/tests/integration.test.ts",

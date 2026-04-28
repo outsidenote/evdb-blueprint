@@ -188,6 +188,12 @@
       "aggregateDependencies": [],
       "dependencies": [
         {
+          "id": "3458764669703756020",
+          "type": "OUTBOUND",
+          "title": "Loan submission status",
+          "elementType": "READMODEL"
+        },
+        {
           "id": "3458764667419948450",
           "type": "INBOUND",
           "title": "Add Loan to Portfolio",
@@ -278,6 +284,12 @@
           "id": "3458764667425307762",
           "type": "OUTBOUND",
           "title": "Loans Pending Risk Assess",
+          "elementType": "READMODEL"
+        },
+        {
+          "id": "3458764669703756020",
+          "type": "OUTBOUND",
+          "title": "Loan submission status",
           "elementType": "READMODEL"
         },
         {
@@ -1018,5 +1030,9 @@
     }
   ],
   "actors": [],
+  "codeGen": {
+    "backendPrompts": [],
+    "uiPrompts": []
+  },
   "aggregates": []
 }

@@ -1,0 +1,219 @@
+{
+  "id": "3458764669704666678",
+  "status": "Created",
+  "title": "slice: Loan submission status",
+  "context": "Portfolio",
+  "sliceType": "STATE_VIEW",
+  "commands": [],
+  "events": [],
+  "readmodels": [
+    {
+      "id": "3458764669703756020",
+      "tags": [],
+      "elementContext": "INTERNAL",
+      "modelContext": "Portfolio",
+      "context": "INTERNAL",
+      "slice": "slice: Loan submission status",
+      "title": "Loan submission status",
+      "fields": [
+        {
+          "name": "portfolioId",
+          "type": "UUID",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": true
+        },
+        {
+          "name": "borrowerName",
+          "type": "String",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "creditRating",
+          "type": "String",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "interestRate",
+          "type": "Double",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "loanAmount",
+          "type": "Double",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "loanId",
+          "type": "UUID",
+          "generated": true,
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "maturityDate",
+          "type": "Date",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "errorMessage",
+          "type": "String",
+          "generated": true,
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        }
+      ],
+      "type": "READMODEL",
+      "description": "",
+      "aggregate": "default",
+      "aggregateDependencies": [],
+      "dependencies": [
+        {
+          "id": "3458764669703756027",
+          "type": "OUTBOUND",
+          "title": "screen",
+          "elementType": "SCREEN"
+        },
+        {
+          "id": "3458764667420674218",
+          "type": "INBOUND",
+          "title": "LoanAddedToPortfolio",
+          "elementType": "EVENT"
+        },
+        {
+          "id": "3458764667420901109",
+          "type": "INBOUND",
+          "title": "LoanRejectedFromPortfolio",
+          "elementType": "EVENT"
+        }
+      ],
+      "createsAggregate": false,
+      "triggers": [],
+      "sketched": false,
+      "prototype": {
+        "activeByDefault": false
+      }
+    }
+  ],
+  "screens": [
+    {
+      "id": "3458764669703756027",
+      "tags": [],
+      "groupId": "3458764669703756037",
+      "elementContext": "INTERNAL",
+      "modelContext": "Portfolio",
+      "context": "INTERNAL",
+      "slice": "slice: Loan submission status",
+      "title": "screen",
+      "fields": [
+        {
+          "name": "portfolioId",
+          "type": "UUID",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": true
+        },
+        {
+          "name": "acquisitionDate",
+          "type": "DateTime",
+          "generated": true,
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "borrowerName",
+          "type": "String",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "creditRating",
+          "type": "String",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "interestRate",
+          "type": "Double",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "loanAmount",
+          "type": "Double",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "loanId",
+          "type": "UUID",
+          "generated": true,
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "maturityDate",
+          "type": "Date",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "errorMessage",
+          "type": "String",
+          "generated": true,
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        }
+      ],
+      "type": "SCREEN",
+      "description": "Displays the. add to portfolio status. if there is error message, then show it could not be added because of the error else show success message, portfolio added with loan id ",
+      "aggregate": "default",
+      "aggregateDependencies": [],
+      "dependencies": [
+        {
+          "id": "3458764669703756020",
+          "type": "INBOUND",
+          "title": "Loan submission status",
+          "elementType": "READMODEL"
+        }
+      ],
+      "createsAggregate": false,
+      "triggers": [],
+      "sketched": false,
+      "prototype": {
+        "activeByDefault": false
+      }
+    }
+  ],
+  "screenImages": [],
+  "screenLayouts": [],
+  "processors": [],
+  "tables": [],
+  "specifications": [],
+  "actors": [],
+  "codeGen": {
+    "backendPrompts": [],
+    "uiPrompts": []
+  },
+  "aggregates": []
+}

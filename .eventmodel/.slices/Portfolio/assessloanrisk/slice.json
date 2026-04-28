@@ -172,6 +172,13 @@
       "title": "LoanRiskAssessed",
       "fields": [
         {
+          "name": "portfolioId",
+          "type": "UUID",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": true
+        },
+        {
           "name": "acquisitionDate",
           "type": "DateTime",
           "generated": true,
@@ -208,13 +215,6 @@
           "idAttribute": false
         },
         {
-          "name": "expectedPortfolioLoss",
-          "type": "Double",
-          "subfields": [],
-          "cardinality": "Single",
-          "idAttribute": false
-        },
-        {
           "name": "interestRate",
           "type": "Double",
           "subfields": [],
@@ -243,13 +243,6 @@
           "idAttribute": false
         },
         {
-          "name": "portfolioId",
-          "type": "UUID",
-          "subfields": [],
-          "cardinality": "Single",
-          "idAttribute": true
-        },
-        {
           "name": "probabilityOfDefault",
           "type": "Double",
           "subfields": [],
@@ -259,6 +252,13 @@
         {
           "name": "riskBand",
           "type": "String",
+          "subfields": [],
+          "cardinality": "Single",
+          "idAttribute": false
+        },
+        {
+          "name": "expectedPortfolioLoss",
+          "type": "Double",
           "subfields": [],
           "cardinality": "Single",
           "idAttribute": false
